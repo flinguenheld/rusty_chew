@@ -1,44 +1,37 @@
-//! Rainbow effect color wheel using the onboard NeoPixel on an Waveshare RP2040-Zero board
-//!
-//! This flows smoothly through various colours on the onboard NeoPixel.
-//! Uses the `ws2812_pio` driver to control the NeoPixel, which in turns uses the
-//! RP2040's PIO block.
 #![no_std]
 #![no_main]
+mod colors;
 
 use core::iter::once;
-use embedded_hal::delay::DelayNs;
-use panic_halt as _;
-use smart_leds::{brightness, SmartLedsWrite, RGB8};
-use waveshare_rp2040_zero::entry;
-use waveshare_rp2040_zero::{
-    hal::{
-        clocks::{init_clocks_and_plls, Clock},
-        pac,
-        pio::PIOExt,
-        timer::Timer,
-        watchdog::Watchdog,
-        Sio,
-    },
-    Pins, XOSC_CRYSTAL_FREQ,
+use defmt::*;
+use defmt_rtt as _;
+use panic_probe as _;
+use waveshare_rp2040_zero as bsp;
+
+use bsp::hal::{
+    clocks::{init_clocks_and_plls, Clock},
+    entry, pac,
+    pio::PIOExt,
+    timer::Timer,
+    watchdog::Watchdog,
+    Sio,
 };
+use smart_leds::{brightness, SmartLedsWrite};
 use ws2812_pio::Ws2812;
 
-/// Entry point to our bare-metal application.
-///
-/// The `#[entry]` macro ensures the Cortex-M start-up code calls this function
-/// as soon as all global variables are initialised.
-///
-/// The function configures the RP2040 peripherals, then infinitely cycles the built-in LED colour from red, to green,
-/// to blue and back to red.
 #[entry]
 fn main() -> ! {
+    info!("Program start");
+
     let mut pac = pac::Peripherals::take().unwrap();
-
+    let core = pac::CorePeripherals::take().unwrap();
     let mut watchdog = Watchdog::new(pac.WATCHDOG);
+    let sio = Sio::new(pac.SIO);
 
+    // External high-speed crystal on the pico board is 12Mhz
+    let external_xtal_freq_hz = 12_000_000u32;
     let clocks = init_clocks_and_plls(
-        XOSC_CRYSTAL_FREQ,
+        external_xtal_freq_hz,
         pac.XOSC,
         pac.CLOCKS,
         pac.PLL_SYS,
@@ -49,8 +42,9 @@ fn main() -> ! {
     .ok()
     .unwrap();
 
-    let sio = Sio::new(pac.SIO);
-    let pins = Pins::new(
+    let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
+
+    let pins = bsp::Pins::new(
         pac.IO_BANK0,
         pac.PADS_BANK0,
         sio.gpio_bank0,
@@ -70,33 +64,17 @@ fn main() -> ! {
         timer.count_down(),
     );
 
-    // Infinite colour wheel loop
-    let mut n: u8 = 128;
-    let mut timer = timer; // rebind to force a copy of the timer
     loop {
-        ws.write(brightness(once(wheel(n)), 32)).unwrap();
-        n = n.wrapping_add(1);
-
-        // timer.delay_ms(25);
-        timer.delay_ms(5);
-    }
-}
-
-/// Convert a number from `0..=255` to an RGB color triplet.
-///
-/// The colours are a transition from red, to green, to blue and back to red.
-fn wheel(mut wheel_pos: u8) -> RGB8 {
-    wheel_pos = 255 - wheel_pos;
-    if wheel_pos < 85 {
-        // No green in this sector - red and blue only
-        (255 - (wheel_pos * 3), 0, wheel_pos * 3).into()
-    } else if wheel_pos < 170 {
-        // No red in this sector - green and blue only
-        wheel_pos -= 85;
-        (0, wheel_pos * 3, 255 - (wheel_pos * 3)).into()
-    } else {
-        // No blue in this sector - red and green only
-        wheel_pos -= 170;
-        (wheel_pos * 3, 255 - (wheel_pos * 3), 0).into()
+        info!("on!");
+        // GRB ???
+        ws.write(brightness(once(colors::RED.into()), 3)).unwrap();
+        delay.delay_ms(250);
+        ws.write(brightness(once(colors::GREEN.into()), 3)).unwrap();
+        delay.delay_ms(250);
+        ws.write(brightness(once(colors::BLUE.into()), 3)).unwrap();
+        delay.delay_ms(250);
+        ws.write(brightness(once(colors::OFF.into()), 3)).unwrap();
+        delay.delay_ms(1000);
+        info!("off!");
     }
 }

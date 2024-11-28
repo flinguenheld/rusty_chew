@@ -1,0 +1,6 @@
+[[language]]
+name = "rust"
+
+[language-server.rust-analyzer.config.check]
+targets = ["thumbv6m-none-eabi"]
+allTargets = false
