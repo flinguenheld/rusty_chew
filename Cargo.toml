@@ -16,3 +16,10 @@ panic-probe = { version = "0.3", features = ["print-defmt"] }
 waveshare-rp2040-zero = "0.8.0"
 smart-leds = "0.3.0"
 ws2812-pio = "0.8.0"
+
+usb-device = "0.3"
+usbd-human-interface-device = "=0.5.0"
+
+fugit = "0.3"
+embedded-hal = { version = "1.0" }
+
