@@ -4,6 +4,7 @@
 mod colors;
 use core::iter::once;
 
+use alloc::vec::Vec;
 use bsp::hal::{
     clocks::{init_clocks_and_plls, Clock},
     entry,
@@ -34,8 +35,26 @@ use usbd_human_interface_device::prelude::*;
 use smart_leds::{brightness, SmartLedsWrite};
 use ws2812_pio::Ws2812;
 
+// use heapless::Vec;
+
+extern crate alloc;
+
+use core::ptr::addr_of_mut;
+use embedded_alloc::LlffHeap as Heap;
+
+#[global_allocator]
+static HEAP: Heap = Heap::empty();
+
 #[entry]
 fn main() -> ! {
+    {
+        // Embedded-alloc - Init heap
+        use core::mem::MaybeUninit;
+        const HEAP_SIZE: usize = 1024;
+        static mut HEAP_MEM: [MaybeUninit<u8>; HEAP_SIZE] = [MaybeUninit::uninit(); HEAP_SIZE];
+        unsafe { HEAP.init(addr_of_mut!(HEAP_MEM) as usize, HEAP_SIZE) }
+    }
+
     let mut pac = pac::Peripherals::take().unwrap();
 
     let mut watchdog = Watchdog::new(pac.WATCHDOG);
@@ -83,6 +102,8 @@ fn main() -> ! {
         &mut pac.RESETS,
     ));
 
+    info!("aaa");
+
     let mut keyboard = UsbHidClassBuilder::new()
         .add_device(
             usbd_human_interface_device::device::keyboard::NKROBootKeyboardConfig::default(),
@@ -99,25 +120,28 @@ fn main() -> ! {
         .build();
 
     //GPIO pins
-    let mut led_pin = pins.gp13.into_push_pull_output();
-
-    let mut keys: [Pin<DynPinId, FunctionSioInput, PullUp>; 13] = [
+    let mut keys: [Pin<DynPinId, FunctionSioInput, PullUp>; 17] = [
         pins.gp4.into_pull_up_input().into_dyn_pin(),
         pins.gp3.into_pull_up_input().into_dyn_pin(),
         pins.gp2.into_pull_up_input().into_dyn_pin(),
         pins.gp1.into_pull_up_input().into_dyn_pin(),
         pins.gp0.into_pull_up_input().into_dyn_pin(),
+        // --
         pins.gp15.into_pull_up_input().into_dyn_pin(),
         pins.gp26.into_pull_up_input().into_dyn_pin(),
         pins.gp27.into_pull_up_input().into_dyn_pin(),
         pins.gp28.into_pull_up_input().into_dyn_pin(),
         pins.gp29.into_pull_up_input().into_dyn_pin(),
+        // --
+        pins.gp14.into_pull_up_input().into_dyn_pin(),
+        pins.gp13.into_pull_up_input().into_dyn_pin(),
+        pins.gp9.into_pull_up_input().into_dyn_pin(),
+        pins.gp8.into_pull_up_input().into_dyn_pin(),
+        // --
         pins.gp7.into_pull_up_input().into_dyn_pin(),
         pins.gp6.into_pull_up_input().into_dyn_pin(),
         pins.gp5.into_pull_up_input().into_dyn_pin(),
     ];
-
-    led_pin.set_low().ok();
 
     let mut input_count_down = timer.count_down();
     input_count_down.start(10.millis());
@@ -125,22 +149,11 @@ fn main() -> ! {
     let mut tick_count_down = timer.count_down();
     tick_count_down.start(1.millis());
 
-    let mut test_o = true;
-
     loop {
         //Poll the keys every 10ms
         if input_count_down.wait().is_ok() {
-            let keys = get_keys(&mut keys);
-
-            if keys[0] == Keyboard::O {
-                test_o = true;
-            }
-
-            if keys[0] == Keyboard::C {
-                test_o = false;
-            }
-
-            match keyboard.device().write_report(keys) {
+            let pouet = get_keys(&mut keys);
+            match keyboard.device().write_report(pouet) {
                 Err(UsbHidError::WouldBlock) => {}
                 Err(UsbHidError::Duplicate) => {}
                 Ok(_) => {}
@@ -148,12 +161,6 @@ fn main() -> ! {
                     core::panic!("Failed to write keyboard report: {:?}", e)
                 }
             };
-        }
-
-        if test_o {
-            neopixel
-                .write(brightness(once(colors::RED.into()), 3))
-                .unwrap();
         }
 
         //Tick once per ms
@@ -188,72 +195,19 @@ fn main() -> ! {
     }
 }
 
-fn get_keys(keys: &mut [Pin<DynPinId, FunctionSioInput, PullUp>]) -> [Keyboard; 13] {
-    [
-        if keys[0].is_low().unwrap() {
-            Keyboard::Q
-        } else {
-            Keyboard::NoEventIndicated
-        }, //Numlock
-        if keys[1].is_low().unwrap() {
-            Keyboard::C
-        } else {
-            Keyboard::NoEventIndicated
-        }, //Up
-        if keys[2].is_low().unwrap() {
-            Keyboard::O
-        } else {
-            Keyboard::NoEventIndicated
-        }, //F12
-        if keys[3].is_low().unwrap() {
-            Keyboard::P
-        } else {
-            Keyboard::NoEventIndicated
-        }, //Left
-        if keys[4].is_low().unwrap() {
-            Keyboard::V
-        } else {
-            Keyboard::NoEventIndicated
-        }, //Down
-        if keys[5].is_low().unwrap() {
-            Keyboard::A
-        } else {
-            Keyboard::NoEventIndicated
-        }, //Right
-        if keys[6].is_low().unwrap() {
-            Keyboard::S
-        } else {
-            Keyboard::NoEventIndicated
-        }, //A
-        if keys[7].is_low().unwrap() {
-            Keyboard::E
-        } else {
-            Keyboard::NoEventIndicated
-        }, //B
-        if keys[8].is_low().unwrap() {
-            Keyboard::N
-        } else {
-            Keyboard::NoEventIndicated
-        }, //C
-        if keys[9].is_low().unwrap() {
-            Keyboard::F
-        } else {
-            Keyboard::NoEventIndicated
-        }, //LCtrl
-        if keys[10].is_low().unwrap() {
-            Keyboard::Z
-        } else {
-            Keyboard::NoEventIndicated
-        }, //LShift
-        if keys[11].is_low().unwrap() {
-            Keyboard::X
-        } else {
-            Keyboard::NoEventIndicated
-        }, //Enter
-        if keys[12].is_low().unwrap() {
-            Keyboard::E
-        } else {
-            Keyboard::NoEventIndicated
-        }, //Enter
-    ]
+fn get_keys(keys: &mut [Pin<DynPinId, FunctionSioInput, PullUp>]) -> Vec<Keyboard> {
+    let mut output = Vec::new();
+    if keys[0].is_low().unwrap() {
+        // Keyboard::Q
+        output.push(Keyboard::A);
+        output.push(Keyboard::B);
+        output.push(Keyboard::C);
+        output.push(Keyboard::D);
+        output.push(Keyboard::F);
+        output.push(Keyboard::L);
+    } else {
+        // output.push(Keyboard::NoEventIndicated);
+    }
+
+    output
 }

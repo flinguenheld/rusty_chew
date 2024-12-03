@@ -12,7 +12,6 @@ defmt-rtt = "0.4"
 panic-probe = { version = "0.3", features = ["print-defmt"] }
 
 # We're using a Pico by default on this template
-# rp-pico = "0.9"
 waveshare-rp2040-zero = "0.8.0"
 smart-leds = "0.3.0"
 ws2812-pio = "0.8.0"
@@ -22,4 +21,4 @@ usbd-human-interface-device = "=0.5.0"
 
 fugit = "0.3"
 embedded-hal = { version = "1.0" }
-
+embedded-alloc = "0.6.0"
