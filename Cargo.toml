@@ -3,6 +3,9 @@ name = "rusty_chew"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+slave = []
+
 [dependencies]
 cortex-m = "0.7"
 cortex-m-rt = "0.7"
@@ -16,9 +19,14 @@ waveshare-rp2040-zero = "0.8.0"
 smart-leds = "0.3.0"
 ws2812-pio = "0.8.0"
 
+embedded-io = "0.6.1"
+pio-uart = "0.3.0"
+
 usb-device = "0.3"
 usbd-human-interface-device = "=0.5.0"
 
 fugit = "0.3"
 embedded-hal = { version = "1.0" }
 embedded-alloc = "0.6.0"
+
+cfg-if = "1.0.0"

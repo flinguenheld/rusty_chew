@@ -4,6 +4,8 @@
 mod colors;
 use core::iter::once;
 
+use waveshare_rp2040_zero as bsp;
+
 use alloc::vec::Vec;
 use bsp::hal::{
     clocks::{init_clocks_and_plls, Clock},
@@ -12,17 +14,20 @@ use bsp::hal::{
     pac,
     pio::PIOExt,
     timer::Timer,
+    uart::{DataBits, StopBits, UartConfig},
     usb,
     watchdog::Watchdog,
     Sio,
 };
-use waveshare_rp2040_zero as bsp;
+use cfg_if::cfg_if;
+use embedded_io::{Read, Write};
+use pio_uart::PioUart;
 
 use cortex_m::prelude::*;
 use defmt::*;
 use defmt_rtt as _;
 use embedded_hal::digital::*;
-use fugit::ExtU32;
+use fugit::{ExtU32, RateExtU32};
 
 use panic_probe as _;
 
@@ -83,7 +88,7 @@ fn main() -> ! {
     info!("Starting");
 
     // Configure the addressable LED
-    let (mut pio, sm0, _, _, _) = pac.PIO0.split(&mut pac.RESETS);
+    let (mut pio, sm0, sm1, sm2, _) = pac.PIO0.split(&mut pac.RESETS);
     let mut neopixel = Ws2812::new(
         // The onboard NeoPixel is attached to GPIO pin #16 on the Waveshare RP2040-Zero.
         pins.neopixel.into_function(),
@@ -143,6 +148,45 @@ fn main() -> ! {
         pins.gp5.into_pull_up_input().into_dyn_pin(),
     ];
 
+    let is_left = pins.gp10.into_floating_input().is_high().unwrap();
+
+    // Test UART ----------------------------------------------------------------------------------------
+    // Test UART ----------------------------------------------------------------------------------------
+
+    // Split PIO0 to be able to program it
+    // let (mut pio, sm0, sm1, _sm2, _sm3) = pac.PIO0.split(&mut pac.RESETS);
+    // Program RX and TX programs into PIO0
+    let mut rx_program = pio_uart::install_rx_program(&mut pio).ok().unwrap();
+
+    cfg_if::cfg_if! {
+        if #[cfg(feature="slave")] {
+             let mut tx_program = pio_uart::install_tx_program(&mut pio).ok().unwrap();
+             let mut tx = pio_uart::PioUartTx::new(
+                 pins.gp11.reconfigure(),
+                 sm2,
+                 &mut tx_program,
+                 19200.Hz(),
+                 125.MHz(),
+             )
+             .enable();
+        } else {
+             let mut rx = pio_uart::PioUartRx::new(
+                 pins.gp11.reconfigure(),
+                 sm1,
+                 &mut rx_program,
+                 19200.Hz(),
+                 125.MHz(),
+             )
+             .enable();
+        }
+    }
+
+    // Test UART ----------------------------------------------------------------------------------------
+    // Test UART ----------------------------------------------------------------------------------------
+
+    // let mut input_count_down = timer.count_down();
+    // input_count_down.start(10.millis());
+
     let mut input_count_down = timer.count_down();
     input_count_down.start(10.millis());
 
@@ -150,17 +194,44 @@ fn main() -> ! {
     tick_count_down.start(1.millis());
 
     loop {
+        // pouet.to
         //Poll the keys every 10ms
         if input_count_down.wait().is_ok() {
-            let pouet = get_keys(&mut keys);
-            match keyboard.device().write_report(pouet) {
-                Err(UsbHidError::WouldBlock) => {}
-                Err(UsbHidError::Duplicate) => {}
-                Ok(_) => {}
-                Err(e) => {
-                    core::panic!("Failed to write keyboard report: {:?}", e)
+            cfg_if::cfg_if! {
+                if #[cfg(feature="slave")] {
+                    // Find a way to convert into a vec of Keyboard
+                    let mut arr: [u8; 5] = [0, 0, 0, 0, 0];
+                    if keys[0].is_low().unwrap(){
+                        arr[0]=1;
+                    }
+                    tx.write(&arr).ok();
+                    // tx.write(b"Hello, UART over PIO!").ok();
+                } else {
+                    let mut pouet = get_keys(&mut keys);
+
+                    let mut buffer = [0u8; 5];
+                    rx.read(&mut buffer).ok();
+
+
+                    if buffer[0]==1{
+                        pouet.push(Keyboard::H);
+                        pouet.push(Keyboard::E);
+                        pouet.push(Keyboard::L);
+                        pouet.push(Keyboard::L);
+                        pouet.push(Keyboard::O);
+                    }
+
+                    // Find a way to convert into a vec of Keyboard
+                    match keyboard.device().write_report(pouet) {
+                        Err(UsbHidError::WouldBlock) => {}
+                        Err(UsbHidError::Duplicate) => {}
+                        Ok(_) => {}
+                        Err(e) => {
+                            core::panic!("Failed to write keyboard report: {:?}", e)
+                        }
+                    };
                 }
-            };
+            }
         }
 
         //Tick once per ms
@@ -202,9 +273,14 @@ fn get_keys(keys: &mut [Pin<DynPinId, FunctionSioInput, PullUp>]) -> Vec<Keyboar
         output.push(Keyboard::A);
         output.push(Keyboard::B);
         output.push(Keyboard::C);
-        output.push(Keyboard::D);
-        output.push(Keyboard::F);
-        output.push(Keyboard::L);
+        // if cfg!("left")
+        #[cfg(feature = "master")]
+        {
+            output.push(Keyboard::C);
+            output.push(Keyboard::H);
+            output.push(Keyboard::E);
+            output.push(Keyboard::W);
+        }
     } else {
         // output.push(Keyboard::NoEventIndicated);
     }
