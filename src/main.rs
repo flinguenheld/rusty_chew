@@ -1,8 +1,7 @@
 #![no_std]
 #![no_main]
 
-mod colors;
-use core::iter::once;
+mod led;
 
 use waveshare_rp2040_zero as bsp;
 
@@ -193,32 +192,48 @@ fn main() -> ! {
     let mut tick_count_down = timer.count_down();
     tick_count_down.start(1.millis());
 
+    let mut startup = led::LedStartup::new(&timer, &mut neopixel);
+
     loop {
         // pouet.to
         //Poll the keys every 10ms
         if input_count_down.wait().is_ok() {
+            startup.run();
+
             cfg_if::cfg_if! {
                 if #[cfg(feature="slave")] {
                     // Find a way to convert into a vec of Keyboard
-                    let mut arr: [u8; 5] = [0, 0, 0, 0, 0];
+                    // let mut arr: [u8; 5] = [0, 0, 0, 0, 0];
+                    let mut arr = 0;
                     if keys[0].is_low().unwrap(){
-                        arr[0]=1;
+                        // arr[0]=1;
+                        arr= 6;
                     }
                     tx.write(&arr).ok();
                     // tx.write(b"Hello, UART over PIO!").ok();
                 } else {
                     let mut pouet = get_keys(&mut keys);
 
-                    let mut buffer = [0u8; 5];
+                    // let mut buffer = [0u8; 5];
+                    let mut buffer= [0_u8;3];
                     rx.read(&mut buffer).ok();
 
 
-                    if buffer[0]==1{
-                        pouet.push(Keyboard::H);
-                        pouet.push(Keyboard::E);
-                        pouet.push(Keyboard::L);
-                        pouet.push(Keyboard::L);
-                        pouet.push(Keyboard::O);
+                    // if buffer[0]==1{
+                    if buffer[0] & 0b000010000 ==   0b000010000 {
+                        pouet.push(Keyboard::J);
+                    }
+                    if buffer[0] & 0b000001000 ==   0b000001000 {
+                        pouet.push(Keyboard::M);
+                    }
+                    if buffer[0] & 0b000000010 ==   0b000000010 {
+                        pouet.push(Keyboard::D);
+                    }
+                    if buffer[0] & 0b000000100 ==   0b000000100 {
+                        pouet.push(Keyboard::Y);
+                    }
+                    if buffer[0] & 0b000000001 ==   0b000000001 {
+                        pouet.push(Keyboard::W);
                     }
 
                     // Find a way to convert into a vec of Keyboard
