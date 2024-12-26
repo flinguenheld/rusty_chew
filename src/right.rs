@@ -1,7 +1,9 @@
 #![no_std]
 #![no_main]
 
-mod led;
+mod utils;
+use utils::led::LedStartup;
+use utils::timer::ChewTimer;
 
 use waveshare_rp2040_zero as bsp;
 
@@ -132,24 +134,23 @@ fn main() -> ! {
     let mut input_count_down = timer.count_down();
     input_count_down.start(10.millis());
 
-    let mut startup = led::LedStartup::new(&timer, &mut neopixel);
+    let mut chew_timer = ChewTimer::new();
+    let mut startup = LedStartup::new(&mut neopixel);
 
     loop {
         // Poll the keys every 10ms
         if input_count_down.wait().is_ok() {
-            startup.run();
+            startup.run(chew_timer.ticks);
 
             tx.write(&get_keys(&mut row_0, &mut row_1, &mut row_2)).ok();
         }
 
-        // Tick once per ms
+        //Tick once per ms
         if tick_count_down.wait().is_ok() {
             match keyboard.tick() {
                 Err(UsbHidError::WouldBlock) => {}
-                Ok(_) => {}
-                Err(e) => {
-                    core::panic!("Failed to process keyboard tick: {:?}", e)
-                }
+                Ok(_) => chew_timer.add(),
+                Err(e) => core::panic!("Failed to process keyboard tick: {:?}", e),
             };
         }
     }

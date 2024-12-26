@@ -8,7 +8,7 @@ slave = []
 
 [[bin]]
 name = "left"
-path = "src/main.rs"
+path = "src/left.rs"
 
 [[bin]]
 name = "right"
