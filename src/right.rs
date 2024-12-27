@@ -5,12 +5,15 @@ mod utils;
 use utils::led::LedStartup;
 use utils::timer::ChewTimer;
 
-use waveshare_rp2040_zero as bsp;
+use waveshare_rp2040_zero::{
+    self as bsp,
+    hal::gpio::{FunctionSio, SioInput},
+};
 
 use bsp::hal::{
     clocks::{init_clocks_and_plls, Clock},
     entry,
-    gpio::{DynPinId, FunctionSioInput, Pin, PullUp},
+    gpio::{DynPinId, Pin, PullUp},
     pac,
     pio::PIOExt,
     timer::Timer,
@@ -77,31 +80,35 @@ fn main() -> ! {
         .build(&usb_bus);
 
     // GPIO -----
-    let mut row_0 = [
-        pins.gp0.into_pull_up_input().into_dyn_pin(),
-        pins.gp1.into_pull_up_input().into_dyn_pin(),
-        pins.gp2.into_pull_up_input().into_dyn_pin(),
-        pins.gp3.into_pull_up_input().into_dyn_pin(),
-        pins.gp4.into_pull_up_input().into_dyn_pin(),
-    ];
-
-    let mut row_1 = [
-        pins.gp29.into_pull_up_input().into_dyn_pin(),
-        pins.gp28.into_pull_up_input().into_dyn_pin(),
-        pins.gp27.into_pull_up_input().into_dyn_pin(),
-        pins.gp26.into_pull_up_input().into_dyn_pin(),
-        pins.gp15.into_pull_up_input().into_dyn_pin(),
-    ];
-
-    let mut row_2 = [
-        pins.gp5.into_pull_up_input().into_dyn_pin(),
-        pins.gp6.into_pull_up_input().into_dyn_pin(),
-        pins.gp7.into_pull_up_input().into_dyn_pin(),
-        // --
-        pins.gp8.into_pull_up_input().into_dyn_pin(),
-        pins.gp9.into_pull_up_input().into_dyn_pin(),
-        pins.gp13.into_pull_up_input().into_dyn_pin(),
-        pins.gp14.into_pull_up_input().into_dyn_pin(),
+    let mut gpios: [[Option<Pin<DynPinId, FunctionSio<SioInput>, PullUp>>; 5]; 4] = [
+        [
+            Some(pins.gp0.into_pull_up_input().into_dyn_pin()),
+            Some(pins.gp1.into_pull_up_input().into_dyn_pin()),
+            Some(pins.gp2.into_pull_up_input().into_dyn_pin()),
+            Some(pins.gp3.into_pull_up_input().into_dyn_pin()),
+            Some(pins.gp4.into_pull_up_input().into_dyn_pin()),
+        ],
+        [
+            Some(pins.gp29.into_pull_up_input().into_dyn_pin()),
+            Some(pins.gp28.into_pull_up_input().into_dyn_pin()),
+            Some(pins.gp27.into_pull_up_input().into_dyn_pin()),
+            Some(pins.gp26.into_pull_up_input().into_dyn_pin()),
+            Some(pins.gp15.into_pull_up_input().into_dyn_pin()),
+        ],
+        [
+            Some(pins.gp8.into_pull_up_input().into_dyn_pin()),
+            Some(pins.gp9.into_pull_up_input().into_dyn_pin()),
+            Some(pins.gp13.into_pull_up_input().into_dyn_pin()),
+            Some(pins.gp14.into_pull_up_input().into_dyn_pin()),
+            None,
+        ],
+        [
+            None,
+            None,
+            Some(pins.gp5.into_pull_up_input().into_dyn_pin()),
+            Some(pins.gp6.into_pull_up_input().into_dyn_pin()),
+            Some(pins.gp7.into_pull_up_input().into_dyn_pin()),
+        ],
     ];
 
     // let is_right = pins.gp12.into_floating_input().is_high().unwrap();
@@ -123,7 +130,8 @@ fn main() -> ! {
         pins.gp11.reconfigure(),
         sm1,
         &mut tx_program,
-        19200.Hz(),
+        // 19200.Hz(),
+        115200.Hz(),
         125.MHz(),
     )
     .enable();
@@ -141,8 +149,7 @@ fn main() -> ! {
         // Poll the keys every 10ms
         if input_count_down.wait().is_ok() {
             startup.run(chew_timer.ticks);
-
-            tx.write(&get_keys(&mut row_0, &mut row_1, &mut row_2)).ok();
+            tx.write(&get_keys(&mut gpios)).ok();
         }
 
         //Tick once per ms
@@ -156,29 +163,18 @@ fn main() -> ! {
     }
 }
 
-fn get_keys(
-    row_0: &mut [Pin<DynPinId, FunctionSioInput, PullUp>],
-    row_1: &mut [Pin<DynPinId, FunctionSioInput, PullUp>],
-    row_2: &mut [Pin<DynPinId, FunctionSioInput, PullUp>],
-) -> [u8; 3] {
-    let mut output = [0_u8; 3];
+// Convert gpio states into an array of flags to be sent to the left
+fn get_keys(rows: &mut [[Option<Pin<DynPinId, FunctionSio<SioInput>, PullUp>>; 5]; 4]) -> [u8; 4] {
+    let mut output = [0_u8; 4];
 
-    for k in row_0.iter_mut() {
-        output[0] <<= 1;
-        if k.is_low().unwrap() {
-            output[0] |= 1;
-        }
-    }
-    for k in row_1.iter_mut() {
-        output[1] <<= 1;
-        if k.is_low().unwrap() {
-            output[1] |= 1;
-        }
-    }
-    for k in row_2.iter_mut() {
-        output[2] <<= 1;
-        if k.is_low().unwrap() {
-            output[2] |= 1;
+    for (i, row) in rows.iter_mut().enumerate() {
+        for k in row.iter_mut() {
+            output[i] <<= 1;
+            if let Some(key) = k {
+                if key.is_low().unwrap() {
+                    output[i] |= 1;
+                }
+            }
         }
     }
 

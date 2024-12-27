@@ -2,14 +2,17 @@
 #![no_main]
 
 mod keys;
-mod matrix;
 use keys::Key;
 mod utils;
 use utils::led::LedStartup;
+use utils::matrix::Matrix;
 use utils::timer::ChewTimer;
 use Keyboard as K;
 
-use waveshare_rp2040_zero as bsp;
+use waveshare_rp2040_zero::{
+    self as bsp,
+    hal::gpio::{FunctionSio, SioInput},
+};
 
 use alloc::vec::Vec;
 use bsp::hal::{
@@ -112,27 +115,35 @@ fn main() -> ! {
         .build();
 
     // GPIO -----
-    let mut keys: [Pin<DynPinId, FunctionSioInput, PullUp>; 17] = [
-        pins.gp4.into_pull_up_input().into_dyn_pin(),
-        pins.gp3.into_pull_up_input().into_dyn_pin(),
-        pins.gp2.into_pull_up_input().into_dyn_pin(),
-        pins.gp1.into_pull_up_input().into_dyn_pin(),
-        pins.gp0.into_pull_up_input().into_dyn_pin(),
-        // --
-        pins.gp15.into_pull_up_input().into_dyn_pin(),
-        pins.gp26.into_pull_up_input().into_dyn_pin(),
-        pins.gp27.into_pull_up_input().into_dyn_pin(),
-        pins.gp28.into_pull_up_input().into_dyn_pin(),
-        pins.gp29.into_pull_up_input().into_dyn_pin(),
-        // --
-        pins.gp14.into_pull_up_input().into_dyn_pin(),
-        pins.gp13.into_pull_up_input().into_dyn_pin(),
-        pins.gp9.into_pull_up_input().into_dyn_pin(),
-        pins.gp8.into_pull_up_input().into_dyn_pin(),
-        // --
-        pins.gp7.into_pull_up_input().into_dyn_pin(),
-        pins.gp6.into_pull_up_input().into_dyn_pin(),
-        pins.gp5.into_pull_up_input().into_dyn_pin(),
+    let mut gpios: [[Option<Pin<DynPinId, FunctionSio<SioInput>, PullUp>>; 5]; 4] = [
+        [
+            Some(pins.gp4.into_pull_up_input().into_dyn_pin()),
+            Some(pins.gp3.into_pull_up_input().into_dyn_pin()),
+            Some(pins.gp2.into_pull_up_input().into_dyn_pin()),
+            Some(pins.gp1.into_pull_up_input().into_dyn_pin()),
+            Some(pins.gp0.into_pull_up_input().into_dyn_pin()),
+        ],
+        [
+            Some(pins.gp15.into_pull_up_input().into_dyn_pin()),
+            Some(pins.gp26.into_pull_up_input().into_dyn_pin()),
+            Some(pins.gp27.into_pull_up_input().into_dyn_pin()),
+            Some(pins.gp28.into_pull_up_input().into_dyn_pin()),
+            Some(pins.gp29.into_pull_up_input().into_dyn_pin()),
+        ],
+        [
+            Some(pins.gp14.into_pull_up_input().into_dyn_pin()),
+            Some(pins.gp13.into_pull_up_input().into_dyn_pin()),
+            Some(pins.gp9.into_pull_up_input().into_dyn_pin()),
+            Some(pins.gp8.into_pull_up_input().into_dyn_pin()),
+            None,
+        ],
+        [
+            None,
+            None,
+            Some(pins.gp7.into_pull_up_input().into_dyn_pin()),
+            Some(pins.gp6.into_pull_up_input().into_dyn_pin()),
+            Some(pins.gp5.into_pull_up_input().into_dyn_pin()),
+        ],
     ];
 
     // let is_left = pins.gp10.into_floating_input().is_high().unwrap();
@@ -153,7 +164,8 @@ fn main() -> ! {
         pins.gp11.reconfigure(),
         sm1,
         &mut rx_program,
-        19200.Hz(),
+        // 19200.Hz(),
+        115200.Hz(),
         125.MHz(),
     )
     .enable();
@@ -179,6 +191,8 @@ fn main() -> ! {
                                         Key::Std(K::A), Key::Std(K::A), Key::Std(K::A),      Key::Std(K::A), Key::Std(K::A), Key::Std(K::A)
     ]];
 
+    let mut matrix = Matrix::new();
+
     // TEST LAYOUT ---------------------------------------------------------------------------------
     // TEST LAYOUT ---------------------------------------------------------------------------------
 
@@ -187,27 +201,136 @@ fn main() -> ! {
         if input_count_down.wait().is_ok() {
             startup.run(chew_timer.ticks);
 
-            let mut pouet = get_keys(&mut keys);
+            let mut pouet = Vec::new();
 
-            // let mut buffer = [0u8; 5];
-            let mut buffer = [0_u8; 3];
+            // Read the right ----
+            let mut buffer = [0_u8; 4];
             rx.read(&mut buffer).ok();
 
-            // if buffer[0]==1{
-            if buffer[0] & 0b000010000 == 0b000010000 {
-                pouet.push(Keyboard::J);
+            // Up the matrix ----
+            matrix.read_left(&mut gpios, chew_timer.ticks);
+            matrix.read_right(&mut buffer, chew_timer.ticks);
+
+            if matrix.grid[0][0] > 10 {
+                pouet.push(Keyboard::Q);
             }
-            if buffer[0] & 0b000001000 == 0b000001000 {
-                pouet.push(Keyboard::M);
+            if matrix.grid[0][1] > 10 {
+                pouet.push(Keyboard::C);
             }
-            if buffer[0] & 0b000000010 == 0b000000010 {
-                pouet.push(Keyboard::D);
+            if matrix.grid[0][2] > 10 {
+                pouet.push(Keyboard::O);
             }
-            if buffer[0] & 0b000000100 == 0b000000100 {
+            if matrix.grid[0][3] > 10 {
+                pouet.push(Keyboard::P);
+            }
+            if matrix.grid[0][4] > 10 {
+                pouet.push(Keyboard::V);
+            }
+
+            if matrix.grid[1][0] > 10 {
+                pouet.push(Keyboard::A);
+            }
+            if matrix.grid[1][1] > 10 {
+                pouet.push(Keyboard::S);
+            }
+            if matrix.grid[1][2] > 10 {
+                pouet.push(Keyboard::E);
+            }
+            if matrix.grid[1][3] > 10 {
+                pouet.push(Keyboard::N);
+            }
+            if matrix.grid[1][4] > 10 {
+                pouet.push(Keyboard::F);
+            }
+
+            if matrix.grid[2][0] > 10 {
+                pouet.push(Keyboard::Z);
+            }
+            if matrix.grid[2][1] > 10 {
+                pouet.push(Keyboard::X);
+            }
+            if matrix.grid[2][2] > 10 {
+                pouet.push(Keyboard::E);
+            }
+            if matrix.grid[2][3] > 10 {
+                pouet.push(Keyboard::B);
+            }
+
+            if matrix.grid[3][2] > 10 {
+                pouet.push(Keyboard::A);
+            }
+            if matrix.grid[3][3] > 10 {
+                pouet.push(Keyboard::B);
+            }
+            if matrix.grid[3][4] > 10 {
+                pouet.push(Keyboard::C);
+            }
+
+            // --------------------------------------
+            // --------------------------------------
+            // --------------------------------------
+            // --------------------------------------
+            // --------------------------------------
+            // --------------------------------------
+            if matrix.grid[0][9] > 10 {
+                pouet.push(Keyboard::W);
+            }
+            if matrix.grid[0][8] > 10 {
                 pouet.push(Keyboard::Y);
             }
-            if buffer[0] & 0b000000001 == 0b000000001 {
-                pouet.push(Keyboard::W);
+            if matrix.grid[0][7] > 10 {
+                pouet.push(Keyboard::D);
+            }
+            if matrix.grid[0][6] > 10 {
+                pouet.push(Keyboard::M);
+            }
+            if matrix.grid[0][5] > 10 {
+                pouet.push(Keyboard::J);
+            }
+
+            // --------------------------------------
+            // --------------------------------------
+            if matrix.grid[1][9] > 10 {
+                pouet.push(Keyboard::U);
+            }
+            if matrix.grid[1][8] > 10 {
+                pouet.push(Keyboard::I);
+            }
+            if matrix.grid[1][7] > 10 {
+                pouet.push(Keyboard::T);
+            }
+            if matrix.grid[1][6] > 10 {
+                pouet.push(Keyboard::R);
+            }
+            if matrix.grid[1][5] > 10 {
+                pouet.push(Keyboard::L);
+            }
+
+            // --------------------------------------
+            // --------------------------------------
+            if matrix.grid[2][9] > 10 {
+                pouet.push(Keyboard::K);
+            }
+            if matrix.grid[2][8] > 10 {
+                pouet.push(Keyboard::E);
+            }
+            if matrix.grid[2][7] > 10 {
+                pouet.push(Keyboard::G);
+            }
+            if matrix.grid[2][6] > 10 {
+                pouet.push(Keyboard::H);
+            }
+
+            // --------------------------------------
+            // --------------------------------------
+            if matrix.grid[3][5] > 10 {
+                pouet.push(Keyboard::A);
+            }
+            if matrix.grid[3][6] > 10 {
+                pouet.push(Keyboard::B);
+            }
+            if matrix.grid[3][7] > 10 {
+                pouet.push(Keyboard::C);
             }
 
             // Find a way to convert into a vec of Keyboard
@@ -250,19 +373,3 @@ fn main() -> ! {
         }
     }
 }
-
-fn get_keys(keys: &mut [Pin<DynPinId, FunctionSioInput, PullUp>]) -> Vec<Keyboard> {
-    let mut output = Vec::new();
-    if keys[0].is_low().unwrap() {
-        // Keyboard::Q
-        output.push(Keyboard::A);
-        output.push(Keyboard::B);
-        output.push(Keyboard::C);
-    } else {
-        // output.push(Keyboard::NoEventIndicated);
-    }
-
-    output
-}
-
-fn read_hardware(right: [u8; 4]) {}
