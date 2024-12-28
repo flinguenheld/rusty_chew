@@ -4,4 +4,5 @@ pub enum Key {
     None,
     Std(Keyboard),
     Layout(u8),
+    HomeRow(Keyboard),
 }

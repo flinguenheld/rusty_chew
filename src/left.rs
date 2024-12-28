@@ -4,9 +4,9 @@
 mod keys;
 use keys::Key;
 mod utils;
-use utils::led::LedStartup;
 use utils::matrix::Matrix;
 use utils::timer::ChewTimer;
+use utils::{led::LedStartup, matrix::MatrixStatus};
 use Keyboard as K;
 
 use waveshare_rp2040_zero::{
@@ -138,11 +138,11 @@ fn main() -> ! {
             None,
         ],
         [
-            None,
-            None,
             Some(pins.gp7.into_pull_up_input().into_dyn_pin()),
             Some(pins.gp6.into_pull_up_input().into_dyn_pin()),
             Some(pins.gp5.into_pull_up_input().into_dyn_pin()),
+            None,
+            None,
         ],
     ];
 
@@ -184,14 +184,25 @@ fn main() -> ! {
     // TEST LAYOUT ---------------------------------------------------------------------------------
 
     #[rustfmt::skip]
-    let layout: [[Key; 34]; 1] = [[
+    let layouts: [[Key; 34]; 2] = [[
         Key::Std(K::Q), Key::Std(K::C), Key::Std(K::O), Key::Std(K::P), Key::Std(K::V),      Key::Std(K::J), Key::Std(K::M), Key::Std(K::D), Key::Std(K::Y), Key::Std(K::W),
         Key::Std(K::A), Key::Std(K::S), Key::Std(K::E), Key::Std(K::N), Key::Std(K::F),      Key::Std(K::L), Key::Std(K::R), Key::Std(K::T), Key::Std(K::I), Key::Std(K::U),
         Key::Std(K::Z), Key::Std(K::X), Key::Std(K::E), Key::Std(K::B),                                      Key::Std(K::H), Key::Std(K::G), Key::Std(K::E), Key::Std(K::K),
-                                        Key::Std(K::A), Key::Std(K::A), Key::Std(K::A),      Key::Std(K::A), Key::Std(K::A), Key::Std(K::A)
-    ]];
+                                        Key::Std(K::A), Key::Std(K::A), Key::Std(K::A),      Key::Std(K::ReturnEnter), Key::Layout(1), Key::Std(K::A)
+    ],
+    [
+        Key::Std(K::Q), Key::Std(K::C), Key::Std(K::O), Key::Std(K::P), Key::Std(K::V),      Key::Std(K::J), Key::Std(K::Keyboard7), Key::Std(K::Keyboard8), Key::Std(K::Keyboard9), Key::Std(K::W),
+        Key::Std(K::A), Key::Std(K::S), Key::Std(K::E), Key::Std(K::N), Key::Std(K::F),      Key::Std(K::L), Key::Std(K::Keyboard3), Key::Std(K::Keyboard5), Key::Std(K::Keyboard6), Key::Std(K::U),
+        Key::Std(K::Z), Key::Std(K::X), Key::Std(K::E), Key::Std(K::B),                                      Key::Std(K::Keyboard1), Key::Std(K::Keyboard2), Key::Std(K::Keyboard3), Key::Std(K::K),
+                                        Key::Std(K::A), Key::Std(K::A), Key::Std(K::A),      Key::Std(K::ReturnEnter), Key::None, Key::Std(K::A)
+    ]
+    
+    
+    ];
 
     let mut matrix = Matrix::new();
+    let mut current_layout: Vec<u8> = Vec::new();
+    current_layout.push(0);
 
     // TEST LAYOUT ---------------------------------------------------------------------------------
     // TEST LAYOUT ---------------------------------------------------------------------------------
@@ -208,61 +219,76 @@ fn main() -> ! {
             rx.read(&mut buffer).ok();
 
             // Up the matrix ----
-            matrix.read_left(&mut gpios, chew_timer.ticks);
-            matrix.read_right(&mut buffer, chew_timer.ticks);
+            matrix.read_left(&mut gpios, &chew_timer);
+            matrix.read_right(&mut buffer, &chew_timer);
 
-            if matrix.grid[0][0] > 10 {
+            // Current layout
+            // Is it still active ?
+            // Check if there is a new one ?
+            // Any modificator ?
+
+            // Loop and push all keys
+
+            // for (row, status_row) in layouts.iter().zip(matrix.grid.iter_mut()) {
+            //     for (key, key_status) in layouts.iter().zip(matrix.grid.iter_mut()) {}
+            //     match key_status {
+            //         MatrixStatus::Wait(ticks) => {}
+            //         _ => {}
+            //     }
+            // }
+
+            if matrix.grid[0] == MatrixStatus::Pressed {
                 pouet.push(Keyboard::Q);
             }
-            if matrix.grid[0][1] > 10 {
+            if matrix.grid[1] == MatrixStatus::Pressed {
                 pouet.push(Keyboard::C);
             }
-            if matrix.grid[0][2] > 10 {
+            if matrix.grid[2] == MatrixStatus::Pressed {
                 pouet.push(Keyboard::O);
             }
-            if matrix.grid[0][3] > 10 {
+            if matrix.grid[3] == MatrixStatus::Pressed {
                 pouet.push(Keyboard::P);
             }
-            if matrix.grid[0][4] > 10 {
+            if matrix.grid[4] == MatrixStatus::Pressed {
                 pouet.push(Keyboard::V);
             }
 
-            if matrix.grid[1][0] > 10 {
+            if matrix.grid[10] == MatrixStatus::Pressed {
                 pouet.push(Keyboard::A);
             }
-            if matrix.grid[1][1] > 10 {
+            if matrix.grid[11] == MatrixStatus::Pressed {
                 pouet.push(Keyboard::S);
             }
-            if matrix.grid[1][2] > 10 {
+            if matrix.grid[12] == MatrixStatus::Pressed {
                 pouet.push(Keyboard::E);
             }
-            if matrix.grid[1][3] > 10 {
+            if matrix.grid[13] == MatrixStatus::Pressed {
                 pouet.push(Keyboard::N);
             }
-            if matrix.grid[1][4] > 10 {
+            if matrix.grid[14] == MatrixStatus::Pressed {
                 pouet.push(Keyboard::F);
             }
 
-            if matrix.grid[2][0] > 10 {
+            if matrix.grid[20] == MatrixStatus::Pressed {
                 pouet.push(Keyboard::Z);
             }
-            if matrix.grid[2][1] > 10 {
+            if matrix.grid[21] == MatrixStatus::Pressed {
                 pouet.push(Keyboard::X);
             }
-            if matrix.grid[2][2] > 10 {
+            if matrix.grid[22] == MatrixStatus::Pressed {
                 pouet.push(Keyboard::E);
             }
-            if matrix.grid[2][3] > 10 {
+            if matrix.grid[23] == MatrixStatus::Pressed {
                 pouet.push(Keyboard::B);
             }
 
-            if matrix.grid[3][2] > 10 {
+            if matrix.grid[28] == MatrixStatus::Pressed {
                 pouet.push(Keyboard::A);
             }
-            if matrix.grid[3][3] > 10 {
+            if matrix.grid[29] == MatrixStatus::Pressed {
                 pouet.push(Keyboard::B);
             }
-            if matrix.grid[3][4] > 10 {
+            if matrix.grid[30] == MatrixStatus::Pressed {
                 pouet.push(Keyboard::C);
             }
 
@@ -272,64 +298,64 @@ fn main() -> ! {
             // --------------------------------------
             // --------------------------------------
             // --------------------------------------
-            if matrix.grid[0][9] > 10 {
-                pouet.push(Keyboard::W);
-            }
-            if matrix.grid[0][8] > 10 {
-                pouet.push(Keyboard::Y);
-            }
-            if matrix.grid[0][7] > 10 {
-                pouet.push(Keyboard::D);
-            }
-            if matrix.grid[0][6] > 10 {
-                pouet.push(Keyboard::M);
-            }
-            if matrix.grid[0][5] > 10 {
+            if matrix.grid[5] == MatrixStatus::Pressed {
                 pouet.push(Keyboard::J);
             }
+            if matrix.grid[6] == MatrixStatus::Pressed {
+                pouet.push(Keyboard::M);
+            }
+            if matrix.grid[7] == MatrixStatus::Pressed {
+                pouet.push(Keyboard::D);
+            }
+            if matrix.grid[8] == MatrixStatus::Pressed {
+                pouet.push(Keyboard::Y);
+            }
+            if matrix.grid[9] == MatrixStatus::Pressed {
+                pouet.push(Keyboard::W);
+            }
 
             // --------------------------------------
             // --------------------------------------
-            if matrix.grid[1][9] > 10 {
-                pouet.push(Keyboard::U);
-            }
-            if matrix.grid[1][8] > 10 {
-                pouet.push(Keyboard::I);
-            }
-            if matrix.grid[1][7] > 10 {
-                pouet.push(Keyboard::T);
-            }
-            if matrix.grid[1][6] > 10 {
-                pouet.push(Keyboard::R);
-            }
-            if matrix.grid[1][5] > 10 {
+            if matrix.grid[15] == MatrixStatus::Pressed {
                 pouet.push(Keyboard::L);
             }
+            if matrix.grid[16] == MatrixStatus::Pressed {
+                pouet.push(Keyboard::R);
+            }
+            if matrix.grid[17] == MatrixStatus::Pressed {
+                pouet.push(Keyboard::T);
+            }
+            if matrix.grid[18] == MatrixStatus::Pressed {
+                pouet.push(Keyboard::I);
+            }
+            if matrix.grid[19] == MatrixStatus::Pressed {
+                pouet.push(Keyboard::U);
+            }
 
             // --------------------------------------
             // --------------------------------------
-            if matrix.grid[2][9] > 10 {
-                pouet.push(Keyboard::K);
-            }
-            if matrix.grid[2][8] > 10 {
-                pouet.push(Keyboard::E);
-            }
-            if matrix.grid[2][7] > 10 {
-                pouet.push(Keyboard::G);
-            }
-            if matrix.grid[2][6] > 10 {
+            if matrix.grid[24] == MatrixStatus::Pressed {
                 pouet.push(Keyboard::H);
             }
+            if matrix.grid[25] == MatrixStatus::Pressed {
+                pouet.push(Keyboard::G);
+            }
+            if matrix.grid[26] == MatrixStatus::Pressed {
+                pouet.push(Keyboard::E);
+            }
+            if matrix.grid[27] == MatrixStatus::Pressed {
+                pouet.push(Keyboard::K);
+            }
 
             // --------------------------------------
             // --------------------------------------
-            if matrix.grid[3][5] > 10 {
+            if matrix.grid[31] == MatrixStatus::Pressed {
                 pouet.push(Keyboard::A);
             }
-            if matrix.grid[3][6] > 10 {
+            if matrix.grid[32] == MatrixStatus::Pressed {
                 pouet.push(Keyboard::B);
             }
-            if matrix.grid[3][7] > 10 {
+            if matrix.grid[33] == MatrixStatus::Pressed {
                 pouet.push(Keyboard::C);
             }
 

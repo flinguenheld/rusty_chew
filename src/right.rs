@@ -103,11 +103,11 @@ fn main() -> ! {
             None,
         ],
         [
-            None,
-            None,
             Some(pins.gp5.into_pull_up_input().into_dyn_pin()),
             Some(pins.gp6.into_pull_up_input().into_dyn_pin()),
             Some(pins.gp7.into_pull_up_input().into_dyn_pin()),
+            None,
+            None,
         ],
     ];
 
@@ -169,8 +169,8 @@ fn get_keys(rows: &mut [[Option<Pin<DynPinId, FunctionSio<SioInput>, PullUp>>; 5
 
     for (i, row) in rows.iter_mut().enumerate() {
         for k in row.iter_mut() {
-            output[i] <<= 1;
             if let Some(key) = k {
+                output[i] <<= 1;
                 if key.is_low().unwrap() {
                     output[i] |= 1;
                 }

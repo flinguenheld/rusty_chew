@@ -1,27 +1,42 @@
 use embedded_hal::digital::InputPin;
 use waveshare_rp2040_zero::hal::gpio::{DynPinId, FunctionSio, Pin, PullUp, SioInput};
 
-pub struct Matrix {
-    pub grid: [[u32; 34]; 4],
+use super::timer::ChewTimer;
+
+#[derive(Clone, Copy, PartialEq, PartialOrd)]
+pub enum MatrixStatus {
+    Wait(u32),
+    Hold,
+    Pressed,
+    Free,
 }
+
+pub struct Matrix {
+    pub grid: [MatrixStatus; 34],
+}
+
+// 00  01  02  03  04    |    05  06  07  08  09
+// 10  11  12  13  14    |    15  16  17  18  19
+// 20  21  22  23        |        24  25  26  27
+//         28  29  30    |    31  32  33
 
 impl Matrix {
     pub fn new() -> Self {
-        Matrix { grid: [[0; 34]; 4] }
+        Matrix {
+            grid: [MatrixStatus::Free; 34],
+        }
     }
 
     pub fn read_left(
         &mut self,
         rows: &mut [[Option<Pin<DynPinId, FunctionSio<SioInput>, PullUp>>; 5]; 4],
-        ticks: u32,
+        chew_timer: &ChewTimer,
     ) {
-        for (i, row) in rows.iter_mut().enumerate() {
-            for (j, k) in row.iter_mut().enumerate() {
+        let indexes = [0, 10, 20, 28];
+        for (row, index_start) in rows.iter_mut().zip(indexes.iter()) {
+            for (i, k) in row.iter_mut().enumerate() {
                 if let Some(key) = k {
-                    match key.is_low().unwrap() {
-                        true => self.grid[i][j] = ticks,
-                        false => self.grid[i][j] = 0,
-                    }
+                    self.up_case_status(index_start + i, key.is_low().unwrap_or(false), chew_timer);
                 }
             }
         }
@@ -32,14 +47,46 @@ impl Matrix {
     // 0b000000100 -> M
     // 0b000000010 -> Y
     // 0b000000001 -> W
-    pub fn read_right(&mut self, right: &mut [u8; 4], ticks: u32) {
-        for (r, row) in right.iter_mut().enumerate() {
-            for c in (5..=9).rev() {
-                match *row & 1 {
-                    0 => self.grid[r][c] = 0,
-                    _ => self.grid[r][c] = ticks,
-                }
+    pub fn read_right(&mut self, right: &mut [u8; 4], chew_timer: &ChewTimer) {
+        let indexes = [(5, 9), (15, 19), (24, 27), (31, 33)];
+        for (row, index) in right.iter_mut().zip(indexes.iter()) {
+            for i in (index.0..=index.1).rev() {
+                self.up_case_status(i, *row & 1 == 1, chew_timer);
                 *row >>= 1;
+            }
+        }
+    }
+
+    fn up_case_status(&mut self, index: usize, is_low: bool, chew_timer: &ChewTimer) {
+        if is_low {
+            match self.grid[index] {
+                MatrixStatus::Wait(saved_ticks) => {
+                    // Is the holding time reached ?
+                    if chew_timer.diff(saved_ticks) > 200 {
+                        self.grid[index] = MatrixStatus::Hold;
+                    }
+                }
+                MatrixStatus::Free => {
+                    self.grid[index] = MatrixStatus::Wait(chew_timer.ticks);
+                }
+                _ => {}
+            }
+        } else {
+            match self.grid[index] {
+                MatrixStatus::Wait(saved_ticks) => {
+                    // Is the holding time reached ?
+                    if chew_timer.diff(saved_ticks) < 200 {
+                        self.grid[index] = MatrixStatus::Pressed;
+                    } else {
+                        self.grid[index] = MatrixStatus::Free;
+                    }
+                }
+                MatrixStatus::Hold => {
+                    self.grid[index] = MatrixStatus::Free;
+                }
+                _ => {
+                    self.grid[index] = MatrixStatus::Free;
+                }
             }
         }
     }
