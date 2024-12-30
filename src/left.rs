@@ -4,7 +4,7 @@
 mod keys;
 mod layouts;
 use alloc::collections::vec_deque::VecDeque;
-use keys::Key;
+use keys::{add_rename, Key, KC};
 use layouts::LAYOUTS;
 mod utils;
 use usbd_human_interface_device::page::Keyboard;
@@ -223,21 +223,7 @@ fn main() -> ! {
                 LAYOUTS[current_layout].iter().zip(matrix.grid.iter_mut())
             {
                 match layout_case {
-                    Key::Layout(number) => match matrix_case {
-                        MatrixStatus::Pressed(_) | MatrixStatus::Held => {
-                            current_layout = *number as usize
-                        }
-                        _ => {}
-                    },
-                    _ => {}
-                }
-            }
-
-            for (layout_case, matrix_case) in
-                LAYOUTS[current_layout].iter().zip(matrix.grid.iter_mut())
-            {
-                match layout_case {
-                    Key::Layout(number) => match matrix_case {
+                    KC::LAY(number) => match matrix_case {
                         MatrixStatus::Pressed(_) | MatrixStatus::Held => {
                             current_layout = *number as usize
                         }
@@ -262,48 +248,51 @@ fn main() -> ! {
                 .zip(matrix.grid.iter_mut())
             {
                 match layout_case {
-                    Key::Std(k) => match matrix_case {
-                        MatrixStatus::Pressed(_) => {
-                            let mut blah = Vec::new();
-                            blah.push(*k);
-                            pouet.push_front(blah);
+                    k if (k >= &KC::A && k <= &KC::Question) => match matrix_case {
+                        MatrixStatus::Pressed(ticks) => {
+                            // let mut blah = Vec::new();
+                            // blah.push(*k);
+                            pouet.push_front(add_rename(false, false, false, false, *k));
+                            *matrix_case = MatrixStatus::Done(*ticks);
                             // pouet.push(*k);
-                            *matrix_case = MatrixStatus::Free; // Allow to add lots of letters by maintaining the key
+                        }
+                        MatrixStatus::Held => {
+                            pouet.push_front(add_rename(false, false, false, false, *k));
                         }
                         _ => {}
                     },
-                    Key::HR((held, pressed)) => {
-                        match matrix_case {
-                            MatrixStatus::Released => {
-                                // pouet.push(*pressed);
-                                let mut blah = Vec::new();
-                                blah.push(*pressed);
-                                pouet.push_front(blah);
-                            }
-                            MatrixStatus::Held => {
-                                match held {
-                                    Keyboard::LeftShift | Keyboard::RightShift => {
-                                        modifiers[0] = (true, index)
-                                    }
-                                    Keyboard::LeftControl | Keyboard::RightControl => {
-                                        modifiers[1] = (true, index)
-                                    }
-                                    Keyboard::LeftAlt | Keyboard::RightAlt => {
-                                        modifiers[2] = (true, index)
-                                    }
-                                    Keyboard::LeftGUI | Keyboard::RightGUI => {
-                                        modifiers[3] = (true, index)
-                                    }
-                                    _ => {}
-                                }
-                                // pouet.push(*held);
-                            }
-                            _ => {}
-                        }
-                        // matrix_case
-                        // pouet.push(*pressed);
-                        // *matrix_case = MatrixStatus::Free;
-                    }
+                    // Key::HR((held, pressed)) => {
+                    //     match matrix_case {
+                    //         MatrixStatus::Released => {
+                    //             // pouet.push(*pressed);
+                    //             let mut blah = Vec::new();
+                    //             blah.push(*pressed);
+                    //             pouet.push_front(blah);
+                    //         }
+                    //         MatrixStatus::Held => {
+                    //             match held {
+                    //                 Keyboard::LeftShift | Keyboard::RightShift => {
+                    //                     modifiers[0] = (true, index)
+                    //                 }
+                    //                 Keyboard::LeftControl | Keyboard::RightControl => {
+                    //                     modifiers[1] = (true, index)
+                    //                 }
+                    //                 Keyboard::LeftAlt | Keyboard::RightAlt => {
+                    //                     modifiers[2] = (true, index)
+                    //                 }
+                    //                 Keyboard::LeftGUI | Keyboard::RightGUI => {
+                    //                     modifiers[3] = (true, index)
+                    //                 }
+                    //                 _ => {}
+                    //             }
+                    //             // pouet.push(*held);
+                    //         }
+                    //         _ => {}
+                    //     }
+                    // matrix_case
+                    // pouet.push(*pressed);
+                    // *matrix_case = MatrixStatus::Free;
+                    // }
                     _ => {}
                 }
             }

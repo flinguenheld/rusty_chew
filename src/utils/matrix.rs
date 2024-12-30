@@ -6,6 +6,7 @@ use super::timer::ChewTimer;
 #[derive(Clone, Copy, PartialEq, PartialOrd)]
 pub enum MatrixStatus {
     Pressed(u32),
+    Done(u32),
     Held,
     Released,
     Free,
@@ -61,7 +62,7 @@ impl Matrix {
     fn up_case_status(&mut self, index: usize, is_low: bool, chew_timer: &ChewTimer) {
         if is_low {
             match self.grid[index] {
-                MatrixStatus::Pressed(saved_ticks) => {
+                MatrixStatus::Pressed(saved_ticks) | MatrixStatus::Done(saved_ticks) => {
                     if chew_timer.diff(saved_ticks) > 200 {
                         self.grid[index] = MatrixStatus::Held;
                     }
@@ -70,15 +71,6 @@ impl Matrix {
                     self.grid[index] = MatrixStatus::Pressed(chew_timer.ticks);
                 }
                 _ => {}
-            }
-
-            self.grid[index] = match self.grid[index] {
-                MatrixStatus::Pressed(saved_ticks) => match chew_timer.diff(saved_ticks) > 200 {
-                    true => MatrixStatus::Held,
-                    false => MatrixStatus::Pressed(saved_ticks),
-                },
-                MatrixStatus::Held => MatrixStatus::Held,
-                _ => MatrixStatus::Pressed(chew_timer.ticks),
             }
         } else {
             self.grid[index] = match self.grid[index] {
