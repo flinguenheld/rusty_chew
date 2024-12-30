@@ -5,9 +5,9 @@ use super::timer::ChewTimer;
 
 #[derive(Clone, Copy, PartialEq, PartialOrd)]
 pub enum MatrixStatus {
-    Wait(u32),
-    Hold,
-    Pressed,
+    Pressed(u32),
+    Held,
+    Released,
     Free,
 }
 
@@ -57,37 +57,34 @@ impl Matrix {
         }
     }
 
+    // Upgrade grid status from the hardware perspective
     fn up_case_status(&mut self, index: usize, is_low: bool, chew_timer: &ChewTimer) {
         if is_low {
             match self.grid[index] {
-                MatrixStatus::Wait(saved_ticks) => {
-                    // Is the holding time reached ?
+                MatrixStatus::Pressed(saved_ticks) => {
                     if chew_timer.diff(saved_ticks) > 200 {
-                        self.grid[index] = MatrixStatus::Hold;
+                        self.grid[index] = MatrixStatus::Held;
                     }
                 }
                 MatrixStatus::Free => {
-                    self.grid[index] = MatrixStatus::Wait(chew_timer.ticks);
+                    self.grid[index] = MatrixStatus::Pressed(chew_timer.ticks);
                 }
                 _ => {}
             }
-        } else {
-            match self.grid[index] {
-                MatrixStatus::Wait(saved_ticks) => {
-                    // Is the holding time reached ?
-                    if chew_timer.diff(saved_ticks) < 200 {
-                        self.grid[index] = MatrixStatus::Pressed;
-                    } else {
-                        self.grid[index] = MatrixStatus::Free;
-                    }
-                }
-                MatrixStatus::Hold => {
-                    self.grid[index] = MatrixStatus::Free;
-                }
-                _ => {
-                    self.grid[index] = MatrixStatus::Free;
-                }
+
+            self.grid[index] = match self.grid[index] {
+                MatrixStatus::Pressed(saved_ticks) => match chew_timer.diff(saved_ticks) > 200 {
+                    true => MatrixStatus::Held,
+                    false => MatrixStatus::Pressed(saved_ticks),
+                },
+                MatrixStatus::Held => MatrixStatus::Held,
+                _ => MatrixStatus::Pressed(chew_timer.ticks),
             }
+        } else {
+            self.grid[index] = match self.grid[index] {
+                MatrixStatus::Pressed(_) => MatrixStatus::Released,
+                _ => MatrixStatus::Free,
+            };
         }
     }
 }
