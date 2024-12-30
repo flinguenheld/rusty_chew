@@ -63,7 +63,7 @@ impl Matrix {
         if is_low {
             match self.grid[index] {
                 MatrixStatus::Pressed(saved_ticks) | MatrixStatus::Done(saved_ticks) => {
-                    if chew_timer.diff(saved_ticks) > 200 {
+                    if chew_timer.diff(saved_ticks) > 150 {
                         self.grid[index] = MatrixStatus::Held;
                     }
                 }

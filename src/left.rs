@@ -4,7 +4,7 @@
 mod keys;
 mod layouts;
 use alloc::collections::vec_deque::VecDeque;
-use keys::{add_rename, Key, KC};
+use keys::{Key, Modifiers, KC};
 use layouts::LAYOUTS;
 mod utils;
 use usbd_human_interface_device::page::Keyboard;
@@ -195,7 +195,8 @@ fn main() -> ! {
     // TEST LAYOUT ---------------------------------------------------------------------------------
     // TEST LAYOUT ---------------------------------------------------------------------------------
 
-    let mut modifiers: [(bool, usize); 4] = [(false, 0), (false, 0), (false, 0), (false, 0)];
+    // let mut modifiers: [(bool, usize); 4] = [(false, 0), (false, 0), (false, 0), (false, 0)];
+    let mut modifiers = Modifiers::new();
 
     loop {
         //Poll the keys every 10ms
@@ -235,11 +236,10 @@ fn main() -> ! {
 
             // Modifiers ----------------------------------------------------------------
             // Maintain them from the grid level instead of the layout
-            modifiers
-                .iter_mut()
-                .for_each(|m| m.0 = matrix.grid[m.1] == MatrixStatus::Held);
-
-            // Add a loop to deal with all modifiers
+            modifiers.Alt.0 = matrix.grid[modifiers.Alt.1] == MatrixStatus::Held;
+            modifiers.Ctrl.0 = matrix.grid[modifiers.Ctrl.1] == MatrixStatus::Held;
+            modifiers.Gui.0 = matrix.grid[modifiers.Gui.1] == MatrixStatus::Held;
+            modifiers.Shift.0 = matrix.grid[modifiers.Shift.1] == MatrixStatus::Held;
 
             // Keys ---------------------------------------------------------------------
             for ((index, layout_case), matrix_case) in LAYOUTS[current_layout]
@@ -250,49 +250,31 @@ fn main() -> ! {
                 match layout_case {
                     k if (k >= &KC::A && k <= &KC::Question) => match matrix_case {
                         MatrixStatus::Pressed(ticks) => {
-                            // let mut blah = Vec::new();
-                            // blah.push(*k);
-                            pouet.push_front(add_rename(false, false, false, false, *k));
+                            pouet.push_front(k.to_usb_code(&modifiers));
                             *matrix_case = MatrixStatus::Done(*ticks);
-                            // pouet.push(*k);
                         }
                         MatrixStatus::Held => {
-                            pouet.push_front(add_rename(false, false, false, false, *k));
+                            if !modifiers.is_active(index) {
+                                pouet.push_front(k.to_usb_code(&modifiers));
+                            }
                         }
                         _ => {}
                     },
-                    // Key::HR((held, pressed)) => {
-                    //     match matrix_case {
-                    //         MatrixStatus::Released => {
-                    //             // pouet.push(*pressed);
-                    //             let mut blah = Vec::new();
-                    //             blah.push(*pressed);
-                    //             pouet.push_front(blah);
-                    //         }
-                    //         MatrixStatus::Held => {
-                    //             match held {
-                    //                 Keyboard::LeftShift | Keyboard::RightShift => {
-                    //                     modifiers[0] = (true, index)
-                    //                 }
-                    //                 Keyboard::LeftControl | Keyboard::RightControl => {
-                    //                     modifiers[1] = (true, index)
-                    //                 }
-                    //                 Keyboard::LeftAlt | Keyboard::RightAlt => {
-                    //                     modifiers[2] = (true, index)
-                    //                 }
-                    //                 Keyboard::LeftGUI | Keyboard::RightGUI => {
-                    //                     modifiers[3] = (true, index)
-                    //                 }
-                    //                 _ => {}
-                    //             }
-                    //             // pouet.push(*held);
-                    //         }
-                    //         _ => {}
-                    //     }
-                    // matrix_case
-                    // pouet.push(*pressed);
-                    // *matrix_case = MatrixStatus::Free;
-                    // }
+
+                    k if (k >= &KC::HomeAltA && k <= &KC::HomeShiftR) => match matrix_case {
+                        MatrixStatus::Released => {
+                            pouet.push_front(k.to_usb_code(&modifiers));
+                        }
+                        MatrixStatus::Held => match layout_case {
+                            KC::HomeAltA | KC::HomeAltU => modifiers.Alt = (true, index),
+                            KC::HomeCtrlE | KC::HomeCtrlT => modifiers.Ctrl = (true, index),
+                            KC::HomeGuiS | KC::HomeGuiI => modifiers.Gui = (true, index),
+                            KC::HomeShiftN | KC::HomeShiftR => modifiers.Shift = (true, index),
+                            _ => {}
+                        },
+                        _ => {}
+                    },
+
                     _ => {}
                 }
             }
