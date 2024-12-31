@@ -12,41 +12,52 @@ use ws2812_pio::Ws2812;
 
 pub const OFF: [u8; 3] = [0, 0, 0];
 // pub const GREEN: [u8; 3] = [255, 0, 0];
-// pub const RED: [u8; 3] = [0, 255, 0];
+pub const RED: [u8; 3] = [0, 255, 0];
 // pub const BLUE: [u8; 3] = [0, 0, 255];
 
 type Neopixel<'a> = Ws2812<PIO0, SM0, CountDown<'a>, Pin<Gpio16, FunctionPio0, PullDown>>;
 
-pub struct LedStartup<'a> {
+pub struct Led<'a> {
     n: u8,
     on: bool,
-    countdown: u32,
+    startup_countdown: u32,
     neopixel: &'a mut Neopixel<'a>,
 }
 
-impl LedStartup<'_> {
-    pub fn new<'a>(neopixel: &'a mut Neopixel<'a>) -> LedStartup<'a> {
-        LedStartup {
+impl Led<'_> {
+    pub fn new<'a>(neopixel: &'a mut Neopixel<'a>) -> Led<'a> {
+        Led {
             n: 0,
             on: true,
-            countdown: 10_000, // ms
+            startup_countdown: 10_000, // ms
             neopixel,
         }
     }
-    pub fn run(&mut self, ticks: u32) {
+    pub fn startup(&mut self, ticks: u32) {
         if self.on {
             self.neopixel
                 .write(brightness(once(wheel(self.n)), 3))
                 .unwrap();
             self.n = self.n.wrapping_add(1);
 
-            if ticks > self.countdown {
+            if ticks > self.startup_countdown {
                 self.on = false;
                 self.neopixel
                     .write(brightness(once(OFF.into()), 3))
                     .unwrap();
             }
         }
+    }
+
+    pub fn light_on(&mut self, color: [u8; 3]) {
+        self.neopixel
+            .write(brightness(once(color.into()), 3))
+            .unwrap();
+    }
+    pub fn light_off(&mut self) {
+        self.neopixel
+            .write(brightness(once(OFF.into()), 3))
+            .unwrap();
     }
 }
 

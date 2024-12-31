@@ -2,7 +2,7 @@
 #![no_main]
 
 mod utils;
-use utils::led::LedStartup;
+use utils::led::{Led, RED};
 use utils::timer::ChewTimer;
 
 use waveshare_rp2040_zero::{
@@ -131,7 +131,8 @@ fn main() -> ! {
         sm1,
         &mut tx_program,
         // 19200.Hz(),
-        115200.Hz(),
+        // 115200.Hz(),
+        921_600.Hz(),
         125.MHz(),
     )
     .enable();
@@ -140,16 +141,18 @@ fn main() -> ! {
     tick_count_down.start(1.millis());
 
     let mut input_count_down = timer.count_down();
-    input_count_down.start(10.millis());
+    input_count_down.start(5.millis());
 
     let mut chew_timer = ChewTimer::new();
-    let mut startup = LedStartup::new(&mut neopixel);
+    let mut led = Led::new(&mut neopixel);
 
     loop {
         // Poll the keys every 10ms
         if input_count_down.wait().is_ok() {
-            startup.run(chew_timer.ticks);
-            tx.write(&get_keys(&mut gpios)).ok();
+            led.startup(chew_timer.ticks);
+            if !tx.write_all(&get_keys(&mut gpios)).is_ok() {
+                led.light_on(RED);
+            }
         }
 
         //Tick once per ms

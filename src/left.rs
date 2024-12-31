@@ -8,9 +8,10 @@ use keys::{Key, Modifiers, KC};
 use layouts::LAYOUTS;
 mod utils;
 use usbd_human_interface_device::page::Keyboard;
+use utils::led::RED;
 use utils::matrix::Matrix;
 use utils::timer::ChewTimer;
-use utils::{led::LedStartup, matrix::MatrixStatus};
+use utils::{led::Led, matrix::MatrixStatus};
 
 use waveshare_rp2040_zero::hal::rom_data::popcount32;
 use waveshare_rp2040_zero::{
@@ -169,20 +170,21 @@ fn main() -> ! {
         sm1,
         &mut rx_program,
         // 19200.Hz(),
-        115200.Hz(),
+        // 115200.Hz(),
+        921_600.Hz(),
         125.MHz(),
     )
     .enable();
 
     // ----------
     let mut input_count_down = timer.count_down();
-    input_count_down.start(10.millis());
+    input_count_down.start(5.millis());
 
     let mut tick_count_down = timer.count_down();
     tick_count_down.start(1.millis());
 
     let mut chew_timer = ChewTimer::new();
-    let mut startup = LedStartup::new(&mut neopixel);
+    let mut led = Led::new(&mut neopixel);
 
     // TEST LAYOUT ---------------------------------------------------------------------------------
     // TEST LAYOUT ---------------------------------------------------------------------------------
@@ -201,13 +203,15 @@ fn main() -> ! {
     loop {
         //Poll the keys every 10ms
         if input_count_down.wait().is_ok() {
-            startup.run(chew_timer.ticks);
+            led.startup(chew_timer.ticks);
 
             let mut pouet = VecDeque::new();
 
             // Read the right ----
             let mut buffer = [0_u8; 4];
-            rx.read(&mut buffer).ok();
+            if !rx.read_exact(&mut buffer).is_ok() {
+                led.light_on(RED);
+            }
 
             // Up the matrix ----
             matrix.read_left(&mut gpios, &chew_timer);
@@ -241,6 +245,39 @@ fn main() -> ! {
             modifiers.Gui.0 = matrix.grid[modifiers.Gui.1] == MatrixStatus::Held;
             modifiers.Shift.0 = matrix.grid[modifiers.Shift.1] == MatrixStatus::Held;
 
+            // Loop only for them
+            for ((index, layout_case), matrix_case) in LAYOUTS[current_layout]
+                .iter()
+                .enumerate()
+                .zip(matrix.grid.iter_mut())
+            {
+                match layout_case {
+                    k if (k >= &KC::ALT && k <= &KC::SHIFT) => match matrix_case {
+                        MatrixStatus::Pressed(_) | MatrixStatus::Held => match layout_case {
+                            KC::HomeAltA | KC::HomeAltU => modifiers.Alt = (true, index),
+                            KC::HomeCtrlE | KC::HomeCtrlT => modifiers.Ctrl = (true, index),
+                            KC::HomeGuiS | KC::HomeGuiI => modifiers.Gui = (true, index),
+                            KC::HomeShiftN | KC::HomeShiftR => modifiers.Shift = (true, index),
+                            _ => {}
+                        },
+                        _ => {}
+                    },
+
+                    k if (k >= &KC::HomeAltA && k <= &KC::HomeShiftR) => match matrix_case {
+                        MatrixStatus::Held => match layout_case {
+                            KC::HomeAltA | KC::HomeAltU => modifiers.Alt = (true, index),
+                            KC::HomeCtrlE | KC::HomeCtrlT => modifiers.Ctrl = (true, index),
+                            KC::HomeGuiS | KC::HomeGuiI => modifiers.Gui = (true, index),
+                            KC::HomeShiftN | KC::HomeShiftR => modifiers.Shift = (true, index),
+                            _ => {}
+                        },
+                        _ => {}
+                    },
+
+                    _ => {}
+                }
+            }
+
             // Keys ---------------------------------------------------------------------
             for ((index, layout_case), matrix_case) in LAYOUTS[current_layout]
                 .iter()
@@ -265,13 +302,6 @@ fn main() -> ! {
                         MatrixStatus::Released => {
                             pouet.push_front(k.to_usb_code(&modifiers));
                         }
-                        MatrixStatus::Held => match layout_case {
-                            KC::HomeAltA | KC::HomeAltU => modifiers.Alt = (true, index),
-                            KC::HomeCtrlE | KC::HomeCtrlT => modifiers.Ctrl = (true, index),
-                            KC::HomeGuiS | KC::HomeGuiI => modifiers.Gui = (true, index),
-                            KC::HomeShiftN | KC::HomeShiftR => modifiers.Shift = (true, index),
-                            _ => {}
-                        },
                         _ => {}
                     },
 
@@ -279,7 +309,7 @@ fn main() -> ! {
                 }
             }
 
-            // Write --
+            // USB ----------------------------------------------------------------------
             pouet.push_front(Vec::new()); // Add an empty vec to close or use when nothing appends
             while let Some(combi) = pouet.pop_back() {
                 match keyboard.device().write_report(combi) {
