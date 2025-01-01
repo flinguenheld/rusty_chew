@@ -2,6 +2,7 @@
 #![no_main]
 
 mod utils;
+use crate::utils::options::TIMER_MAIN_LOOP;
 use utils::led::{Led, RED};
 use utils::timer::ChewTimer;
 
@@ -131,8 +132,8 @@ fn main() -> ! {
         sm1,
         &mut tx_program,
         // 19200.Hz(),
-        // 115200.Hz(),
-        921_600.Hz(),
+        115_200.Hz(),
+        // 921_600.Hz(),
         125.MHz(),
     )
     .enable();
@@ -141,7 +142,7 @@ fn main() -> ! {
     tick_count_down.start(1.millis());
 
     let mut input_count_down = timer.count_down();
-    input_count_down.start(5.millis());
+    input_count_down.start(TIMER_MAIN_LOOP.millis());
 
     let mut chew_timer = ChewTimer::new();
     let mut led = Led::new(&mut neopixel);

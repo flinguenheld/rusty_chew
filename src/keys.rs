@@ -1,4 +1,4 @@
-use alloc::vec::Vec;
+use heapless::Vec;
 use usbd_human_interface_device::page::Keyboard;
 
 pub enum Key {
@@ -70,16 +70,18 @@ pub enum KC {
     Y = 25,
     Z = 26,
 
-    Num0 = 40,
-    Num1 = 41,
-    Num2 = 42,
-    Num3 = 43,
-    Num4 = 44,
-    Num5 = 45,
-    Num6 = 46,
-    Num7 = 47,
-    Num8 = 48,
-    Num9 = 49,
+    Fr_e_acute = 50,
+
+    Num0 = 300,
+    Num1 = 301,
+    Num2 = 302,
+    Num3 = 303,
+    Num4 = 304,
+    Num5 = 305,
+    Num6 = 306,
+    Num7 = 307,
+    Num8 = 308,
+    Num9 = 309,
 
     Minus = 400,
     Equal = 401,
@@ -128,115 +130,126 @@ pub enum KC {
     HomeGuiI = 2003,
     HomeCtrlE = 2004,
     HomeCtrlT = 2005,
-    HomeShiftN = 2006,
-    HomeShiftR = 2007,
+    HomeSftN = 2006,
+    HomeSftR = 2007,
 
     // Home(KC) = 2000,
     LAY(u8) = 10000,
 }
 
+fn push(array: &mut [Keyboard; 5], val: Keyboard) {
+    if let Some(index) = array.iter().position(|c| *c == Keyboard::NoEventIndicated) {
+        array[index] = val;
+        // true
+        // } else {
+        //     false
+    }
+}
+
 impl KC {
     #[rustfmt::skip]
-    pub fn to_usb_code(&self, modifiers: &Modifiers) -> Vec<Keyboard> {
-        let mut output = Vec::new();
+    pub fn to_usb_code(&self, modifiers: &Modifiers) -> [Keyboard;5] {
+        let mut output = [Keyboard::NoEventIndicated; 5];
 
         if modifiers.Alt.0 || *self == KC::ALT {
-            output.push(Keyboard::LeftAlt);
+            push(&mut output,Keyboard::LeftAlt);
         }
         if modifiers.Ctrl.0 || *self == KC::CTRL {
-            output.push(Keyboard::LeftControl);
+            push(&mut output, Keyboard::LeftControl);
         }
         if modifiers.Gui.0 || *self == KC::GUI {
-            output.push(Keyboard::LeftGUI);
+            push(&mut output, Keyboard::LeftGUI);
         }
-        if (modifiers.Shift.0 || *self == KC::SHIFT) && (*self < KC::Minus || *self > KC::Question)
+
+        // Exclude numbers and symbols from shift
+        if (modifiers.Shift.0 || *self == KC::SHIFT) && (*self < KC::Num0 || *self > KC::Question)
         {
-            output.push(Keyboard::LeftShift);
+            push(&mut output, Keyboard::LeftShift);
         }
 
         match *self {
-            KC::A => output.push(Keyboard::A),
-            KC::B => output.push(Keyboard::B),
-            KC::C => output.push(Keyboard::C),
-            KC::D => output.push(Keyboard::D),
-            KC::E => output.push(Keyboard::E),
-            KC::F => output.push(Keyboard::F),
-            KC::G => output.push(Keyboard::G),
-            KC::H => output.push(Keyboard::H),
-            KC::I => output.push(Keyboard::I),
-            KC::J => output.push(Keyboard::J),
-            KC::K => output.push(Keyboard::K),
-            KC::L => output.push(Keyboard::L),
-            KC::M => output.push(Keyboard::M),
-            KC::N => output.push(Keyboard::N),
-            KC::O => output.push(Keyboard::O),
-            KC::P => output.push(Keyboard::P),
-            KC::Q => output.push(Keyboard::Q),
-            KC::R => output.push(Keyboard::R),
-            KC::S => output.push(Keyboard::S),
-            KC::T => output.push(Keyboard::T),
-            KC::U => output.push(Keyboard::U),
-            KC::V => output.push(Keyboard::V),
-            KC::W => output.push(Keyboard::W),
-            KC::X => output.push(Keyboard::X),
-            KC::Y => output.push(Keyboard::Y),
-            KC::Z => output.push(Keyboard::Z),
+            KC::A => push(&mut output, Keyboard::A),
+            KC::B => push(&mut output, Keyboard::B),
+            KC::C => push(&mut output, Keyboard::C),
+            KC::D => push(&mut output, Keyboard::D),
+            KC::E => push(&mut output, Keyboard::E),
+            KC::F => push(&mut output, Keyboard::F),
+            KC::G => push(&mut output, Keyboard::G),
+            KC::H => push(&mut output, Keyboard::H),
+            KC::I => push(&mut output, Keyboard::I),
+            KC::J => push(&mut output, Keyboard::J),
+            KC::K => push(&mut output, Keyboard::K),
+            KC::L => push(&mut output, Keyboard::L),
+            KC::M => push(&mut output, Keyboard::M),
+            KC::N => push(&mut output, Keyboard::N),
+            KC::O => push(&mut output, Keyboard::O),
+            KC::P => push(&mut output, Keyboard::P),
+            KC::Q => push(&mut output, Keyboard::Q),
+            KC::R => push(&mut output, Keyboard::R),
+            KC::S => push(&mut output, Keyboard::S),
+            KC::T => push(&mut output, Keyboard::T),
+            KC::U => push(&mut output, Keyboard::U),
+            KC::V => push(&mut output, Keyboard::V),
+            KC::W => push(&mut output, Keyboard::W),
+            KC::X => push(&mut output, Keyboard::X),
+            KC::Y => push(&mut output, Keyboard::Y),
+            KC::Z => push(&mut output, Keyboard::Z),
 
-            KC::Num0 => output.push(Keyboard::Keyboard0),
-            KC::Num1 => output.push(Keyboard::Keyboard1),
-            KC::Num2 => output.push(Keyboard::Keyboard2),
-            KC::Num3 => output.push(Keyboard::Keyboard3),
-            KC::Num4 => output.push(Keyboard::Keyboard4),
-            KC::Num5 => output.push(Keyboard::Keyboard5),
-            KC::Num6 => output.push(Keyboard::Keyboard6),
-            KC::Num7 => output.push(Keyboard::Keyboard7),
-            KC::Num8 => output.push(Keyboard::Keyboard8),
-            KC::Num9 => output.push(Keyboard::Keyboard9),
+            KC::Num0 => push(&mut output, Keyboard::Keyboard0),
+            KC::Num1 => push(&mut output, Keyboard::Keyboard1),
+            KC::Num2 => push(&mut output, Keyboard::Keyboard2),
+            KC::Num3 => push(&mut output, Keyboard::Keyboard3),
+            KC::Num4 => push(&mut output, Keyboard::Keyboard4),
+            KC::Num5 => push(&mut output, Keyboard::Keyboard5),
+            KC::Num6 => push(&mut output, Keyboard::Keyboard6),
+            KC::Num7 => push(&mut output, Keyboard::Keyboard7),
+            KC::Num8 => push(&mut output, Keyboard::Keyboard8),
+            KC::Num9 => push(&mut output, Keyboard::Keyboard9),
 
-            KC::Minus          => output.push(Keyboard::Minus),
-            KC::Equal          => output.push(Keyboard::Equal),
-            KC::LeftBracket    => output.push(Keyboard::LeftBrace),
-            KC::RightBracket   => output.push(Keyboard::RightBrace),
-            KC::Backslash      => output.push(Keyboard::Backslash),
-            KC::NonusHash      => output.push(Keyboard::NonUSHash),
-            KC::SemiColon      => output.push(Keyboard::Semicolon),
-            KC::Quote          => output.push(Keyboard::Apostrophe),
-            KC::Grave          => output.push(Keyboard::Grave),
-            KC::Comma          => output.push(Keyboard::Comma),
-            KC::Dot            => output.push(Keyboard::Dot),
-            KC::Slash          => output.push(Keyboard::ForwardSlash),
-            KC::NonusBackslash => output.push(Keyboard::NonUSBackslash),
+            KC::Minus          => push(&mut output, Keyboard::Minus),
+            KC::Equal          => push(&mut output, Keyboard::Equal),
+            KC::LeftBracket    => push(&mut output, Keyboard::LeftBrace),
+            KC::RightBracket   => push(&mut output, Keyboard::RightBrace),
+            KC::Backslash      => push(&mut output, Keyboard::Backslash),
+            KC::NonusHash      => push(&mut output, Keyboard::NonUSHash),
+            KC::SemiColon      => push(&mut output, Keyboard::Semicolon),
+            KC::Quote          => push(&mut output, Keyboard::Apostrophe),
+            KC::Grave          => push(&mut output, Keyboard::Grave),
+            KC::Comma          => push(&mut output, Keyboard::Comma),
+            KC::Dot            => push(&mut output, Keyboard::Dot),
+            KC::Slash          => push(&mut output, Keyboard::ForwardSlash),
+            KC::NonusBackslash => push(&mut output, Keyboard::NonUSBackslash),
 
-            KC::Tilde          => { output.push(Keyboard::LeftShift); output.push(Keyboard::Grave); }
-            KC::Exclaim        => { output.push(Keyboard::LeftShift); output.push(Keyboard::Keyboard1); }
-            KC::At             => { output.push(Keyboard::LeftShift); output.push(Keyboard::Keyboard2); }
-            KC::Hash           => { output.push(Keyboard::LeftShift); output.push(Keyboard::Keyboard3); }
-            KC::Dollar         => { output.push(Keyboard::LeftShift); output.push(Keyboard::Keyboard4); }
-            KC::Percentage     => { output.push(Keyboard::LeftShift); output.push(Keyboard::Keyboard5); }
-            KC::Circumflex     => { output.push(Keyboard::LeftShift); output.push(Keyboard::Keyboard6); }
-            KC::Ampersand      => { output.push(Keyboard::LeftShift); output.push(Keyboard::Keyboard7); }
-            KC::Asterix        => { output.push(Keyboard::LeftShift); output.push(Keyboard::Keyboard8); }
-            KC::LeftParent     => { output.push(Keyboard::LeftShift); output.push(Keyboard::Keyboard9); }
-            KC::RightParent    => { output.push(Keyboard::LeftShift); output.push(Keyboard::Keyboard0); }
-            KC::Underscore     => { output.push(Keyboard::LeftShift); output.push(Keyboard::Minus); }
-            KC::Plus           => { output.push(Keyboard::LeftShift); output.push(Keyboard::Equal); }
-            KC::LeftCurly      => { output.push(Keyboard::LeftShift); output.push(Keyboard::LeftBrace); }
-            KC::RightCurly     => { output.push(Keyboard::LeftShift); output.push(Keyboard::RightBrace); }
-            KC::Pipe           => { output.push(Keyboard::LeftShift); output.push(Keyboard::Backslash); }
-            KC::Colon          => { output.push(Keyboard::LeftShift); output.push(Keyboard::Semicolon); }
-            KC::DoubleQuote    => { output.push(Keyboard::LeftShift); output.push(Keyboard::Apostrophe); }
-            KC::LowerThan      => { output.push(Keyboard::LeftShift); output.push(Keyboard::Comma); }
-            KC::GreaterThan    => { output.push(Keyboard::LeftShift); output.push(Keyboard::Dot); }
-            KC::Question       => { output.push(Keyboard::LeftShift); output.push(Keyboard::ForwardSlash); }
+            KC::Tilde          => { push(&mut output, Keyboard::LeftShift); push(&mut output, Keyboard::Grave); }
+            KC::Exclaim        => { push(&mut output, Keyboard::LeftShift); push(&mut output, Keyboard::Keyboard1); }
+            KC::At             => { push(&mut output, Keyboard::LeftShift); push(&mut output, Keyboard::Keyboard2); }
+            KC::Hash           => { push(&mut output, Keyboard::LeftShift); push(&mut output, Keyboard::Keyboard3); }
+            KC::Dollar         => { push(&mut output, Keyboard::LeftShift); push(&mut output, Keyboard::Keyboard4); }
+            KC::Percentage     => { push(&mut output, Keyboard::LeftShift); push(&mut output, Keyboard::Keyboard5); }
+            KC::Circumflex     => { push(&mut output, Keyboard::LeftShift); push(&mut output, Keyboard::Keyboard6); }
+            KC::Ampersand      => { push(&mut output, Keyboard::LeftShift); push(&mut output, Keyboard::Keyboard7); }
+            KC::Asterix        => { push(&mut output, Keyboard::LeftShift); push(&mut output, Keyboard::Keyboard8); }
+            KC::LeftParent     => { push(&mut output, Keyboard::LeftShift); push(&mut output, Keyboard::Keyboard9); }
+            KC::RightParent    => { push(&mut output, Keyboard::LeftShift); push(&mut output, Keyboard::Keyboard0); }
+            KC::Underscore     => { push(&mut output, Keyboard::LeftShift); push(&mut output, Keyboard::Minus); }
+            KC::Plus           => { push(&mut output, Keyboard::LeftShift); push(&mut output, Keyboard::Equal); }
+            KC::LeftCurly      => { push(&mut output, Keyboard::LeftShift); push(&mut output, Keyboard::LeftBrace); }
+            KC::RightCurly     => { push(&mut output, Keyboard::LeftShift); push(&mut output, Keyboard::RightBrace); }
+            KC::Pipe           => { push(&mut output, Keyboard::LeftShift); push(&mut output, Keyboard::Backslash); }
+            KC::Colon          => { push(&mut output, Keyboard::LeftShift); push(&mut output, Keyboard::Semicolon); }
+            KC::DoubleQuote    => { push(&mut output, Keyboard::LeftShift); push(&mut output, Keyboard::Apostrophe); }
+            KC::LowerThan      => { push(&mut output, Keyboard::LeftShift); push(&mut output, Keyboard::Comma); }
+            KC::GreaterThan    => { push(&mut output, Keyboard::LeftShift); push(&mut output, Keyboard::Dot); }
+            KC::Question       => { push(&mut output, Keyboard::LeftShift); push(&mut output, Keyboard::ForwardSlash); }
 
-            KC::HomeAltA       => output.push(Keyboard::A),
-            KC::HomeAltU       => output.push(Keyboard::U),
-            KC::HomeGuiS       => output.push(Keyboard::S),
-            KC::HomeGuiI       => output.push(Keyboard::I),
-            KC::HomeCtrlE      => output.push(Keyboard::E),
-            KC::HomeCtrlT      => output.push(Keyboard::T),
-            KC::HomeShiftN     => output.push(Keyboard::N),
-            KC::HomeShiftR     => output.push(Keyboard::R),
+            KC::HomeAltA       => push(&mut output, Keyboard::A),
+            KC::HomeAltU       => push(&mut output, Keyboard::U),
+            KC::HomeGuiS       => push(&mut output, Keyboard::S),
+            KC::HomeGuiI       => push(&mut output, Keyboard::I),
+            KC::HomeCtrlE      => push(&mut output, Keyboard::E),
+            KC::HomeCtrlT      => push(&mut output, Keyboard::T),
+            KC::HomeSftN     => push(&mut output, Keyboard::N),
+            KC::HomeSftR     => push(&mut output, Keyboard::R),
 
             _ => {}
         }

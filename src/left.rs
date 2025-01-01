@@ -3,23 +3,21 @@
 
 mod keys;
 mod layouts;
-use alloc::collections::vec_deque::VecDeque;
 use keys::{Key, Modifiers, KC};
 use layouts::LAYOUTS;
 mod utils;
+use crate::utils::options::{HOLD_TIME, TIMER_MAIN_LOOP};
 use usbd_human_interface_device::page::Keyboard;
-use utils::led::RED;
+use utils::led::{BLUE, RED};
 use utils::matrix::Matrix;
 use utils::timer::ChewTimer;
 use utils::{led::Led, matrix::MatrixStatus};
 
-use waveshare_rp2040_zero::hal::rom_data::popcount32;
 use waveshare_rp2040_zero::{
     self as bsp,
     hal::gpio::{FunctionSio, SioInput},
 };
 
-use alloc::vec::Vec;
 use bsp::hal::{
     clocks::{init_clocks_and_plls, Clock},
     entry,
@@ -45,27 +43,10 @@ use usb_device::class_prelude::*;
 use usb_device::prelude::*;
 use usbd_human_interface_device::prelude::*;
 
-// use heapless::Vec;
-
-extern crate alloc;
-
-use core::alloc::Layout;
-use core::ptr::addr_of_mut;
-use embedded_alloc::LlffHeap as Heap;
-
-#[global_allocator]
-static HEAP: Heap = Heap::empty();
+use heapless::Vec;
 
 #[entry]
 fn main() -> ! {
-    {
-        // Embedded-alloc - Init heap
-        use core::mem::MaybeUninit;
-        const HEAP_SIZE: usize = 1024;
-        static mut HEAP_MEM: [MaybeUninit<u8>; HEAP_SIZE] = [MaybeUninit::uninit(); HEAP_SIZE];
-        unsafe { HEAP.init(addr_of_mut!(HEAP_MEM) as usize, HEAP_SIZE) }
-    }
-
     let mut pac = pac::Peripherals::take().unwrap();
 
     let mut watchdog = Watchdog::new(pac.WATCHDOG);
@@ -170,18 +151,18 @@ fn main() -> ! {
         sm1,
         &mut rx_program,
         // 19200.Hz(),
-        // 115200.Hz(),
-        921_600.Hz(),
+        115_200.Hz(),
+        // 921_600.Hz(),
         125.MHz(),
     )
     .enable();
 
     // ----------
-    let mut input_count_down = timer.count_down();
-    input_count_down.start(5.millis());
-
     let mut tick_count_down = timer.count_down();
     tick_count_down.start(1.millis());
+
+    let mut input_count_down = timer.count_down();
+    input_count_down.start(TIMER_MAIN_LOOP.millis());
 
     let mut chew_timer = ChewTimer::new();
     let mut led = Led::new(&mut neopixel);
@@ -205,15 +186,16 @@ fn main() -> ! {
         if input_count_down.wait().is_ok() {
             led.startup(chew_timer.ticks);
 
-            let mut pouet = VecDeque::new();
+            // let mut pouet: Vec<[Keyboard; 5], 5> = Vec::new();
+            let mut pouet: [Keyboard; 5] = [Keyboard::NoEventIndicated; 5];
 
-            // Read the right ----
+            // Read the right side ----
             let mut buffer = [0_u8; 4];
             if !rx.read_exact(&mut buffer).is_ok() {
                 led.light_on(RED);
             }
 
-            // Up the matrix ----
+            // Up matrix ----
             matrix.read_left(&mut gpios, &chew_timer);
             matrix.read_right(&mut buffer, &chew_timer);
 
@@ -245,38 +227,70 @@ fn main() -> ! {
             modifiers.Gui.0 = matrix.grid[modifiers.Gui.1] == MatrixStatus::Held;
             modifiers.Shift.0 = matrix.grid[modifiers.Shift.1] == MatrixStatus::Held;
 
-            // Loop only for them
+            let nb_key_pressed = matrix
+                .grid
+                .iter()
+                .filter(|c| match **c {
+                    MatrixStatus::Pressed(ticks) => ticks > HOLD_TIME - (HOLD_TIME / 4),
+                    _ => false,
+                })
+                .count();
+
+            // Loop once only for them
             for ((index, layout_case), matrix_case) in LAYOUTS[current_layout]
                 .iter()
                 .enumerate()
                 .zip(matrix.grid.iter_mut())
             {
                 match layout_case {
+                    // Regular modifiers --
                     k if (k >= &KC::ALT && k <= &KC::SHIFT) => match matrix_case {
                         MatrixStatus::Pressed(_) | MatrixStatus::Held => match layout_case {
-                            KC::HomeAltA | KC::HomeAltU => modifiers.Alt = (true, index),
-                            KC::HomeCtrlE | KC::HomeCtrlT => modifiers.Ctrl = (true, index),
-                            KC::HomeGuiS | KC::HomeGuiI => modifiers.Gui = (true, index),
-                            KC::HomeShiftN | KC::HomeShiftR => modifiers.Shift = (true, index),
+                            KC::ALT => modifiers.Alt = (true, index),
+                            KC::CTRL => modifiers.Ctrl = (true, index),
+                            KC::GUI => modifiers.Gui = (true, index),
+                            KC::SHIFT => modifiers.Shift = (true, index),
                             _ => {}
                         },
+
                         _ => {}
                     },
 
-                    k if (k >= &KC::HomeAltA && k <= &KC::HomeShiftR) => match matrix_case {
+                    // Homerow modifiers --
+                    k if k >= &KC::HomeAltA && k <= &KC::HomeSftR => match matrix_case {
                         MatrixStatus::Held => match layout_case {
                             KC::HomeAltA | KC::HomeAltU => modifiers.Alt = (true, index),
                             KC::HomeCtrlE | KC::HomeCtrlT => modifiers.Ctrl = (true, index),
                             KC::HomeGuiS | KC::HomeGuiI => modifiers.Gui = (true, index),
-                            KC::HomeShiftN | KC::HomeShiftR => modifiers.Shift = (true, index),
+                            KC::HomeSftN | KC::HomeSftR => modifiers.Shift = (true, index),
                             _ => {}
                         },
+                        MatrixStatus::Pressed(_) => {
+                            // Specific case when a homerow & another key are simultaneously pressed --
+                            // TODO Set the key as Held ?
+                            if nb_key_pressed > 1 {
+                                match layout_case {
+                                    KC::HomeAltA | KC::HomeAltU => modifiers.Alt = (true, index),
+                                    KC::HomeCtrlE | KC::HomeCtrlT => modifiers.Ctrl = (true, index),
+                                    KC::HomeGuiS | KC::HomeGuiI => modifiers.Gui = (true, index),
+                                    KC::HomeSftN | KC::HomeSftR => modifiers.Shift = (true, index),
+                                    _ => {}
+                                }
+                            }
+                        }
                         _ => {}
                     },
-
                     _ => {}
                 }
             }
+            if modifiers.Shift.0 {
+                led.light_on(BLUE);
+            } else {
+                led.light_off();
+            }
+
+            // TODO: Find a way to say:
+            // if a home row is pressed (not held) and some other keys -> activate the modifier
 
             // Keys ---------------------------------------------------------------------
             for ((index, layout_case), matrix_case) in LAYOUTS[current_layout]
@@ -287,20 +301,21 @@ fn main() -> ! {
                 match layout_case {
                     k if (k >= &KC::A && k <= &KC::Question) => match matrix_case {
                         MatrixStatus::Pressed(ticks) => {
-                            pouet.push_front(k.to_usb_code(&modifiers));
-                            *matrix_case = MatrixStatus::Done(*ticks);
+                            pouet = k.to_usb_code(&modifiers);
+                            break;
                         }
                         MatrixStatus::Held => {
                             if !modifiers.is_active(index) {
-                                pouet.push_front(k.to_usb_code(&modifiers));
+                                pouet = k.to_usb_code(&modifiers);
                             }
+                            break;
                         }
                         _ => {}
                     },
 
-                    k if (k >= &KC::HomeAltA && k <= &KC::HomeShiftR) => match matrix_case {
+                    k if (k >= &KC::HomeAltA && k <= &KC::HomeSftR) => match matrix_case {
                         MatrixStatus::Released => {
-                            pouet.push_front(k.to_usb_code(&modifiers));
+                            pouet = k.to_usb_code(&modifiers);
                         }
                         _ => {}
                     },
@@ -310,15 +325,12 @@ fn main() -> ! {
             }
 
             // USB ----------------------------------------------------------------------
-            pouet.push_front(Vec::new()); // Add an empty vec to close or use when nothing appends
-            while let Some(combi) = pouet.pop_back() {
-                match keyboard.device().write_report(combi) {
-                    Err(UsbHidError::WouldBlock) => {}
-                    Err(UsbHidError::Duplicate) => {}
-                    Ok(_) => {}
-                    Err(e) => {
-                        core::panic!("Failed to write keyboard report: {:?}", e)
-                    }
+            match keyboard.device().write_report(pouet) {
+                Err(UsbHidError::WouldBlock) => {}
+                Err(UsbHidError::Duplicate) => {}
+                Ok(_) => {}
+                Err(e) => {
+                    core::panic!("Failed to write keyboard report: {:?}", e)
                 }
             }
         }

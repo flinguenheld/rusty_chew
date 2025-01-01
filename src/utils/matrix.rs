@@ -1,12 +1,13 @@
 use embedded_hal::digital::InputPin;
 use waveshare_rp2040_zero::hal::gpio::{DynPinId, FunctionSio, Pin, PullUp, SioInput};
 
+use super::options::{HOLD_TIME, WAIT_TIME};
 use super::timer::ChewTimer;
 
 #[derive(Clone, Copy, PartialEq, PartialOrd)]
 pub enum MatrixStatus {
+    Wait(u32),
     Pressed(u32),
-    Done(u32),
     Held,
     Released,
     Free,
@@ -62,13 +63,18 @@ impl Matrix {
     fn up_case_status(&mut self, index: usize, is_low: bool, chew_timer: &ChewTimer) {
         if is_low {
             match self.grid[index] {
-                MatrixStatus::Pressed(saved_ticks) | MatrixStatus::Done(saved_ticks) => {
-                    if chew_timer.diff(saved_ticks) > 150 {
-                        self.grid[index] = MatrixStatus::Held;
+                MatrixStatus::Free => {
+                    self.grid[index] = MatrixStatus::Wait(chew_timer.ticks);
+                }
+                MatrixStatus::Wait(ticks) => {
+                    if chew_timer.diff(ticks) >= WAIT_TIME {
+                        self.grid[index] = MatrixStatus::Pressed(ticks);
                     }
                 }
-                MatrixStatus::Free => {
-                    self.grid[index] = MatrixStatus::Pressed(chew_timer.ticks);
+                MatrixStatus::Pressed(ticks) => {
+                    if chew_timer.diff(ticks) >= HOLD_TIME {
+                        self.grid[index] = MatrixStatus::Held;
+                    }
                 }
                 _ => {}
             }
