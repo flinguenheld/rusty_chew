@@ -3,13 +3,12 @@
 
 mod utils;
 use crate::utils::options::TIMER_MAIN_LOOP;
+use utils::gpios::{self, Gpios};
 use utils::led::{Led, RED};
+use utils::options::{TIMER_LED_STARTUP, UART_SPEED};
 use utils::timer::ChewTimer;
 
-use waveshare_rp2040_zero::{
-    self as bsp,
-    hal::gpio::{FunctionSio, SioInput},
-};
+use waveshare_rp2040_zero as bsp;
 
 use bsp::hal::{
     clocks::{init_clocks_and_plls, Clock},
@@ -81,36 +80,38 @@ fn main() -> ! {
         .build(&usb_bus);
 
     // GPIO -----
-    let mut gpios: [[Option<Pin<DynPinId, FunctionSio<SioInput>, PullUp>>; 5]; 4] = [
-        [
-            Some(pins.gp0.into_pull_up_input().into_dyn_pin()),
-            Some(pins.gp1.into_pull_up_input().into_dyn_pin()),
-            Some(pins.gp2.into_pull_up_input().into_dyn_pin()),
-            Some(pins.gp3.into_pull_up_input().into_dyn_pin()),
-            Some(pins.gp4.into_pull_up_input().into_dyn_pin()),
+    let mut gpios: Gpios = Gpios {
+        pins: [
+            [
+                Some(pins.gp0.into_pull_up_input().into_dyn_pin()),
+                Some(pins.gp1.into_pull_up_input().into_dyn_pin()),
+                Some(pins.gp2.into_pull_up_input().into_dyn_pin()),
+                Some(pins.gp3.into_pull_up_input().into_dyn_pin()),
+                Some(pins.gp4.into_pull_up_input().into_dyn_pin()),
+            ],
+            [
+                Some(pins.gp29.into_pull_up_input().into_dyn_pin()),
+                Some(pins.gp28.into_pull_up_input().into_dyn_pin()),
+                Some(pins.gp27.into_pull_up_input().into_dyn_pin()),
+                Some(pins.gp26.into_pull_up_input().into_dyn_pin()),
+                Some(pins.gp15.into_pull_up_input().into_dyn_pin()),
+            ],
+            [
+                Some(pins.gp8.into_pull_up_input().into_dyn_pin()),
+                Some(pins.gp9.into_pull_up_input().into_dyn_pin()),
+                Some(pins.gp13.into_pull_up_input().into_dyn_pin()),
+                Some(pins.gp14.into_pull_up_input().into_dyn_pin()),
+                None,
+            ],
+            [
+                Some(pins.gp5.into_pull_up_input().into_dyn_pin()),
+                Some(pins.gp6.into_pull_up_input().into_dyn_pin()),
+                Some(pins.gp7.into_pull_up_input().into_dyn_pin()),
+                None,
+                None,
+            ],
         ],
-        [
-            Some(pins.gp29.into_pull_up_input().into_dyn_pin()),
-            Some(pins.gp28.into_pull_up_input().into_dyn_pin()),
-            Some(pins.gp27.into_pull_up_input().into_dyn_pin()),
-            Some(pins.gp26.into_pull_up_input().into_dyn_pin()),
-            Some(pins.gp15.into_pull_up_input().into_dyn_pin()),
-        ],
-        [
-            Some(pins.gp8.into_pull_up_input().into_dyn_pin()),
-            Some(pins.gp9.into_pull_up_input().into_dyn_pin()),
-            Some(pins.gp13.into_pull_up_input().into_dyn_pin()),
-            Some(pins.gp14.into_pull_up_input().into_dyn_pin()),
-            None,
-        ],
-        [
-            Some(pins.gp5.into_pull_up_input().into_dyn_pin()),
-            Some(pins.gp6.into_pull_up_input().into_dyn_pin()),
-            Some(pins.gp7.into_pull_up_input().into_dyn_pin()),
-            None,
-            None,
-        ],
-    ];
+    };
 
     // let is_right = pins.gp12.into_floating_input().is_high().unwrap();
     // let is_left = pins.gp10.into_floating_input().is_high().unwrap();
@@ -131,9 +132,7 @@ fn main() -> ! {
         pins.gp11.reconfigure(),
         sm1,
         &mut tx_program,
-        // 19200.Hz(),
-        115_200.Hz(),
-        // 921_600.Hz(),
+        UART_SPEED.Hz(),
         125.MHz(),
     )
     .enable();
@@ -141,49 +140,30 @@ fn main() -> ! {
     let mut tick_count_down = timer.count_down();
     tick_count_down.start(1.millis());
 
-    let mut input_count_down = timer.count_down();
-    input_count_down.start(TIMER_MAIN_LOOP.millis());
+    let mut main_count_down = timer.count_down();
+    main_count_down.start(TIMER_MAIN_LOOP.millis());
 
     let mut chew_timer = ChewTimer::new();
     let mut led = Led::new(&mut neopixel);
 
     loop {
-        // Poll the keys every 10ms
-        if input_count_down.wait().is_ok() {
-            led.startup(chew_timer.ticks);
-            // if !tx.write_all(&get_keys(&mut gpios)).is_ok() {
-            //     led.light_on(RED);
+        if main_count_down.wait().is_ok() {
             // }
+
+            // if gpio_count_down.wait().is_ok() {
+            let right_pins = gpios.update_states();
+            if !tx.write_all(&right_pins).is_ok() {
+                led.light_on(RED);
+            }
+            // led.startup(chew_timer.ticks);
         }
 
-        //Tick once per ms
         if tick_count_down.wait().is_ok() {
             match keyboard.tick() {
                 Err(UsbHidError::WouldBlock) => {}
                 Ok(_) => chew_timer.add(),
                 Err(e) => core::panic!("Failed to process keyboard tick: {:?}", e),
             };
-            if !tx.write_all(&get_keys(&mut gpios)).is_ok() {
-                led.light_on(RED);
-            }
         }
     }
-}
-
-// Convert gpio states into an array of flags to be sent to the left
-fn get_keys(rows: &mut [[Option<Pin<DynPinId, FunctionSio<SioInput>, PullUp>>; 5]; 4]) -> [u8; 4] {
-    let mut output = [0_u8; 4];
-
-    for (i, row) in rows.iter_mut().enumerate() {
-        for k in row.iter_mut() {
-            if let Some(key) = k {
-                output[i] <<= 1;
-                if key.is_low().unwrap() {
-                    output[i] |= 1;
-                }
-            }
-        }
-    }
-
-    output
 }

@@ -3,16 +3,19 @@
 
 mod keys;
 mod layouts;
+use core::mem::swap;
+
 use keys::{Key, Modifiers, KC};
 use layouts::LAYOUTS;
-use utils::options::BUFFER_LENGTH;
+use utils::gpios::{self, Gpios};
+use utils::options::{BUFFER_LENGTH, UART_SPEED};
 mod utils;
 use crate::utils::options::{HOLD_TIME, TIMER_MAIN_LOOP};
 use usbd_human_interface_device::page::Keyboard;
+use utils::led::Led;
 use utils::led::{BLUE, RED};
-use utils::matrix::Matrix;
+use utils::matrix::{self, up_matrix, Matrix};
 use utils::timer::ChewTimer;
-use utils::{led::Led, matrix::MatrixStatus};
 
 use waveshare_rp2040_zero::{
     self as bsp,
@@ -102,36 +105,38 @@ fn main() -> ! {
         .build();
 
     // GPIO -----
-    let mut gpios: [[Option<Pin<DynPinId, FunctionSio<SioInput>, PullUp>>; 5]; 4] = [
-        [
-            Some(pins.gp4.into_pull_up_input().into_dyn_pin()),
-            Some(pins.gp3.into_pull_up_input().into_dyn_pin()),
-            Some(pins.gp2.into_pull_up_input().into_dyn_pin()),
-            Some(pins.gp1.into_pull_up_input().into_dyn_pin()),
-            Some(pins.gp0.into_pull_up_input().into_dyn_pin()),
+    let mut gpios: Gpios = Gpios {
+        pins: [
+            [
+                Some(pins.gp4.into_pull_up_input().into_dyn_pin()),
+                Some(pins.gp3.into_pull_up_input().into_dyn_pin()),
+                Some(pins.gp2.into_pull_up_input().into_dyn_pin()),
+                Some(pins.gp1.into_pull_up_input().into_dyn_pin()),
+                Some(pins.gp0.into_pull_up_input().into_dyn_pin()),
+            ],
+            [
+                Some(pins.gp15.into_pull_up_input().into_dyn_pin()),
+                Some(pins.gp26.into_pull_up_input().into_dyn_pin()),
+                Some(pins.gp27.into_pull_up_input().into_dyn_pin()),
+                Some(pins.gp28.into_pull_up_input().into_dyn_pin()),
+                Some(pins.gp29.into_pull_up_input().into_dyn_pin()),
+            ],
+            [
+                Some(pins.gp14.into_pull_up_input().into_dyn_pin()),
+                Some(pins.gp13.into_pull_up_input().into_dyn_pin()),
+                Some(pins.gp9.into_pull_up_input().into_dyn_pin()),
+                Some(pins.gp8.into_pull_up_input().into_dyn_pin()),
+                None,
+            ],
+            [
+                Some(pins.gp7.into_pull_up_input().into_dyn_pin()),
+                Some(pins.gp6.into_pull_up_input().into_dyn_pin()),
+                Some(pins.gp5.into_pull_up_input().into_dyn_pin()),
+                None,
+                None,
+            ],
         ],
-        [
-            Some(pins.gp15.into_pull_up_input().into_dyn_pin()),
-            Some(pins.gp26.into_pull_up_input().into_dyn_pin()),
-            Some(pins.gp27.into_pull_up_input().into_dyn_pin()),
-            Some(pins.gp28.into_pull_up_input().into_dyn_pin()),
-            Some(pins.gp29.into_pull_up_input().into_dyn_pin()),
-        ],
-        [
-            Some(pins.gp14.into_pull_up_input().into_dyn_pin()),
-            Some(pins.gp13.into_pull_up_input().into_dyn_pin()),
-            Some(pins.gp9.into_pull_up_input().into_dyn_pin()),
-            Some(pins.gp8.into_pull_up_input().into_dyn_pin()),
-            None,
-        ],
-        [
-            Some(pins.gp7.into_pull_up_input().into_dyn_pin()),
-            Some(pins.gp6.into_pull_up_input().into_dyn_pin()),
-            Some(pins.gp5.into_pull_up_input().into_dyn_pin()),
-            None,
-            None,
-        ],
-    ];
+    };
 
     // let is_left = pins.gp10.into_floating_input().is_high().unwrap();
 
@@ -151,9 +156,7 @@ fn main() -> ! {
         pins.gp11.reconfigure(),
         sm1,
         &mut rx_program,
-        // 19200.Hz(),
-        115_200.Hz(),
-        // 921_600.Hz(),
+        UART_SPEED.Hz(),
         125.MHz(),
     )
     .enable();
@@ -162,16 +165,21 @@ fn main() -> ! {
     let mut tick_count_down = timer.count_down();
     tick_count_down.start(1.millis());
 
-    let mut input_count_down = timer.count_down();
-    input_count_down.start(TIMER_MAIN_LOOP.millis());
+    let mut main_count_down = timer.count_down();
+    main_count_down.start(TIMER_MAIN_LOOP.millis());
+
+    // let mut gpio_count_down = timer.count_down();
+    // gpio_count_down.start(TIMER_GPIO.millis());
 
     let mut chew_timer = ChewTimer::new();
     let mut led = Led::new(&mut neopixel);
 
+    let mut matrix_prev: Matrix = [0; 34];
+    let mut matrix_cur: Matrix = [0; 34];
+
     // TEST LAYOUT ---------------------------------------------------------------------------------
     // TEST LAYOUT ---------------------------------------------------------------------------------
 
-    let mut matrix = Matrix::new();
     // let mut current_layout: Vec<u8> = Vec::new();
     // current_layout.push(0);
     let mut current_layout = 0;
@@ -179,149 +187,54 @@ fn main() -> ! {
     // TEST LAYOUT ---------------------------------------------------------------------------------
     // TEST LAYOUT ---------------------------------------------------------------------------------
 
-    // let mut modifiers: [(bool, usize); 4] = [(false, 0), (false, 0), (false, 0), (false, 0)];
     let mut modifiers = Modifiers::new();
-
     let mut key_buffer: Vec<[Keyboard; 6], BUFFER_LENGTH> = Vec::new();
 
     loop {
+        // TODO put in its owns timer
+        // led.startup(chew_timer.ticks);
         //Poll the keys every 10ms
-        if input_count_down.wait().is_ok() {
+        if main_count_down.wait().is_ok() {
+            let left_pins = gpios.update_states();
+
+            // Matrix update ------------------------------------------------------------------
+            // Read the right side ----
+            let mut right_pins = [0_u8; 4];
+            if !rx.read_exact(&mut right_pins).is_ok() {
+                led.light_on(RED);
+            }
+
+            swap(&mut matrix_prev, &mut matrix_cur);
+            up_matrix(left_pins, 'l', &chew_timer, &matrix_prev, &mut matrix_cur);
+            up_matrix(right_pins, 'r', &chew_timer, &matrix_prev, &mut matrix_cur);
+
             if key_buffer.is_empty() {
-                led.startup(chew_timer.ticks);
-
-                // let mut pouet: Vec<[Keyboard; 5], 5> = Vec::new();
-                let mut pouet: [Keyboard; 6] = [Keyboard::NoEventIndicated; 6];
-
-                // Current layout
-                // Is it still active ?
-                // Check if there is a new one ?
-                // Any modificator ?
-
                 // Layouts ------------------------------------------------------------------
                 current_layout = 0;
-                for (layout_case, matrix_case) in
-                    LAYOUTS[current_layout].iter().zip(matrix.grid.iter_mut())
+                for (layout_case, (case_prev, case_cur)) in LAYOUTS[current_layout]
+                    .iter()
+                    .zip(matrix_prev.iter().zip(matrix_cur.iter()))
                 {
                     match layout_case {
-                        KC::LAY(number) => match matrix_case {
-                            MatrixStatus::Pressed(_) | MatrixStatus::Held => {
-                                current_layout = *number as usize
-                            }
-                            _ => {}
-                        },
-                        _ => {}
-                    }
-                }
+                        k if (k >= &KC::A && k <= &KC::Question) => {
+                            // let diff = chew_timer.diff(*case_cur);
+                            // if (*case_prev == 0 && *case_cur > 0)
+                            if *case_cur > 0
+                                && (*case_prev == 0 || chew_timer.diff(*case_cur) >= HOLD_TIME)
+                            {
+                                // TODO find a way to make macro forbiden ? or to limit their speed
 
-                // Modifiers ----------------------------------------------------------------
-                // Maintain them from the grid level instead of the layout
-                modifiers.alt.0 = matrix.grid[modifiers.alt.1] == MatrixStatus::Held;
-                modifiers.alt_gr.0 = matrix.grid[modifiers.alt_gr.1] == MatrixStatus::Held;
-                modifiers.ctrl.0 = matrix.grid[modifiers.ctrl.1] == MatrixStatus::Held;
-                modifiers.gui.0 = matrix.grid[modifiers.gui.1] == MatrixStatus::Held;
-                modifiers.shift.0 = matrix.grid[modifiers.shift.1] == MatrixStatus::Held;
-
-                let nb_key_pressed = matrix
-                    .grid
-                    .iter()
-                    .filter(|c| match **c {
-                        MatrixStatus::Pressed(ticks) => ticks > HOLD_TIME - (HOLD_TIME / 4),
-                        _ => false,
-                    })
-                    .count();
-
-                // Loop once only for them
-                for ((index, layout_case), matrix_case) in LAYOUTS[current_layout]
-                    .iter()
-                    .enumerate()
-                    .zip(matrix.grid.iter_mut())
-                {
-                    match layout_case {
-                        // Regular modifiers --
-                        k if (k >= &KC::ALT && k <= &KC::SHIFT) => match matrix_case {
-                            MatrixStatus::Pressed(_) | MatrixStatus::Held => match layout_case {
-                                KC::ALT => modifiers.alt = (true, index),
-                                KC::ALTGR => modifiers.alt_gr = (true, index),
-                                KC::CTRL => modifiers.ctrl = (true, index),
-                                KC::GUI => modifiers.gui = (true, index),
-                                KC::SHIFT => modifiers.shift = (true, index),
-                                _ => {}
-                            },
-
-                            _ => {}
-                        },
-
-                        // Homerow modifiers --
-                        k if k >= &KC::HomeAltA && k <= &KC::HomeSftR => match matrix_case {
-                            MatrixStatus::Held => match layout_case {
-                                KC::HomeAltA | KC::HomeAltU => modifiers.alt = (true, index),
-                                KC::HomeCtrlE | KC::HomeCtrlT => modifiers.ctrl = (true, index),
-                                KC::HomeGuiS | KC::HomeGuiI => modifiers.gui = (true, index),
-                                KC::HomeSftN | KC::HomeSftR => modifiers.shift = (true, index),
-                                _ => {}
-                            },
-                            MatrixStatus::Pressed(_) => {
-                                // Specific case when a homerow & another key are simultaneously pressed --
-                                // TODO Set the key as Held ?
-                                if nb_key_pressed > 1 {
-                                    match layout_case {
-                                        KC::HomeAltA | KC::HomeAltU => {
-                                            modifiers.alt = (true, index)
-                                        }
-                                        KC::HomeCtrlE | KC::HomeCtrlT => {
-                                            modifiers.ctrl = (true, index)
-                                        }
-                                        KC::HomeGuiS | KC::HomeGuiI => {
-                                            modifiers.gui = (true, index)
-                                        }
-                                        KC::HomeSftN | KC::HomeSftR => {
-                                            modifiers.shift = (true, index)
-                                        }
-                                        _ => {}
-                                    }
-                                }
-                            }
-                            _ => {}
-                        },
-                        _ => {}
-                    }
-                }
-                if modifiers.shift.0 {
-                    led.light_on(BLUE);
-                } else {
-                    led.light_off();
-                }
-
-                // Keys ---------------------------------------------------------------------
-                for ((index, layout_case), matrix_case) in LAYOUTS[current_layout]
-                    .iter()
-                    .enumerate()
-                    .zip(matrix.grid.iter_mut())
-                {
-                    match layout_case {
-                        k if (k >= &KC::A && k <= &KC::Question) => match matrix_case {
-                            MatrixStatus::Pressed(ticks) => {
                                 k.to_usb_code(&modifiers, &mut key_buffer);
-                                break;
+                                // break;
                             }
-                            MatrixStatus::Held => {
-                                if !modifiers.is_active(index) {
-                                    k.to_usb_code(&modifiers, &mut key_buffer);
-                                }
-                                break;
-                            }
-                            _ => {}
-                        },
-
-                        k if (k >= &KC::HomeAltA && k <= &KC::HomeSftR) => match matrix_case {
-                            MatrixStatus::Released => {
+                        }
+                        k if (k >= &KC::HomeAltA && k <= &KC::HomeSftR) => {
+                            // let diff = chew_timer.diff(*case_prev);
+                            if chew_timer.diff(*case_prev) < HOLD_TIME && *case_cur == 0 {
                                 k.to_usb_code(&modifiers, &mut key_buffer);
-                                break;
+                                // break;
                             }
-                            _ => {}
-                        },
-
+                        }
                         _ => {}
                     }
                 }
@@ -330,17 +243,33 @@ fn main() -> ! {
             // USB ----------------------------------------------------------------------
             let to_print = key_buffer.pop().unwrap_or([Keyboard::NoEventIndicated; 6]);
 
-            // if let Some(pouet) = key_buffer.pop() {
             match keyboard.device().write_report(to_print) {
                 Err(UsbHidError::WouldBlock) => {}
                 Err(UsbHidError::Duplicate) => {}
                 Ok(_) => {}
                 Err(e) => {
                     core::panic!("Failed to write keyboard report: {:?}", e)
-                    // }
                 }
             }
         }
+
+        // Rename ----------------------------------------------------------------------
+        // Rename ----------------------------------------------------------------------
+        // Rename ----------------------------------------------------------------------
+        // if gpio_count_down.wait().is_ok() {
+        //     let left_pins = gpios.update_states();
+
+        //     // Matrix update ------------------------------------------------------------------
+        //     // Read the right side ----
+        //     let mut right_pins = [0_u8; 4];
+        //     if !rx.read_exact(&mut right_pins).is_ok() {
+        //         led.light_on(RED);
+        //     }
+
+        //     swap(&mut matrix_prev, &mut matrix_cur);
+        //     up_matrix(left_pins, 'l', &chew_timer, &matrix_prev, &mut matrix_cur);
+        //     up_matrix(right_pins, 'r', &chew_timer, &matrix_prev, &mut matrix_cur);
+        // }
 
         //Tick once per ms
         if tick_count_down.wait().is_ok() {
@@ -349,18 +278,6 @@ fn main() -> ! {
                 Ok(_) => chew_timer.add(),
                 Err(e) => core::panic!("Failed to process keyboard tick: {:?}", e),
             };
-
-            // Matrix update ------------------------------------------------------------------
-            // Read the right side ----
-            let mut buffer = [0_u8; 4];
-            if !rx.read_exact(&mut buffer).is_ok() {
-                led.light_on(RED);
-            }
-
-            // Up matrix ----
-            matrix.read_left(&mut gpios, &chew_timer);
-            matrix.read_right(&mut buffer, &chew_timer);
-            // Matrix update ------------------------------------------------------------------
         }
 
         if usb_dev.poll(&mut [&mut keyboard]) {

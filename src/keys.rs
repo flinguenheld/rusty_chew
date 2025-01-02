@@ -208,8 +208,10 @@ impl KC {
             KC::Z => push_to_buffer(push(output, Keyboard::Z), buffer),
 
             KC::E_acute =>  push_to_buffer(push(push(output, Keyboard::RightAlt), Keyboard::E), buffer) ,
-            KC::E_circu => { push_to_buffer(push(push(output.clone(), Keyboard::RightAlt), Keyboard::Grave), buffer);
-                             push_to_buffer(push( output, Keyboard::E), buffer); }
+            // KC::E_circu => { push_to_buffer(push(push(output.clone(), Keyboard::RightAlt), Keyboard::Grave), buffer);
+            //                  push_to_buffer(push( output, Keyboard::E), buffer); }
+            KC::E_circu => { push_to_buffer(push(push(output.clone(), Keyboard::A), Keyboard::B), buffer);
+                             push_to_buffer(push( output, Keyboard::C), buffer); }
 
             KC::Num0 => push_to_buffer(push(output, Keyboard::Keyboard0), buffer),
             KC::Num1 => push_to_buffer(push(output, Keyboard::Keyboard1), buffer),

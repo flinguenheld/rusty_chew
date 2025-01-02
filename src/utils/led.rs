@@ -10,6 +10,8 @@ use core::iter::once;
 use smart_leds::{brightness, SmartLedsWrite, RGB8};
 use ws2812_pio::Ws2812;
 
+use super::options::TIMER_LED_STARTUP;
+
 pub const OFF: [u8; 3] = [0, 0, 0];
 // pub const GREEN: [u8; 3] = [255, 0, 0];
 pub const RED: [u8; 3] = [0, 255, 0];
@@ -29,7 +31,7 @@ impl Led<'_> {
         Led {
             n: 0,
             on: true,
-            startup_countdown: 10_000, // ms
+            startup_countdown: TIMER_LED_STARTUP,
             neopixel,
         }
     }
@@ -41,10 +43,8 @@ impl Led<'_> {
             self.n = self.n.wrapping_add(1);
 
             if ticks > self.startup_countdown {
+                self.light_off();
                 self.on = false;
-                self.neopixel
-                    .write(brightness(once(OFF.into()), 3))
-                    .unwrap();
             }
         }
     }
