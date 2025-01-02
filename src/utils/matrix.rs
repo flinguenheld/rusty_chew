@@ -8,6 +8,7 @@ use super::timer::ChewTimer;
 pub enum MatrixStatus {
     Wait(u32),
     Pressed(u32),
+    Done(u32),
     Held,
     Released,
     Free,

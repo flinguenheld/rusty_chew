@@ -151,9 +151,9 @@ fn main() -> ! {
         // Poll the keys every 10ms
         if input_count_down.wait().is_ok() {
             led.startup(chew_timer.ticks);
-            if !tx.write_all(&get_keys(&mut gpios)).is_ok() {
-                led.light_on(RED);
-            }
+            // if !tx.write_all(&get_keys(&mut gpios)).is_ok() {
+            //     led.light_on(RED);
+            // }
         }
 
         //Tick once per ms
@@ -163,6 +163,9 @@ fn main() -> ! {
                 Ok(_) => chew_timer.add(),
                 Err(e) => core::panic!("Failed to process keyboard tick: {:?}", e),
             };
+            if !tx.write_all(&get_keys(&mut gpios)).is_ok() {
+                led.light_on(RED);
+            }
         }
     }
 }
