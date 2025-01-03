@@ -5,28 +5,23 @@ mod keys;
 mod layouts;
 use core::mem::swap;
 
-use keys::{Key, Modifiers, KC};
+use keys::{Modifiers, KC};
 use layouts::LAYOUTS;
-use utils::gpios::{self, Gpios};
+use utils::gpios::Gpios;
 use utils::options::{BUFFER_LENGTH, UART_SPEED};
 mod utils;
 use crate::utils::options::{HOLD_TIME, TIMER_MAIN_LOOP};
 use usbd_human_interface_device::page::Keyboard;
 use utils::led::Led;
 use utils::led::{BLUE, RED};
-use utils::matrix::{self, up_matrix, Matrix};
+use utils::matrix::{up_matrix, Matrix};
 use utils::timer::ChewTimer;
 
-use waveshare_rp2040_zero::{
-    self as bsp,
-    hal::gpio::{FunctionSio, SioInput},
-};
+use waveshare_rp2040_zero as bsp;
 
 use bsp::hal::{
     clocks::{init_clocks_and_plls, Clock},
-    entry,
-    gpio::{DynPinId, FunctionSioInput, Pin, PullUp},
-    pac,
+    entry, pac,
     pio::PIOExt,
     timer::Timer,
     usb,
@@ -36,7 +31,6 @@ use bsp::hal::{
 use cortex_m::prelude::*;
 use defmt::*;
 use defmt_rtt as _;
-use embedded_hal::digital::*;
 use embedded_io::Read;
 use fugit::{ExtU32, RateExtU32};
 use panic_probe as _;
@@ -187,7 +181,7 @@ fn main() -> ! {
     // TEST LAYOUT ---------------------------------------------------------------------------------
     // TEST LAYOUT ---------------------------------------------------------------------------------
 
-    let mut modifiers = Modifiers::new();
+    let mut mods = Modifiers::new();
     let mut key_buffer: Vec<[Keyboard; 6], BUFFER_LENGTH> = Vec::new();
 
     loop {
@@ -195,49 +189,105 @@ fn main() -> ! {
         // led.startup(chew_timer.ticks);
         //Poll the keys every 10ms
         if main_count_down.wait().is_ok() {
+            // Matrix update ------------------------------------------------------------
             let left_pins = gpios.update_states();
-
-            // Matrix update ------------------------------------------------------------------
-            // Read the right side ----
             let mut right_pins = [0_u8; 4];
             if !rx.read_exact(&mut right_pins).is_ok() {
                 led.light_on(RED);
             }
 
             swap(&mut matrix_prev, &mut matrix_cur);
-            up_matrix(left_pins, 'l', &chew_timer, &matrix_prev, &mut matrix_cur);
-            up_matrix(right_pins, 'r', &chew_timer, &matrix_prev, &mut matrix_cur);
+            up_matrix(left_pins, 'L', &chew_timer, &matrix_prev, &mut matrix_cur);
+            up_matrix(right_pins, 'R', &chew_timer, &matrix_prev, &mut matrix_cur);
 
             if key_buffer.is_empty() {
-                // Layouts ------------------------------------------------------------------
                 current_layout = 0;
-                for (layout_case, (case_prev, case_cur)) in LAYOUTS[current_layout]
+
+                // Layouts --------------------------------------------------------------
+                LAYOUTS[current_layout]
                     .iter()
                     .zip(matrix_prev.iter().zip(matrix_cur.iter()))
-                {
-                    match layout_case {
-                        k if (k >= &KC::A && k <= &KC::Question) => {
-                            // let diff = chew_timer.diff(*case_cur);
-                            // if (*case_prev == 0 && *case_cur > 0)
-                            if *case_cur > 0
-                                && (*case_prev == 0 || chew_timer.diff(*case_cur) >= HOLD_TIME)
-                            {
-                                // TODO find a way to make macro forbiden ? or to limit their speed
+                    .for_each(|(layout, (mat_prev, mat_cur))|
+                    // TODO add specific layout keys
+                    match layout {
+                        KC::LAY(number) => {
+                            if *mat_cur > 0 {
+                                current_layout = *number as usize
+                            }
+                        }
+                        _ => {}
+                    });
 
-                                k.to_usb_code(&modifiers, &mut key_buffer);
+                // Modifiers ------------------------------------------------------------
+                // Maintain them from the matrix level instead of the layout
+                // So keep their indexes
+                mods.alt.0 = mods.alt.0 && matrix_cur[mods.alt.1] >= HOLD_TIME;
+                mods.alt_gr.0 = mods.alt_gr.0 && matrix_cur[mods.alt_gr.1] >= HOLD_TIME;
+                mods.ctrl.0 = mods.ctrl.0 && matrix_cur[mods.ctrl.1] >= HOLD_TIME;
+                mods.gui.0 = mods.gui.0 && matrix_cur[mods.gui.1] >= HOLD_TIME;
+                mods.shift.0 = mods.shift.0 && matrix_cur[mods.shift.1] >= HOLD_TIME;
+
+                // Regular modifiers --
+                LAYOUTS[current_layout]
+                    .iter()
+                    .zip(matrix_cur.iter())
+                    .enumerate()
+                    .filter(|(_, (&la, &mc))| la >= KC::ALT && la <= KC::SHIFT && mc > 0)
+                    .for_each(|(index, (layout, _))| match layout {
+                        KC::ALT => mods.alt = (true, index),
+                        KC::ALTGR => mods.alt_gr = (true, index),
+                        KC::CTRL => mods.ctrl = (true, index),
+                        KC::GUI => mods.gui = (true, index),
+                        _ => mods.shift = (true, index),
+                    });
+
+                // Homerow modifiers --
+                LAYOUTS[current_layout]
+                    .iter()
+                    .zip(matrix_cur.iter())
+                    .enumerate()
+                    .filter(|(_, (&la, &ma))| {
+                        la >= KC::HomeAltA && la <= KC::HomeSftR && ma > HOLD_TIME
+                    })
+                    .for_each(|(index, (layout, _))| match layout {
+                        KC::HomeAltA | KC::HomeAltU => mods.alt = (true, index),
+                        KC::HomeCtrlE | KC::HomeCtrlT => mods.ctrl = (true, index),
+                        KC::HomeGuiS | KC::HomeGuiI => mods.gui = (true, index),
+                        _ => mods.shift = (true, index),
+                    });
+
+                // Regular keys ---------------------------------------------------------
+                LAYOUTS[current_layout]
+                    .iter()
+                    .enumerate()
+                    .zip(matrix_prev.iter().zip(matrix_cur.iter()))
+                    .filter(|((index, _), (_, _))| !mods.is_active(*index))
+                    .for_each(|((_, layout), (mat_prev, mat_cur))| match layout {
+                        k if (k >= &KC::A && k <= &KC::Question) => {
+                            if (*mat_cur > 0 && *mat_prev == 0)
+                                || chew_timer.diff(*mat_cur) >= HOLD_TIME
+                            {
+                                k.to_usb_code(&mods, &mut key_buffer);
+                                // break;
+                            }
+                        }
+                        // Macros (require several usb reports)
+                        k if (k >= &KC::E_circu && k <= &KC::E_circu) => {
+                            if *mat_cur > 0 && *mat_prev == 0 {
+                                k.to_usb_code(&mods, &mut key_buffer);
                                 // break;
                             }
                         }
                         k if (k >= &KC::HomeAltA && k <= &KC::HomeSftR) => {
-                            // let diff = chew_timer.diff(*case_prev);
-                            if chew_timer.diff(*case_prev) < HOLD_TIME && *case_cur == 0 {
-                                k.to_usb_code(&modifiers, &mut key_buffer);
+                            if *mat_cur == 0
+                                && (*mat_prev > 0 && chew_timer.diff(*mat_prev) < HOLD_TIME)
+                            {
+                                k.to_usb_code(&mods, &mut key_buffer);
                                 // break;
                             }
                         }
                         _ => {}
-                    }
-                }
+                    });
             }
 
             // USB ----------------------------------------------------------------------
@@ -252,24 +302,6 @@ fn main() -> ! {
                 }
             }
         }
-
-        // Rename ----------------------------------------------------------------------
-        // Rename ----------------------------------------------------------------------
-        // Rename ----------------------------------------------------------------------
-        // if gpio_count_down.wait().is_ok() {
-        //     let left_pins = gpios.update_states();
-
-        //     // Matrix update ------------------------------------------------------------------
-        //     // Read the right side ----
-        //     let mut right_pins = [0_u8; 4];
-        //     if !rx.read_exact(&mut right_pins).is_ok() {
-        //         led.light_on(RED);
-        //     }
-
-        //     swap(&mut matrix_prev, &mut matrix_cur);
-        //     up_matrix(left_pins, 'l', &chew_timer, &matrix_prev, &mut matrix_cur);
-        //     up_matrix(right_pins, 'r', &chew_timer, &matrix_prev, &mut matrix_cur);
-        // }
 
         //Tick once per ms
         if tick_count_down.wait().is_ok() {

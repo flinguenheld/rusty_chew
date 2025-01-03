@@ -3,19 +3,6 @@ use usbd_human_interface_device::page::Keyboard;
 
 use crate::utils::options::BUFFER_LENGTH;
 
-pub enum Key {
-    None,
-    Std(Keyboard),
-    Shifted(Keyboard),
-    NeverShifted(Keyboard),
-    Layout(u8),
-    HR((Keyboard, Keyboard)),
-}
-
-// pub to_keys(key: Key) {
-
-// }
-
 pub struct Modifiers {
     pub alt: (bool, usize),
     pub alt_gr: (bool, usize),
@@ -76,7 +63,6 @@ pub enum KC {
     Z = 26,
 
     E_acute = 50,
-    E_circu = 51,
 
     Num0 = 300,
     Num1 = 301,
@@ -125,23 +111,26 @@ pub enum KC {
     GreaterThan = 519,
     Question = 520,
 
-    ALT = 1000,
-    ALTGR = 1001,
-    CTRL = 1002,
-    GUI = 1003,
-    SHIFT = 1004,
+    // Macros - No held
+    E_circu = 600,
 
-    HomeAltA = 2000,
-    HomeAltU = 2001,
-    HomeGuiS = 2002,
-    HomeGuiI = 2003,
-    HomeCtrlE = 2004,
-    HomeCtrlT = 2005,
-    HomeSftN = 2006,
-    HomeSftR = 2007,
+    ALT = 10000,
+    ALTGR = 10001,
+    CTRL = 10002,
+    GUI = 10003,
+    SHIFT = 10004,
+
+    HomeAltA = 20000,
+    HomeAltU = 20001,
+    HomeGuiS = 20002,
+    HomeGuiI = 20003,
+    HomeCtrlE = 20004,
+    HomeCtrlT = 20005,
+    HomeSftN = 20006,
+    HomeSftR = 20007,
 
     // Home(KC) = 2000,
-    LAY(u8) = 10000,
+    LAY(u8) = 60000,
 }
 
 fn push_to_buffer(combination: [Keyboard; 6], buffer: &mut Vec<[Keyboard; 6], BUFFER_LENGTH>) {
