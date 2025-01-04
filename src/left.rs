@@ -151,7 +151,7 @@ fn main() -> ! {
         sm1,
         &mut rx_program,
         UART_SPEED.Hz(),
-        125.MHz(),
+        bsp::XOSC_CRYSTAL_FREQ.Hz(),
     )
     .enable();
 
