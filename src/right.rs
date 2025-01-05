@@ -153,7 +153,9 @@ fn main() -> ! {
             // if gpio_count_down.wait().is_ok() {
             let right_pins = gpios.update_states();
             if !tx.write_all(&right_pins).is_ok() {
+                // TODO Clean it if it's validated, turn off the light
                 led.light_on(RED);
+                continue;
             }
             // led.startup(chew_timer.ticks);
         }

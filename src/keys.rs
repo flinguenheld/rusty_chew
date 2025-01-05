@@ -30,6 +30,12 @@ impl Modifiers {
     }
 }
 
+pub struct DeadKeyLayout {
+    pub active: bool,
+    // pub done: bool,
+    pub held: usize,
+}
+
 #[repr(u16)]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub enum KC {
@@ -131,12 +137,14 @@ pub enum KC {
 
     // Home(KC) = 2000,
     LAY(u8) = 60000,
+    LAY_DEAD(u8) = 60001,
 }
 
 fn push_to_buffer(combination: [Keyboard; 6], buffer: &mut Vec<[Keyboard; 6], BUFFER_LENGTH>) {
     buffer.push(combination).ok();
 }
 
+// TODO Remove and use indexes directly
 fn push(mut array: [Keyboard; 6], val: Keyboard) -> [Keyboard; 6] {
     if let Some(index) = array.iter().position(|c| *c == Keyboard::NoEventIndicated) {
         array[index] = val;

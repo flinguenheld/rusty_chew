@@ -5,14 +5,14 @@ mod keys;
 mod layouts;
 use core::mem::swap;
 
-use keys::{Modifiers, KC};
+use keys::{DeadKeyLayout, Modifiers, KC};
 use layouts::LAYOUTS;
 use utils::gpios::Gpios;
 use utils::options::{BUFFER_LENGTH, UART_SPEED};
 mod utils;
 use crate::utils::options::{HOLD_TIME, TIMER_MAIN_LOOP};
 use usbd_human_interface_device::page::Keyboard;
-use utils::led::Led;
+use utils::led::{Led, OFF};
 use utils::led::{BLUE, RED};
 use utils::matrix::{up_matrix, Matrix};
 use utils::timer::ChewTimer;
@@ -177,6 +177,11 @@ fn main() -> ! {
     // let mut current_layout: Vec<u8> = Vec::new();
     // current_layout.push(0);
     let mut current_layout = 0;
+    let mut dead_layout_status = DeadKeyLayout {
+        active: false,
+        // done: false,
+        held: usize::MAX,
+    };
 
     // TEST LAYOUT ---------------------------------------------------------------------------------
     // TEST LAYOUT ---------------------------------------------------------------------------------
@@ -185,6 +190,8 @@ fn main() -> ! {
     let mut key_buffer: Vec<[Keyboard; 6], BUFFER_LENGTH> = Vec::new();
 
     loop {
+        let mut exclude_from_pressed: Vec<usize, 34> = Vec::new();
+
         // TODO put in its owns timer
         // led.startup(chew_timer.ticks);
         //Poll the keys every 10ms
@@ -193,7 +200,9 @@ fn main() -> ! {
             let left_pins = gpios.update_states();
             let mut right_pins = [0_u8; 4];
             if !rx.read_exact(&mut right_pins).is_ok() {
+                // TODO Clean it if it's validated, turn off the light
                 led.light_on(RED);
+                continue;
             }
 
             swap(&mut matrix_prev, &mut matrix_cur);
@@ -201,22 +210,44 @@ fn main() -> ! {
             up_matrix(right_pins, 'R', &chew_timer, &matrix_prev, &mut matrix_cur);
 
             if key_buffer.is_empty() {
-                current_layout = 0;
-
                 // Layouts --------------------------------------------------------------
-                LAYOUTS[current_layout]
-                    .iter()
-                    .zip(matrix_prev.iter().zip(matrix_cur.iter()))
-                    .for_each(|(layout, (mat_prev, mat_cur))|
+                if !dead_layout_status.active {
+                    current_layout = 0;
+
+                    LAYOUTS[current_layout]
+                        .iter()
+                        .enumerate()
+                        .zip(matrix_prev.iter().zip(matrix_cur.iter()))
+                        .for_each(|((index, layout), (mat_prev, mat_cur))|
                     // TODO add specific layout keys
                     match layout {
                         KC::LAY(number) => {
                             if *mat_cur > 0 {
-                                current_layout = *number as usize
+                                current_layout = *number as usize;
+                                // TODO add break points
+                            }
+                        }
+                        KC::LAY_DEAD(number) => {
+                            if *mat_cur > 0 {
+                                dead_layout_status.active = true;
+                                current_layout = *number as usize;
+
+                                if *mat_cur >= HOLD_TIME{
+                                    // Keep the index to filter it from keys
+                                    dead_layout_status.held = index;
+                                }
                             }
                         }
                         _ => {}
                     });
+                }
+                if current_layout == 0 {
+                    led.light_on(RED);
+                } else if current_layout == 2 {
+                    led.light_on(BLUE);
+                } else {
+                    led.light_on(OFF);
+                }
 
                 // Modifiers ------------------------------------------------------------
                 // Maintain them from the matrix level instead of the layout
@@ -257,25 +288,29 @@ fn main() -> ! {
                     });
 
                 // Regular keys ---------------------------------------------------------
-                LAYOUTS[current_layout]
+                for ((_, layout), (mat_prev, mat_cur)) in LAYOUTS[current_layout]
                     .iter()
                     .enumerate()
-                    .zip(matrix_prev.iter().zip(matrix_cur.iter()))
-                    .filter(|((index, _), (_, _))| !mods.is_active(*index))
-                    .for_each(|((_, layout), (mat_prev, mat_cur))| match layout {
+                    .zip(matrix_prev.iter().zip(matrix_cur.iter_mut()))
+                    .filter(|((index, _), (_, _))| {
+                        // !mods.is_active(*index) && dead_layout_status.held != *index
+                        dead_layout_status.held != *index
+                    })
+                {
+                    match layout {
                         k if (k >= &KC::A && k <= &KC::Question) => {
                             if (*mat_cur > 0 && *mat_prev == 0)
                                 || chew_timer.diff(*mat_cur) >= HOLD_TIME
                             {
                                 k.to_usb_code(&mods, &mut key_buffer);
-                                // break;
+                                break;
                             }
                         }
                         // Macros (require several usb reports)
                         k if (k >= &KC::E_circu && k <= &KC::E_circu) => {
                             if *mat_cur > 0 && *mat_prev == 0 {
                                 k.to_usb_code(&mods, &mut key_buffer);
-                                // break;
+                                break;
                             }
                         }
                         k if (k >= &KC::HomeAltA && k <= &KC::HomeSftR) => {
@@ -283,11 +318,20 @@ fn main() -> ! {
                                 && (*mat_prev > 0 && chew_timer.diff(*mat_prev) < HOLD_TIME)
                             {
                                 k.to_usb_code(&mods, &mut key_buffer);
-                                // break;
+                                break;
                             }
                         }
                         _ => {}
-                    });
+                    }
+                }
+
+                // --
+                if dead_layout_status.active && !key_buffer.is_empty() {
+                    KC::W.to_usb_code(&mods, &mut key_buffer);
+                    // if dead_layout_status.active && pouet {
+                    dead_layout_status.held = usize::MAX;
+                    dead_layout_status.active = false;
+                }
             }
 
             // USB ----------------------------------------------------------------------
