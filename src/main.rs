@@ -237,14 +237,14 @@ fn main() -> ! {
                     }
 
                     // Find a way to convert into a vec of Keyboard
-                    match keyboard.device().write_report(pouet) {
-                        Err(UsbHidError::WouldBlock) => {}
-                        Err(UsbHidError::Duplicate) => {}
-                        Ok(_) => {}
-                        Err(e) => {
-                            core::panic!("Failed to write keyboard report: {:?}", e)
-                        }
-                    };
+                    // match keyboard.device().write_report(pouet) {
+                    //     Err(UsbHidError::WouldBlock) => {}
+                    //     Err(UsbHidError::Duplicate) => {}
+                    //     Ok(_) => {}
+                    //     Err(e) => {
+                    //         core::panic!("Failed to write keyboard report: {:?}", e)
+                    //     }
+                    // };
                 }
             }
         }

@@ -1,7 +1,16 @@
-use heapless::Vec;
+use core::iter::Empty;
+
+use heapless::{Deque, Vec};
 use usbd_human_interface_device::page::Keyboard;
 
 use crate::utils::options::BUFFER_LENGTH;
+
+
+const DEAD_CIRCUMFLEX: [Keyboard; 6] = [Keyboard::RightAlt, Keyboard::Keyboard6, Keyboard::NoEventIndicated, Keyboard::NoEventIndicated, Keyboard::NoEventIndicated, Keyboard::NoEventIndicated];
+const DEAD_DIAERIS: [Keyboard; 6] = [Keyboard::LeftShift, Keyboard::RightAlt, Keyboard::Apostrophe, Keyboard::NoEventIndicated, Keyboard::NoEventIndicated, Keyboard::NoEventIndicated];
+const DEAD_GRAVE: [Keyboard; 6] = [Keyboard::RightAlt, Keyboard::Grave, Keyboard::NoEventIndicated, Keyboard::NoEventIndicated, Keyboard::NoEventIndicated, Keyboard::NoEventIndicated];
+const EMPTY: [Keyboard; 6] = [Keyboard::NoEventIndicated; 6];
+
 
 pub struct Modifiers {
     pub alt: (bool, usize),
@@ -36,6 +45,7 @@ pub struct DeadKeyLayout {
     pub held: usize,
 }
 
+#[allow(dead_code)]
 #[repr(u16)]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub enum KC {
@@ -68,7 +78,7 @@ pub enum KC {
     Y = 25,
     Z = 26,
 
-    E_acute = 50,
+    EAcute = 50,
 
     Num0 = 300,
     Num1 = 301,
@@ -118,7 +128,24 @@ pub enum KC {
     Question = 520,
 
     // Macros - No held
-    E_circu = 600,
+    ACircum = 600,
+    AGrave = 601,
+    ADiaer = 602,
+        ECircum = 603,
+        EGrave = 604,
+        EDiaer = 605,
+    ICircum = 606,
+    IGrave = 607,
+    IDiaer = 608,
+        OCircum = 609,
+        OGrave = 610,
+        ODiaer = 611,
+    UCircum = 612,
+    UGrave = 613,
+    UDiaer = 614,
+        YCircum = 615,
+        YGrave = 616,
+        YDiaer = 617,
 
     ALT = 10000,
     ALTGR = 10001,
@@ -140,135 +167,157 @@ pub enum KC {
     LAY_DEAD(u8) = 60001,
 }
 
-fn push_to_buffer(combination: [Keyboard; 6], buffer: &mut Vec<[Keyboard; 6], BUFFER_LENGTH>) {
-    buffer.push(combination).ok();
-}
 
-// TODO Remove and use indexes directly
-fn push(mut array: [Keyboard; 6], val: Keyboard) -> [Keyboard; 6] {
-    if let Some(index) = array.iter().position(|c| *c == Keyboard::NoEventIndicated) {
-        array[index] = val;
-    }
-    array
-}
 
 impl KC {
-    #[rustfmt::skip]
-    pub fn to_usb_code(&self, modifiers: &Modifiers, buffer: &mut Vec<[Keyboard; 6], 20>) {
-        let mut output = [Keyboard::NoEventIndicated; 6];
 
-        if modifiers.alt.0 || *self == KC::ALT {
-            output = push(output, Keyboard::LeftAlt);
-        }
-        // TODO Is alt + alt gr possible ?
-        if modifiers.alt_gr.0 || *self == KC::ALTGR {
-            output = push(output, Keyboard::RightAlt);
-        }
-        if modifiers.ctrl.0 || *self == KC::CTRL {
-            output = push(output, Keyboard::LeftControl);
-        }
-        if modifiers.gui.0 || *self == KC::GUI {
-            output = push(output, Keyboard::LeftGUI);
-        }
+    fn new_combination(&self, modifiers: &Modifiers) -> [Keyboard; 6] {
+         let mut output = EMPTY;
 
         // Exclude numbers and symbols from shift
-        if (modifiers.shift.0 || *self == KC::SHIFT) && (*self < KC::Num0 || *self > KC::Question) {
-            output = push(output, Keyboard::LeftShift);
+        if (modifiers.shift.0 || *self== KC::SHIFT) && (*self< KC::Num0 || *self> KC::Question) {
+            output[0]=Keyboard::LeftShift;
         }
+        if modifiers.alt.0 || *self== KC::ALT {
+            output[1]=Keyboard::LeftAlt;
+        }
+        // TODO Is alt + alt gr possible ?
+        if modifiers.alt_gr.0 || *self== KC::ALTGR {
+            output[2]=Keyboard::RightAlt;
+        }
+        if modifiers.ctrl.0 || *self== KC::CTRL {
+            output[3]=Keyboard::LeftControl;
+        }
+        if modifiers.gui.0 || *self== KC::GUI {
+            output[4]=Keyboard::LeftGUI;
+        }       
+
+        output
+    }
+
+    
+    #[rustfmt::skip]
+    pub fn to_usb_code(&self, modifiers: &Modifiers, mut buffer: Deque<[Keyboard; 6], BUFFER_LENGTH>) -> Deque<[Keyboard; 6], BUFFER_LENGTH> {
+
+        let mut output = self.new_combination(modifiers);
 
         match *self {
-            KC::A => push_to_buffer(push(output, Keyboard::A), buffer),
-            KC::B => push_to_buffer(push(output, Keyboard::B), buffer),
-            KC::C => push_to_buffer(push(output, Keyboard::C), buffer),
-            KC::D => push_to_buffer(push(output, Keyboard::D), buffer),
-            KC::E => push_to_buffer(push(output, Keyboard::E), buffer),
-            KC::F => push_to_buffer(push(output, Keyboard::F), buffer),
-            KC::G => push_to_buffer(push(output, Keyboard::G), buffer),
-            KC::H => push_to_buffer(push(output, Keyboard::H), buffer),
-            KC::I => push_to_buffer(push(output, Keyboard::I), buffer),
-            KC::J => push_to_buffer(push(output, Keyboard::J), buffer),
-            KC::K => push_to_buffer(push(output, Keyboard::K), buffer),
-            KC::L => push_to_buffer(push(output, Keyboard::L), buffer),
-            KC::M => push_to_buffer(push(output, Keyboard::M), buffer),
-            KC::N => push_to_buffer(push(output, Keyboard::N), buffer),
-            KC::O => push_to_buffer(push(output, Keyboard::O), buffer),
-            KC::P => push_to_buffer(push(output, Keyboard::P), buffer),
-            KC::Q => push_to_buffer(push(output, Keyboard::Q), buffer),
-            KC::R => push_to_buffer(push(output, Keyboard::R), buffer),
-            KC::S => push_to_buffer(push(output, Keyboard::S), buffer),
-            KC::T => push_to_buffer(push(output, Keyboard::T), buffer),
-            KC::U => push_to_buffer(push(output, Keyboard::U), buffer),
-            KC::V => push_to_buffer(push(output, Keyboard::V), buffer),
-            KC::W => push_to_buffer(push(output, Keyboard::W), buffer),
-            KC::X => push_to_buffer(push(output, Keyboard::X), buffer),
-            KC::Y => push_to_buffer(push(output, Keyboard::Y), buffer),
-            KC::Z => push_to_buffer(push(output, Keyboard::Z), buffer),
 
-            KC::E_acute =>  push_to_buffer(push(push(output, Keyboard::RightAlt), Keyboard::E), buffer) ,
-            // KC::E_circu => { push_to_buffer(push(push(output.clone(), Keyboard::RightAlt), Keyboard::Grave), buffer);
-            //                  push_to_buffer(push( output, Keyboard::E), buffer); }
-            KC::E_circu => { push_to_buffer(push(push(output.clone(), Keyboard::A), Keyboard::B), buffer);
-                             push_to_buffer(push( output, Keyboard::C), buffer); }
+            KC::None => { buffer.push_back([Keyboard::NoEventIndicated; 6]).ok(); },
 
-            KC::Num0 => push_to_buffer(push(output, Keyboard::Keyboard0), buffer),
-            KC::Num1 => push_to_buffer(push(output, Keyboard::Keyboard1), buffer),
-            KC::Num2 => push_to_buffer(push(output, Keyboard::Keyboard2), buffer),
-            KC::Num3 => push_to_buffer(push(output, Keyboard::Keyboard3), buffer),
-            KC::Num4 => push_to_buffer(push(output, Keyboard::Keyboard4), buffer),
-            KC::Num5 => push_to_buffer(push(output, Keyboard::Keyboard5), buffer),
-            KC::Num6 => push_to_buffer(push(output, Keyboard::Keyboard6), buffer),
-            KC::Num7 => push_to_buffer(push(output, Keyboard::Keyboard7), buffer),
-            KC::Num8 => push_to_buffer(push(output, Keyboard::Keyboard8), buffer),
-            KC::Num9 => push_to_buffer(push(output, Keyboard::Keyboard9), buffer),
+            KC::A => { output[5] = Keyboard::A; buffer.push_back(output).ok(); },
+            KC::B => { output[5] = Keyboard::B; buffer.push_back(output).ok(); },
+            KC::C => { output[5] = Keyboard::C; buffer.push_back(output).ok(); },
+            KC::D => { output[5] = Keyboard::D; buffer.push_back(output).ok(); },
+            KC::E => { output[5] = Keyboard::E; buffer.push_back(output).ok(); },
+            KC::F => { output[5] = Keyboard::F; buffer.push_back(output).ok(); },
+            KC::G => { output[5] = Keyboard::G; buffer.push_back(output).ok(); },
+            KC::H => { output[5] = Keyboard::H; buffer.push_back(output).ok(); },
+            KC::I => { output[5] = Keyboard::I; buffer.push_back(output).ok(); },
+            KC::J => { output[5] = Keyboard::J; buffer.push_back(output).ok(); },
+            KC::K => { output[5] = Keyboard::K; buffer.push_back(output).ok(); },
+            KC::L => { output[5] = Keyboard::L; buffer.push_back(output).ok(); },
+            KC::M => { output[5] = Keyboard::M; buffer.push_back(output).ok(); },
+            KC::N => { output[5] = Keyboard::N; buffer.push_back(output).ok(); },
+            KC::O => { output[5] = Keyboard::O; buffer.push_back(output).ok(); },
+            KC::P => { output[5] = Keyboard::P; buffer.push_back(output).ok(); },
+            KC::Q => { output[5] = Keyboard::Q; buffer.push_back(output).ok(); },
+            KC::R => { output[5] = Keyboard::R; buffer.push_back(output).ok(); },
+            KC::S => { output[5] = Keyboard::S; buffer.push_back(output).ok(); },
+            KC::T => { output[5] = Keyboard::T; buffer.push_back(output).ok(); },
+            KC::U => { output[5] = Keyboard::U; buffer.push_back(output).ok(); },
+            KC::V => { output[5] = Keyboard::V; buffer.push_back(output).ok(); },
+            KC::W => { output[5] = Keyboard::W; buffer.push_back(output).ok(); },
+            KC::X => { output[5] = Keyboard::X; buffer.push_back(output).ok(); },
+            KC::Y => { output[5] = Keyboard::Y; buffer.push_back(output).ok(); },
+            KC::Z => { output[5] = Keyboard::Z; buffer.push_back(output).ok(); },
 
-            KC::Minus => push_to_buffer(push(output, Keyboard::Minus), buffer),
-            KC::Equal => push_to_buffer(push(output, Keyboard::Equal), buffer),
-            KC::LeftBracket => push_to_buffer(push(output, Keyboard::LeftBrace), buffer),
-            KC::RightBracket => push_to_buffer(push(output, Keyboard::RightBrace), buffer),
-            KC::Backslash => push_to_buffer(push(output, Keyboard::Backslash), buffer),
-            KC::NonusHash => push_to_buffer(push(output, Keyboard::NonUSHash), buffer),
-            KC::SemiColon => push_to_buffer(push(output, Keyboard::Semicolon), buffer),
-            KC::Quote => push_to_buffer(push(output, Keyboard::Apostrophe), buffer),
-            KC::Grave => push_to_buffer(push(output, Keyboard::Grave), buffer),
-            KC::Comma => push_to_buffer(push(output, Keyboard::Comma), buffer),
-            KC::Dot => push_to_buffer(push(output, Keyboard::Dot), buffer),
-            KC::Slash => push_to_buffer(push(output, Keyboard::ForwardSlash), buffer),
-            KC::NonusBackslash => {
-                push_to_buffer(push(output, Keyboard::NonUSBackslash), buffer)
-            }
+            KC::EAcute => { output[2] = Keyboard::RightAlt; output[5] = Keyboard::E; buffer.push_back(output).ok(); },
 
-            KC::Tilde => { push_to_buffer( push(push(output, Keyboard::LeftShift), Keyboard::Grave), buffer, ); }
-            KC::Exclaim => { push_to_buffer( push(push(output, Keyboard::LeftShift), Keyboard::Keyboard1), buffer, ); }
-            KC::At => { push_to_buffer( push(push(output, Keyboard::LeftShift), Keyboard::Keyboard2), buffer, ); }
-            KC::Hash => { push_to_buffer( push(push(output, Keyboard::LeftShift), Keyboard::Keyboard3), buffer, ); }
-            KC::Dollar => { push_to_buffer( push(push(output, Keyboard::LeftShift), Keyboard::Keyboard4), buffer, ); }
-            KC::Percentage => { push_to_buffer( push(push(output, Keyboard::LeftShift), Keyboard::Keyboard5), buffer, ); }
-            KC::Circumflex => { push_to_buffer( push(push(output, Keyboard::LeftShift), Keyboard::Keyboard6), buffer, ); }
-            KC::Ampersand => { push_to_buffer( push(push(output, Keyboard::LeftShift), Keyboard::Keyboard7), buffer, ); }
-            KC::Asterix => { push_to_buffer( push(push(output, Keyboard::LeftShift), Keyboard::Keyboard8), buffer, ); }
-            KC::LeftParent => { push_to_buffer( push(push(output, Keyboard::LeftShift), Keyboard::Keyboard9), buffer, ); }
-            KC::RightParent => { push_to_buffer( push(push(output, Keyboard::LeftShift), Keyboard::Keyboard0), buffer, ); }
-            KC::Underscore => { push_to_buffer( push(push(output, Keyboard::LeftShift), Keyboard::Minus), buffer, ); }
-            KC::Plus => { push_to_buffer( push(push(output, Keyboard::LeftShift), Keyboard::Equal), buffer, ); }
-            KC::LeftCurly => { push_to_buffer( push(push(output, Keyboard::LeftShift), Keyboard::LeftBrace), buffer, ); }
-            KC::RightCurly => { push_to_buffer( push(push(output, Keyboard::LeftShift), Keyboard::RightBrace), buffer, ); }
-            KC::Pipe => { push_to_buffer( push(push(output, Keyboard::LeftShift), Keyboard::Backslash), buffer, ); }
-            KC::Colon => { push_to_buffer( push(push(output, Keyboard::LeftShift), Keyboard::Semicolon), buffer, ); }
-            KC::DoubleQuote => { push_to_buffer( push(push(output, Keyboard::LeftShift), Keyboard::Apostrophe), buffer, ); }
-            KC::LowerThan => { push_to_buffer( push(push(output, Keyboard::LeftShift), Keyboard::Comma), buffer, ); }
-            KC::GreaterThan => { push_to_buffer( push(push(output, Keyboard::LeftShift), Keyboard::Dot), buffer, ); }
-            KC::Question => { push_to_buffer( push(push(output, Keyboard::LeftShift), Keyboard::ForwardSlash), buffer, ); }
+            KC::ACircum => { buffer.push_back(DEAD_CIRCUMFLEX).ok(); output[5] = Keyboard::A; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+            KC::ADiaer  => { buffer.push_back(DEAD_DIAERIS).ok();    output[5] = Keyboard::A; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+            KC::AGrave  => { buffer.push_back(DEAD_GRAVE).ok();      output[5] = Keyboard::A; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
 
-            KC::HomeAltA => push_to_buffer(push(output, Keyboard::A), buffer),
-            KC::HomeAltU => push_to_buffer(push(output, Keyboard::U), buffer),
-            KC::HomeGuiS => push_to_buffer(push(output, Keyboard::S), buffer),
-            KC::HomeGuiI => push_to_buffer(push(output, Keyboard::I), buffer),
-            KC::HomeCtrlE => push_to_buffer(push(output, Keyboard::E), buffer),
-            KC::HomeCtrlT => push_to_buffer(push(output, Keyboard::T), buffer),
-            KC::HomeSftN => push_to_buffer(push(output, Keyboard::N), buffer),
-            KC::HomeSftR => push_to_buffer(push(output, Keyboard::R), buffer),
+            KC::ECircum => { buffer.push_back(DEAD_CIRCUMFLEX).ok(); output[5] = Keyboard::E; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+            KC::EDiaer  => { buffer.push_back(DEAD_DIAERIS).ok();    output[5] = Keyboard::E; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+            KC::EGrave  => { buffer.push_back(DEAD_GRAVE).ok();      output[5] = Keyboard::E; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+
+            KC::ICircum => { buffer.push_back(DEAD_CIRCUMFLEX).ok(); output[5] = Keyboard::I; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+            KC::IDiaer  => { buffer.push_back(DEAD_DIAERIS).ok();    output[5] = Keyboard::I; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+            KC::IGrave  => { buffer.push_back(DEAD_GRAVE).ok();      output[5] = Keyboard::I; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+
+            KC::OCircum => { buffer.push_back(DEAD_CIRCUMFLEX).ok(); output[5] = Keyboard::O; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+            KC::ODiaer  => { buffer.push_back(DEAD_DIAERIS).ok();    output[5] = Keyboard::O; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+            KC::OGrave  => { buffer.push_back(DEAD_GRAVE).ok();      output[5] = Keyboard::O; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+
+            KC::UCircum => { buffer.push_back(DEAD_CIRCUMFLEX).ok(); output[5] = Keyboard::U; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+            KC::UDiaer  => { buffer.push_back(DEAD_DIAERIS).ok();    output[5] = Keyboard::U; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+            KC::UGrave  => { buffer.push_back(DEAD_GRAVE).ok();      output[5] = Keyboard::U; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+
+            KC::YCircum => { buffer.push_back(DEAD_CIRCUMFLEX).ok(); output[5] = Keyboard::Y; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+            KC::YDiaer  => { buffer.push_back(DEAD_DIAERIS).ok();    output[5] = Keyboard::Y; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+            KC::YGrave  => { buffer.push_back(DEAD_GRAVE).ok();      output[5] = Keyboard::Y; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+
+            KC::Num0 => { output[5] = Keyboard::Keyboard0; buffer.push_back(output).ok(); }
+            KC::Num1 => { output[5] = Keyboard::Keyboard1; buffer.push_back(output).ok(); }
+            KC::Num2 => { output[5] = Keyboard::Keyboard2; buffer.push_back(output).ok(); }
+            KC::Num3 => { output[5] = Keyboard::Keyboard3; buffer.push_back(output).ok(); }
+            KC::Num4 => { output[5] = Keyboard::Keyboard4; buffer.push_back(output).ok(); }
+            KC::Num5 => { output[5] = Keyboard::Keyboard5; buffer.push_back(output).ok(); }
+            KC::Num6 => { output[5] = Keyboard::Keyboard6; buffer.push_back(output).ok(); }
+            KC::Num7 => { output[5] = Keyboard::Keyboard7; buffer.push_back(output).ok(); }
+            KC::Num8 => { output[5] = Keyboard::Keyboard8; buffer.push_back(output).ok(); }
+            KC::Num9 => { output[5] = Keyboard::Keyboard9; buffer.push_back(output).ok(); }
+
+            KC::Minus          => { output[5] = Keyboard::Minus;          buffer.push_back(output).ok(); }
+            KC::Equal          => { output[5] = Keyboard::Equal;          buffer.push_back(output).ok(); }
+            KC::LeftBracket    => { output[5] = Keyboard::LeftBrace;      buffer.push_back(output).ok(); }
+            KC::RightBracket   => { output[5] = Keyboard::RightBrace;     buffer.push_back(output).ok(); }
+            KC::Backslash      => { output[5] = Keyboard::Backslash;      buffer.push_back(output).ok(); }
+            KC::NonusHash      => { output[5] = Keyboard::NonUSHash;      buffer.push_back(output).ok(); }
+            KC::SemiColon      => { output[5] = Keyboard::Semicolon;      buffer.push_back(output).ok(); }
+            KC::Quote          => { output[5] = Keyboard::Apostrophe;     buffer.push_back(output).ok(); }
+            KC::Grave          => { output[5] = Keyboard::Grave;          buffer.push_back(output).ok(); }
+            KC::Comma          => { output[5] = Keyboard::Comma;          buffer.push_back(output).ok(); }
+            KC::Dot            => { output[5] = Keyboard::Dot;            buffer.push_back(output).ok(); }
+            KC::Slash          => { output[5] = Keyboard::ForwardSlash;   buffer.push_back(output).ok(); }
+            KC::NonusBackslash => { output[5] = Keyboard::NonUSBackslash; buffer.push_back(output).ok(); }
+
+            KC::Tilde       => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Grave;        buffer.push_back(output).ok(); }
+            KC::Exclaim     => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Keyboard1;    buffer.push_back(output).ok(); }
+            KC::At          => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Keyboard2;    buffer.push_back(output).ok(); }
+            KC::Hash        => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Keyboard3;    buffer.push_back(output).ok(); }
+            KC::Dollar      => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Keyboard4;    buffer.push_back(output).ok(); }
+            KC::Percentage  => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Keyboard5;    buffer.push_back(output).ok(); }
+            KC::Circumflex  => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Keyboard6;    buffer.push_back(output).ok(); }
+            KC::Ampersand   => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Keyboard7;    buffer.push_back(output).ok(); }
+            KC::Asterix     => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Keyboard8;    buffer.push_back(output).ok(); }
+            KC::LeftParent  => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Keyboard9;    buffer.push_back(output).ok(); }
+            KC::RightParent => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Keyboard0;    buffer.push_back(output).ok(); }
+            KC::Underscore  => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Minus;        buffer.push_back(output).ok(); }
+            KC::Plus        => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Equal;        buffer.push_back(output).ok(); }
+            KC::LeftCurly   => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::LeftBrace;    buffer.push_back(output).ok(); }
+            KC::RightCurly  => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::RightBrace;   buffer.push_back(output).ok(); }
+            KC::Pipe        => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Backslash;    buffer.push_back(output).ok(); }
+            KC::Colon       => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Semicolon;    buffer.push_back(output).ok(); }
+            KC::DoubleQuote => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Apostrophe;   buffer.push_back(output).ok(); }
+            KC::LowerThan   => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Comma;        buffer.push_back(output).ok(); }
+            KC::GreaterThan => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Dot;          buffer.push_back(output).ok(); }
+            KC::Question    => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::ForwardSlash; buffer.push_back(output).ok(); }
+
+            KC::HomeAltA =>  { output[5] = Keyboard::A; buffer.push_back(output).ok(); }
+            KC::HomeAltU =>  { output[5] = Keyboard::U; buffer.push_back(output).ok(); }
+            KC::HomeGuiS =>  { output[5] = Keyboard::S; buffer.push_back(output).ok(); }
+            KC::HomeGuiI =>  { output[5] = Keyboard::I; buffer.push_back(output).ok(); }
+            KC::HomeCtrlE => { output[5] = Keyboard::E; buffer.push_back(output).ok(); }
+            KC::HomeCtrlT => { output[5] = Keyboard::T; buffer.push_back(output).ok(); }
+            KC::HomeSftN =>  { output[5] = Keyboard::N; buffer.push_back(output).ok(); }
+            KC::HomeSftR =>  { output[5] = Keyboard::R; buffer.push_back(output).ok(); }
 
             _ => {}
         }
+
+        buffer
     }
+
 }
