@@ -4,7 +4,7 @@
 mod keys;
 mod layouts;
 
-use keys::{DeadKeyLayout, Modifiers, KC};
+use keys::{Modifiers, KC};
 use layouts::LAYOUTS;
 use utils::gpios::Gpios;
 use utils::options::{BUFFER_LENGTH, TIMER_USB_LOOP, UART_SPEED};
@@ -168,11 +168,7 @@ fn main() -> ! {
     // TEST LAYOUT ---------------------------------------------------------------------------------
 
     let mut current_layout = 0;
-    let mut dead_layout_status = DeadKeyLayout {
-        active: false,
-        // done: false,
-        held: usize::MAX,
-    };
+    let mut dead_layout = usize::MAX;
 
     // TEST LAYOUT ---------------------------------------------------------------------------------
     // TEST LAYOUT ---------------------------------------------------------------------------------
@@ -185,7 +181,7 @@ fn main() -> ! {
     let mut key_buffer: Deque<[Keyboard; 6], BUFFER_LENGTH> = Deque::new();
     let mut previous_kc: [Keyboard; 6] = [Keyboard::NoEventIndicated; 6];
 
-    loop {
+    'aaa: loop {
         // TODO put in its owns timer
         // led.startup(chew_timer.ticks);
         //Poll the keys every 10ms
@@ -200,91 +196,93 @@ fn main() -> ! {
             }
             matrix.up(left_pins, right_pins);
 
-            let mut to_print = [Keyboard::NoEventIndicated];
-
             // Layouts --------------------------------------------------------------
-            // if !dead_layout_status.active {
-            //     current_layout = 0;
+            if dead_layout == usize::MAX {
+                current_layout = 0;
 
-            //     LAYOUTS[current_layout]
-            //         .iter()
-            //         .enumerate()
-            //         .zip(matrix.prev.iter().zip(matrix.cur.iter()))
-            //         .for_each(|((index, layout), (mat_prev, mat_cur))| match layout {
-            //             KC::LAY(number) => {
-            //                 if *mat_cur != 0 {
-            //                     current_layout = *number as usize;
-            //                     // TODO add break points
-            //                 }
-            //             }
-            //             KC::LAY_DEAD(number) => {
-            //                 if *mat_cur > 0 {
-            //                     dead_layout_status.active = true;
-            //                     current_layout = *number as usize;
-            //                     if *mat_cur >= HOLD_TIME {
-            //                         dead_layout_status.held = index;
-            //                     }
-            //                 }
-            //             }
-            //             _ => {}
-            //         });
-            // }
+                for ((index, layout), (mat_prev, mat_cur)) in LAYOUTS[current_layout]
+                    .iter()
+                    .enumerate()
+                    .zip(matrix.prev.iter().zip(matrix.cur.iter()))
+                {
+                    match layout {
+                        KC::Layout(number) => {
+                            if *mat_cur > 0 {
+                                current_layout = *number;
+                                // TODO add break points
+                            }
+                        }
+                        KC::LayDead(number) => {
+                            if *mat_cur > 0 {
+                                current_layout = *number;
+                                // To simple, need to save a "done" state
+                                dead_layout = index;
+                                continue 'aaa;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
 
-            // if current_layout == 0 {
-            //     led.light_on(RED);
-            // } else if current_layout == 2 {
-            //     led.light_on(BLUE);
-            // } else {
-            //     led.light_on(OFF);
-            // }
+            if current_layout == 0 {
+                led.light_on(RED);
+            } else if current_layout == 2 {
+                led.light_on(BLUE);
+            } else {
+                led.light_on(OFF);
+            }
 
-            // // Modifiers ------------------------------------------------------------
-            // // Maintain them from the matrix level instead of the layout
-            // // So keep their indexes
-            // mods.alt.0 = mods.alt.0 && matrix.cur[mods.alt.1] >= HOLD_TIME;
-            // mods.alt_gr.0 = mods.alt_gr.0 && matrix.cur[mods.alt_gr.1] >= HOLD_TIME;
-            // mods.ctrl.0 = mods.ctrl.0 && matrix.cur[mods.ctrl.1] >= HOLD_TIME;
-            // mods.gui.0 = mods.gui.0 && matrix.cur[mods.gui.1] >= HOLD_TIME;
-            // mods.shift.0 = mods.shift.0 && matrix.cur[mods.shift.1] >= HOLD_TIME;
+            // Modifiers ------------------------------------------------------------
+            // Maintain them from the matrix level instead of the layout
+            // So keep their indexes
+            mods.alt.0 = mods.alt.0 && matrix.cur[mods.alt.1] >= HOLD_TIME;
+            mods.alt_gr.0 = mods.alt_gr.0 && matrix.cur[mods.alt_gr.1] >= HOLD_TIME;
+            mods.ctrl.0 = mods.ctrl.0 && matrix.cur[mods.ctrl.1] >= HOLD_TIME;
+            mods.gui.0 = mods.gui.0 && matrix.cur[mods.gui.1] >= HOLD_TIME;
+            mods.shift.0 = mods.shift.0 && matrix.cur[mods.shift.1] >= HOLD_TIME;
 
-            // // Regular modifiers --
-            // LAYOUTS[current_layout]
-            //     .iter()
-            //     .zip(matrix.cur.iter())
-            //     .enumerate()
-            //     .filter(|(_, (&la, &mc))| la >= KC::ALT && la <= KC::SHIFT && mc > 0)
-            //     .for_each(|(index, (layout, _))| match layout {
-            //         KC::ALT => mods.alt = (true, index),
-            //         KC::ALTGR => mods.alt_gr = (true, index),
-            //         KC::CTRL => mods.ctrl = (true, index),
-            //         KC::GUI => mods.gui = (true, index),
-            //         _ => mods.shift = (true, index),
-            //     });
+            // Regular modifiers --
+            LAYOUTS[current_layout]
+                .iter()
+                .zip(matrix.cur.iter())
+                .enumerate()
+                .filter(|(_, (&la, &mc))| la >= KC::ALT && la <= KC::SHIFT && mc > 0)
+                .for_each(|(index, (layout, _))| match layout {
+                    KC::ALT => mods.alt = (true, index),
+                    KC::ALTGR => mods.alt_gr = (true, index),
+                    KC::CTRL => mods.ctrl = (true, index),
+                    KC::GUI => mods.gui = (true, index),
+                    _ => mods.shift = (true, index),
+                });
 
-            // // Homerow modifiers --
-            // LAYOUTS[current_layout]
-            //     .iter()
-            //     .zip(matrix.cur.iter())
-            //     .enumerate()
-            //     .filter(|(_, (&la, &ma))| {
-            //         la >= KC::HomeAltA && la <= KC::HomeSftR && ma > HOLD_TIME
-            //     })
-            //     .for_each(|(index, (layout, _))| match layout {
-            //         KC::HomeAltA | KC::HomeAltU => mods.alt = (true, index),
-            //         KC::HomeCtrlE | KC::HomeCtrlT => mods.ctrl = (true, index),
-            //         KC::HomeGuiS | KC::HomeGuiI => mods.gui = (true, index),
-            //         _ => mods.shift = (true, index),
-            //     });
+            // Homerow modifiers --
+            LAYOUTS[current_layout]
+                .iter()
+                .zip(matrix.cur.iter())
+                .enumerate()
+                .filter(|(_, (&la, &ma))| {
+                    la >= KC::HomeAltA && la <= KC::HomeSftR && ma > HOLD_TIME
+                })
+                .for_each(|(index, (layout, _))| match layout {
+                    KC::HomeAltA | KC::HomeAltU => mods.alt = (true, index),
+                    KC::HomeCtrlE | KC::HomeCtrlT => mods.ctrl = (true, index),
+                    KC::HomeGuiS | KC::HomeGuiI => mods.gui = (true, index),
+                    _ => mods.shift = (true, index),
+                });
 
             // Regular keys ---------------------------------------------------------
             for (((index, layout), mat_prev), mat_cur) in LAYOUTS[current_layout]
                 .iter()
                 .enumerate()
                 .zip(matrix.prev.iter())
-                .zip(matrix.cur.iter_mut())
-            // .filter(|(((index, _), _), _)| {
-            //     !mods.is_active(*index) && dead_layout_status.held != *index
-            // })
+                .zip(matrix.cur.iter())
+                .filter(|(((index, _), _), _)| {
+                    !mods.is_active(*index)
+                        && !(dead_layout < usize::MAX
+                            && matrix.cur[dead_layout] >= HOLD_TIME
+                            && dead_layout == *index)
+                })
             {
                 match layout {
                     k if (k >= &KC::A && k <= &KC::Question) => {
@@ -305,7 +303,8 @@ fn main() -> ! {
                     k if (k >= &KC::HomeAltA && k <= &KC::HomeSftR) => {
                         if *mat_prev > 0 && *mat_prev < HOLD_TIME && *mat_cur == 0 {
                             key_buffer = k.to_usb_code(&mods, key_buffer);
-                        } else if *mat_prev == 0 && *mat_cur == 0 {
+                        } else if *mat_prev > 0 && *mat_cur == 0 {
+                            key_buffer = KC::None.to_usb_code(&mods, key_buffer);
                         }
                     }
                     _ => {}
@@ -313,12 +312,12 @@ fn main() -> ! {
             }
 
             // --
-            // if dead_layout_status.active && !key_buffer.is_empty() {
-            //     // KC::W.to_usb_code(&mods, &mut key_buffer);
-            //     // if dead_layout_status.active && pouet {
-            //     dead_layout_status.held = usize::MAX;
-            //     dead_layout_status.active = false;
-            // }
+            if dead_layout < usize::MAX
+                && matrix.cur[dead_layout] == 0
+                && matrix.cur.iter().filter(|c| **c > 0).count() > 0
+            {
+                dead_layout = usize::MAX;
+            }
         }
 
         // USB ----------------------------------------------------------------------

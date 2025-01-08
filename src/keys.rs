@@ -39,12 +39,6 @@ impl Modifiers {
     }
 }
 
-pub struct DeadKeyLayout {
-    pub active: bool,
-    // pub done: bool,
-    pub held: usize,
-}
-
 #[allow(dead_code)]
 #[repr(u16)]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
@@ -163,8 +157,8 @@ pub enum KC {
     HomeSftR = 20007,
 
     // Home(KC) = 2000,
-    LAY(u8) = 60000,
-    LAY_DEAD(u8) = 60001,
+    Layout(usize) = 60000,
+    LayDead(usize) = 60001,
 }
 
 
@@ -305,14 +299,14 @@ impl KC {
             KC::GreaterThan => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Dot;          buffer.push_back(output).ok(); }
             KC::Question    => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::ForwardSlash; buffer.push_back(output).ok(); }
 
-            KC::HomeAltA =>  { output[5] = Keyboard::A; buffer.push_back(output).ok(); }
-            KC::HomeAltU =>  { output[5] = Keyboard::U; buffer.push_back(output).ok(); }
-            KC::HomeGuiS =>  { output[5] = Keyboard::S; buffer.push_back(output).ok(); }
-            KC::HomeGuiI =>  { output[5] = Keyboard::I; buffer.push_back(output).ok(); }
-            KC::HomeCtrlE => { output[5] = Keyboard::E; buffer.push_back(output).ok(); }
-            KC::HomeCtrlT => { output[5] = Keyboard::T; buffer.push_back(output).ok(); }
-            KC::HomeSftN =>  { output[5] = Keyboard::N; buffer.push_back(output).ok(); }
-            KC::HomeSftR =>  { output[5] = Keyboard::R; buffer.push_back(output).ok(); }
+            KC::HomeAltA =>  { output[5] = Keyboard::A; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); }
+            KC::HomeAltU =>  { output[5] = Keyboard::U; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); }
+            KC::HomeGuiS =>  { output[5] = Keyboard::S; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); }
+            KC::HomeGuiI =>  { output[5] = Keyboard::I; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); }
+            KC::HomeCtrlE => { output[5] = Keyboard::E; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); }
+            KC::HomeCtrlT => { output[5] = Keyboard::T; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); }
+            KC::HomeSftN =>  { output[5] = Keyboard::N; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); }
+            KC::HomeSftR =>  { output[5] = Keyboard::R; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); }
 
             _ => {}
         }
