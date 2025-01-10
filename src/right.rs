@@ -3,18 +3,15 @@
 
 mod utils;
 use crate::utils::options::TIMER_MAIN_LOOP;
-use utils::gpios::{self, Gpios};
-use utils::led::{Led, RED};
+use utils::gpios::Gpios;
+use utils::led::{Led, OFF, RED};
 use utils::options::{TIMER_LED_STARTUP, UART_SPEED};
-use utils::timer::ChewTimer;
 
 use waveshare_rp2040_zero as bsp;
 
 use bsp::hal::{
     clocks::{init_clocks_and_plls, Clock},
-    entry,
-    gpio::{DynPinId, Pin, PullUp},
-    pac,
+    entry, pac,
     pio::PIOExt,
     timer::Timer,
     usb,
@@ -24,7 +21,6 @@ use bsp::hal::{
 use cortex_m::prelude::*;
 use defmt::*;
 use defmt_rtt as _;
-use embedded_hal::digital::*;
 use embedded_io::Write;
 use fugit::{ExtU32, RateExtU32};
 use panic_probe as _;
@@ -113,9 +109,6 @@ fn main() -> ! {
         ],
     };
 
-    // let is_right = pins.gp12.into_floating_input().is_high().unwrap();
-    // let is_left = pins.gp10.into_floating_input().is_high().unwrap();
-
     // Led ------
     let mut neopixel = Ws2812::new(
         // The onboard NeoPixel is attached to GPIO pin #16 on the Waveshare RP2040-Zero.
@@ -143,17 +136,14 @@ fn main() -> ! {
     let mut main_count_down = timer.count_down();
     main_count_down.start(TIMER_MAIN_LOOP.millis());
 
-    let mut chew_timer = ChewTimer::new();
     let mut led = Led::new(&mut neopixel);
 
     loop {
         if main_count_down.wait().is_ok() {
-            // }
-
-            // if gpio_count_down.wait().is_ok() {
             let right_pins = gpios.update_states();
-            if !tx.write_all(&right_pins).is_ok() {
-                // TODO Clean it if it's validated, turn off the light
+            if tx.write_all(&right_pins).is_ok() {
+                led.light_on(OFF);
+            } else {
                 led.light_on(RED);
                 continue;
             }
@@ -163,7 +153,7 @@ fn main() -> ! {
         if tick_count_down.wait().is_ok() {
             match keyboard.tick() {
                 Err(UsbHidError::WouldBlock) => {}
-                Ok(_) => chew_timer.add(),
+                Ok(_) => {}
                 Err(e) => core::panic!("Failed to process keyboard tick: {:?}", e),
             };
         }

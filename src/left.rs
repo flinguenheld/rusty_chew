@@ -3,17 +3,17 @@
 
 mod keys;
 mod layouts;
-
-use keys::{Modifiers, KC};
-use layouts::LAYOUTS;
-use utils::gpios::Gpios;
-use utils::options::{BUFFER_LENGTH, TIMER_USB_LOOP, UART_SPEED};
 mod utils;
-use crate::utils::options::{HOLD_TIME, TIMER_MAIN_LOOP};
+
+use keys::{DeadLayout, Modifiers, KC};
+use layouts::LAYOUTS;
 use usbd_human_interface_device::page::Keyboard;
-use utils::led::{Led, OFF};
-use utils::led::{BLUE, GREEN, RED};
+use utils::gpios::Gpios;
+use utils::led::{Led, BLUE, GREEN, OFF, RED};
 use utils::matrix::Matrix;
+use utils::options::{BUFFER_LENGTH, HOLD_TIME, TIMER_MAIN_LOOP, TIMER_USB_LOOP, UART_SPEED};
+
+use heapless::{Deque, FnvIndexSet};
 
 use waveshare_rp2040_zero as bsp;
 
@@ -38,8 +38,6 @@ use ws2812_pio::Ws2812;
 use usb_device::class_prelude::*;
 use usb_device::prelude::*;
 use usbd_human_interface_device::prelude::*;
-
-use heapless::{Deque, Vec};
 
 #[entry]
 fn main() -> ! {
@@ -84,7 +82,6 @@ fn main() -> ! {
 
     let mut keyboard = UsbHidClassBuilder::new()
         .add_device(
-            // usbd_human_interface_device::device::keyboard::NKROBootKeyboardConfig::default(),
             usbd_human_interface_device::device::keyboard::NKROBootKeyboardConfig::default(),
         )
         .build(&usb_bus);
@@ -168,7 +165,8 @@ fn main() -> ! {
     // TEST LAYOUT ---------------------------------------------------------------------------------
 
     let mut current_layout = 0;
-    let mut dead_layout = usize::MAX;
+    let mut dead_lay = DeadLayout::new(false, 0);
+    let mut homerow_history: FnvIndexSet<usize, 8> = FnvIndexSet::new();
 
     // TEST LAYOUT ---------------------------------------------------------------------------------
     // TEST LAYOUT ---------------------------------------------------------------------------------
@@ -179,25 +177,25 @@ fn main() -> ! {
     let mut mods = Modifiers::new();
 
     let mut key_buffer: Deque<[Keyboard; 6], BUFFER_LENGTH> = Deque::new();
-    let mut previous_kc: [Keyboard; 6] = [Keyboard::NoEventIndicated; 6];
+    let mut last_printed_key: [Keyboard; 6] = [Keyboard::NoEventIndicated; 6];
 
-    'aaa: loop {
+    'main: loop {
         // TODO put in its owns timer
         // led.startup(chew_timer.ticks);
-        //Poll the keys every 10ms
         if main_count_down.wait().is_ok() {
             // Matrix update ------------------------------------------------------------
             let left_pins = gpios.update_states();
             let mut right_pins = [0_u8; 4];
-            if !rx.read_exact(&mut right_pins).is_ok() {
-                // TODO Clean it if it's validated, turn off the light
+            if rx.read_exact(&mut right_pins).is_ok() {
+                led.light_on(OFF);
+            } else {
                 led.light_on(RED);
                 continue;
             }
             matrix.up(left_pins, right_pins);
 
-            // Layouts --------------------------------------------------------------
-            if dead_layout == usize::MAX {
+            // Layouts ------------------------------------------------------------------
+            if !dead_lay.active {
                 current_layout = 0;
 
                 for ((index, layout), (mat_prev, mat_cur)) in LAYOUTS[current_layout]
@@ -213,11 +211,12 @@ fn main() -> ! {
                             }
                         }
                         KC::LayDead(number) => {
-                            if *mat_cur > 0 {
+                            if *mat_prev == 0 && *mat_cur > 0 {
                                 current_layout = *number;
-                                // To simple, need to save a "done" state
-                                dead_layout = index;
-                                continue 'aaa;
+                                dead_lay = DeadLayout::new(true, index);
+
+                                // Mandatory jump to avoid its own key pressed
+                                continue 'main;
                             }
                         }
                         _ => {}
@@ -225,17 +224,9 @@ fn main() -> ! {
                 }
             }
 
-            if current_layout == 0 {
-                led.light_on(RED);
-            } else if current_layout == 2 {
-                led.light_on(BLUE);
-            } else {
-                led.light_on(OFF);
-            }
-
-            // Modifiers ------------------------------------------------------------
-            // Maintain them from the matrix level instead of the layout
-            // So keep their indexes
+            // Modifiers ----------------------------------------------------------------
+            // Maintain them from the matrix level instead of the layout, so keep their indexes
+            // TODO add a trick to also include fast combinations ?
             mods.alt.0 = mods.alt.0 && matrix.cur[mods.alt.1] >= HOLD_TIME;
             mods.alt_gr.0 = mods.alt_gr.0 && matrix.cur[mods.alt_gr.1] >= HOLD_TIME;
             mods.ctrl.0 = mods.ctrl.0 && matrix.cur[mods.ctrl.1] >= HOLD_TIME;
@@ -271,7 +262,7 @@ fn main() -> ! {
                     _ => mods.shift = (true, index),
                 });
 
-            // Regular keys ---------------------------------------------------------
+            // Regular keys -------------------------------------------------------------
             for (((index, layout), mat_prev), mat_cur) in LAYOUTS[current_layout]
                 .iter()
                 .enumerate()
@@ -279,18 +270,16 @@ fn main() -> ! {
                 .zip(matrix.cur.iter())
                 .filter(|(((index, _), _), _)| {
                     !mods.is_active(*index)
-                        && !(dead_layout < usize::MAX
-                            && matrix.cur[dead_layout] >= HOLD_TIME
-                            && dead_layout == *index)
+                        && !(dead_lay.index < usize::MAX
+                            && matrix.cur[dead_lay.index] >= HOLD_TIME
+                            && dead_lay.index == *index)
                 })
             {
                 match layout {
                     k if (k >= &KC::A && k <= &KC::Question) => {
+                        // Last key is automatically repeated by the usb crate
                         if *mat_prev == 0 && *mat_cur > 0 {
                             key_buffer = k.to_usb_code(&mods, key_buffer);
-                        }
-                        if *mat_cur >= HOLD_TIME {
-                            // k.to_usb_code(&mods, &mut key_buffer);
                         } else if *mat_prev > 0 && *mat_cur == 0 {
                             key_buffer = KC::None.to_usb_code(&mods, key_buffer);
                         }
@@ -301,7 +290,14 @@ fn main() -> ! {
                         }
                     }
                     k if (k >= &KC::HomeAltA && k <= &KC::HomeSftR) => {
-                        if *mat_prev > 0 && *mat_prev < HOLD_TIME && *mat_cur == 0 {
+                        // To be validated, the press event has to be saved in history
+                        if *mat_prev == 0 && *mat_cur > 0 {
+                            homerow_history.insert(index).ok();
+                        } else if *mat_prev > 0
+                            && *mat_prev < HOLD_TIME
+                            && *mat_cur == 0
+                            && homerow_history.contains(&index)
+                        {
                             key_buffer = k.to_usb_code(&mods, key_buffer);
                         } else if *mat_prev > 0 && *mat_cur == 0 {
                             key_buffer = KC::None.to_usb_code(&mods, key_buffer);
@@ -312,19 +308,32 @@ fn main() -> ! {
             }
 
             // --
-            if dead_layout < usize::MAX
-                && matrix.cur[dead_layout] == 0
-                && matrix.cur.iter().filter(|c| **c > 0).count() > 0
-            {
-                dead_layout = usize::MAX;
+            homerow_history.retain(|&index| !(matrix.prev[index] > 0 && matrix.cur[index] == 0));
+
+            if dead_lay.active {
+                if !dead_lay.done {
+                    if matrix.prev[dead_lay.index] == 0 && matrix.cur[dead_lay.index] > 0 {
+                        dead_lay.done = true;
+                    } else if matrix.cur[dead_lay.index] == 0 {
+                        dead_lay.done = matrix.cur.iter().filter(|c| **c > 0).count() > mods.nb_on()
+                    } else if matrix.cur[dead_lay.index] > HOLD_TIME {
+                        dead_lay.done =
+                            matrix.cur.iter().filter(|c| **c > 0).count() > mods.nb_on() + 1
+                    }
+                }
+
+                if dead_lay.done && matrix.cur[dead_lay.index] < HOLD_TIME {
+                    dead_lay = DeadLayout::new(false, 0);
+                    key_buffer = KC::None.to_usb_code(&mods, key_buffer);
+                }
             }
         }
 
-        // USB ----------------------------------------------------------------------
+        // USB --------------------------------------------------------------------------
         if usb_count_down.wait().is_ok() {
             if let Some(to_print) = key_buffer.pop_front() {
-                if to_print != previous_kc {
-                    previous_kc = to_print.clone();
+                if to_print != last_printed_key {
+                    last_printed_key = to_print.clone();
 
                     match keyboard.device().write_report(to_print) {
                         Err(UsbHidError::WouldBlock) => {
@@ -345,7 +354,7 @@ fn main() -> ! {
             }
         }
 
-        //Tick once per ms
+        // Tick once per ms -------------------------------------------------------------
         if tick_count_down.wait().is_ok() {
             match keyboard.tick() {
                 Err(UsbHidError::WouldBlock) => {}
@@ -356,20 +365,11 @@ fn main() -> ! {
 
         if usb_dev.poll(&mut [&mut keyboard]) {
             match keyboard.device().read_report() {
-                Err(UsbError::WouldBlock) => {
-                    //do nothing
-                }
+                Err(UsbError::WouldBlock) => {}
                 Err(e) => {
                     core::panic!("Failed to read keyboard report: {:?}", e)
                 }
-                Ok(leds) => {
-                    // led_pin.set_state(PinState::from(leds.num_lock)).ok();
-                    // if PinState::from(leds.num_lock) == PinState::High {
-                    //     neopixel
-                    //         .write(brightness(once(colors::RED.into()), 3))
-                    //         .unwrap();
-                    // }
-                }
+                Ok(_leds) => {}
             }
         }
     }

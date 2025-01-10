@@ -1,17 +1,35 @@
-use core::iter::Empty;
-
-use heapless::{Deque, Vec};
+use heapless::Deque;
 use usbd_human_interface_device::page::Keyboard;
 
 use crate::utils::options::BUFFER_LENGTH;
 
-
-const DEAD_CIRCUMFLEX: [Keyboard; 6] = [Keyboard::RightAlt, Keyboard::Keyboard6, Keyboard::NoEventIndicated, Keyboard::NoEventIndicated, Keyboard::NoEventIndicated, Keyboard::NoEventIndicated];
-const DEAD_DIAERIS: [Keyboard; 6] = [Keyboard::LeftShift, Keyboard::RightAlt, Keyboard::Apostrophe, Keyboard::NoEventIndicated, Keyboard::NoEventIndicated, Keyboard::NoEventIndicated];
-const DEAD_GRAVE: [Keyboard; 6] = [Keyboard::RightAlt, Keyboard::Grave, Keyboard::NoEventIndicated, Keyboard::NoEventIndicated, Keyboard::NoEventIndicated, Keyboard::NoEventIndicated];
+const DEAD_CIRCUMFLEX: [Keyboard; 6] = [
+    Keyboard::RightAlt,
+    Keyboard::Keyboard6,
+    Keyboard::NoEventIndicated,
+    Keyboard::NoEventIndicated,
+    Keyboard::NoEventIndicated,
+    Keyboard::NoEventIndicated,
+];
+const DEAD_DIAERIS: [Keyboard; 6] = [
+    Keyboard::LeftShift,
+    Keyboard::RightAlt,
+    Keyboard::Apostrophe,
+    Keyboard::NoEventIndicated,
+    Keyboard::NoEventIndicated,
+    Keyboard::NoEventIndicated,
+];
+const DEAD_GRAVE: [Keyboard; 6] = [
+    Keyboard::RightAlt,
+    Keyboard::Grave,
+    Keyboard::NoEventIndicated,
+    Keyboard::NoEventIndicated,
+    Keyboard::NoEventIndicated,
+    Keyboard::NoEventIndicated,
+];
 const EMPTY: [Keyboard; 6] = [Keyboard::NoEventIndicated; 6];
 
-
+/// Keep the state and the matrix index for each modifier.
 pub struct Modifiers {
     pub alt: (bool, usize),
     pub alt_gr: (bool, usize),
@@ -19,6 +37,8 @@ pub struct Modifiers {
     pub gui: (bool, usize),
     pub shift: (bool, usize),
 }
+
+#[rustfmt::skip]
 impl Modifiers {
     pub fn new() -> Modifiers {
         Modifiers {
@@ -37,8 +57,36 @@ impl Modifiers {
             || (self.gui.0 && self.gui.1 == index)
             || (self.shift.0 && self.shift.1 == index)
     }
+
+    pub fn nb_on(&self) -> usize {
+        let mut nb = 0;
+        if self.alt.0 { nb += 1 }
+        if self.alt_gr.0 { nb += 1 }
+        if self.ctrl.0 { nb += 1 }
+        if self.gui.0 { nb += 1 }
+        if self.shift.0 { nb += 1 }
+        nb
+    }
 }
 
+/// Allow to memorise whish key is currently used and if another key has validated the dead action.
+pub struct DeadLayout {
+    pub active: bool,
+    pub done: bool,
+    pub index: usize,
+}
+
+impl DeadLayout {
+    pub fn new(active: bool, index: usize) -> DeadLayout {
+        DeadLayout {
+            active,
+            index,
+            done: false,
+        }
+    }
+}
+
+#[rustfmt::skip]
 #[allow(dead_code)]
 #[repr(u16)]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
@@ -161,42 +209,27 @@ pub enum KC {
     LayDead(usize) = 60001,
 }
 
-
-
+#[rustfmt::skip]
 impl KC {
-
     fn new_combination(&self, modifiers: &Modifiers) -> [Keyboard; 6] {
-         let mut output = EMPTY;
+        let mut output = EMPTY;
 
         // Exclude numbers and symbols from shift
-        if (modifiers.shift.0 || *self== KC::SHIFT) && (*self< KC::Num0 || *self> KC::Question) {
-            output[0]=Keyboard::LeftShift;
-        }
-        if modifiers.alt.0 || *self== KC::ALT {
-            output[1]=Keyboard::LeftAlt;
-        }
-        // TODO Is alt + alt gr possible ?
-        if modifiers.alt_gr.0 || *self== KC::ALTGR {
-            output[2]=Keyboard::RightAlt;
-        }
-        if modifiers.ctrl.0 || *self== KC::CTRL {
-            output[3]=Keyboard::LeftControl;
-        }
-        if modifiers.gui.0 || *self== KC::GUI {
-            output[4]=Keyboard::LeftGUI;
-        }       
+        if (modifiers.shift.0 || *self == KC::SHIFT) && (*self < KC::Num0 || *self > KC::Question) { output[0] = Keyboard::LeftShift; }
+        if modifiers.alt.0 || *self == KC::ALT {                                                     output[1] = Keyboard::LeftAlt; }
+        if modifiers.alt_gr.0 || *self == KC::ALTGR {                                                output[2] = Keyboard::RightAlt; }
+        if modifiers.ctrl.0 || *self == KC::CTRL {                                                   output[3] = Keyboard::LeftControl; }
+        if modifiers.gui.0 || *self == KC::GUI {                                                     output[4] = Keyboard::LeftGUI; }
 
         output
     }
 
-    
     #[rustfmt::skip]
     pub fn to_usb_code(&self, modifiers: &Modifiers, mut buffer: Deque<[Keyboard; 6], BUFFER_LENGTH>) -> Deque<[Keyboard; 6], BUFFER_LENGTH> {
 
         let mut output = self.new_combination(modifiers);
 
         match *self {
-
             KC::None => { buffer.push_back([Keyboard::NoEventIndicated; 6]).ok(); },
 
             KC::A => { output[5] = Keyboard::A; buffer.push_back(output).ok(); },
@@ -313,5 +346,4 @@ impl KC {
 
         buffer
     }
-
 }
