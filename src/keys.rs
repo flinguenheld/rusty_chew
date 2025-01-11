@@ -1,7 +1,6 @@
+use crate::utils::options::BUFFER_LENGTH;
 use heapless::Deque;
 use usbd_human_interface_device::page::Keyboard;
-
-use crate::utils::options::BUFFER_LENGTH;
 
 const DEAD_CIRCUMFLEX: [Keyboard; 6] = [
     Keyboard::RightAlt,
@@ -69,21 +68,10 @@ impl Modifiers {
     }
 }
 
-/// Allow to memorise whish key is currently used and if another key has validated the dead action.
-pub struct DeadLayout {
-    pub active: bool,
-    pub done: bool,
-    pub index: usize,
-}
-
-impl DeadLayout {
-    pub fn new(active: bool, index: usize) -> DeadLayout {
-        DeadLayout {
-            active,
-            index,
-            done: false,
-        }
-    }
+#[derive(Clone)]
+pub enum Lay {
+    Pressed(usize, usize),
+    Dead(usize, usize, bool),
 }
 
 #[rustfmt::skip]
@@ -121,6 +109,19 @@ pub enum KC {
     Z = 26,
 
     EAcute = 50,
+
+    Enter = 100,
+    Space = 101,
+    Esc = 102,
+    Del = 103,
+    BackSpace = 104,
+    Tab = 105,
+    STab = 106,
+
+    Left = 200,
+    Down = 201,
+    Up = 202,
+    Right = 203,
 
     Num0 = 300,
     Num1 = 301,
@@ -260,6 +261,20 @@ impl KC {
             KC::Z => { output[5] = Keyboard::Z; buffer.push_back(output).ok(); },
 
             KC::EAcute => { output[2] = Keyboard::RightAlt; output[5] = Keyboard::E; buffer.push_back(output).ok(); },
+
+            KC::Enter     => {                                  output[5] = Keyboard::ReturnEnter;     buffer.push_back(output).ok(); },
+            KC::Space     => {                                  output[5] = Keyboard::Space;           buffer.push_back(output).ok(); },
+            KC::Esc       => {                                  output[5] = Keyboard::Escape;          buffer.push_back(output).ok(); },
+            KC::Del       => {                                  output[5] = Keyboard::DeleteBackspace; buffer.push_back(output).ok(); },
+            KC::BackSpace => {                                  output[5] = Keyboard::DeleteForward;   buffer.push_back(output).ok(); },
+            KC::Tab       => {                                  output[5] = Keyboard::Tab;             buffer.push_back(output).ok(); },
+            KC::STab      => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Tab;             buffer.push_back(output).ok(); },
+
+            KC::Left  => { output[5] = Keyboard::LeftArrow;  buffer.push_back(output).ok(); },
+            KC::Down  => { output[5] = Keyboard::DownArrow;  buffer.push_back(output).ok(); },
+            KC::Up    => { output[5] = Keyboard::UpArrow;    buffer.push_back(output).ok(); },
+            KC::Right => { output[5] = Keyboard::RightArrow; buffer.push_back(output).ok(); },
+
 
             KC::ACircum => { buffer.push_back(DEAD_CIRCUMFLEX).ok(); output[5] = Keyboard::A; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
             KC::ADiaer  => { buffer.push_back(DEAD_DIAERIS).ok();    output[5] = Keyboard::A; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },

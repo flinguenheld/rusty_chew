@@ -5,15 +5,15 @@ mod keys;
 mod layouts;
 mod utils;
 
-use keys::{DeadLayout, Modifiers, KC};
+use keys::{Lay, Modifiers, KC};
 use layouts::LAYOUTS;
 use usbd_human_interface_device::page::Keyboard;
 use utils::gpios::Gpios;
-use utils::led::{Led, BLUE, GREEN, OFF, RED};
+use utils::led::{Led, BLUE, GREEN, OFF, ORANGE, RED};
 use utils::matrix::Matrix;
 use utils::options::{BUFFER_LENGTH, HOLD_TIME, TIMER_MAIN_LOOP, TIMER_USB_LOOP, UART_SPEED};
 
-use heapless::{Deque, FnvIndexSet};
+use heapless::{Deque, FnvIndexSet, Vec};
 
 use waveshare_rp2040_zero as bsp;
 
@@ -164,8 +164,8 @@ fn main() -> ! {
     // TEST LAYOUT ---------------------------------------------------------------------------------
     // TEST LAYOUT ---------------------------------------------------------------------------------
 
+    let mut layouts: Vec<Lay, 10> = Vec::new();
     let mut current_layout = 0;
-    let mut dead_lay = DeadLayout::new(false, 0);
     let mut homerow_history: FnvIndexSet<usize, 8> = FnvIndexSet::new();
 
     // TEST LAYOUT ---------------------------------------------------------------------------------
@@ -187,7 +187,7 @@ fn main() -> ! {
             let left_pins = gpios.update_states();
             let mut right_pins = [0_u8; 4];
             if rx.read_exact(&mut right_pins).is_ok() {
-                led.light_on(OFF);
+                // led.light_off();
             } else {
                 led.light_on(RED);
                 continue;
@@ -195,34 +195,47 @@ fn main() -> ! {
             matrix.up(left_pins, right_pins);
 
             // Layouts ------------------------------------------------------------------
-            if !dead_lay.active {
-                current_layout = 0;
-
-                for ((index, layout), (mat_prev, mat_cur)) in LAYOUTS[current_layout]
-                    .iter()
-                    .enumerate()
-                    .zip(matrix.prev.iter().zip(matrix.cur.iter()))
-                {
-                    match layout {
-                        KC::Layout(number) => {
-                            if *mat_cur > 0 {
-                                current_layout = *number;
-                                // TODO add break points
+            match layouts.last().unwrap_or(&mut Lay::Pressed(0, 0)) {
+                Lay::Dead(_, _, _) => {}
+                _ => {
+                    for ((index, layout), (mat_prev, mat_cur)) in LAYOUTS[current_layout]
+                        .iter()
+                        .enumerate()
+                        .zip(matrix.prev.iter().zip(matrix.cur.iter()))
+                    {
+                        match layout {
+                            KC::Layout(number) => {
+                                if *mat_cur > 0 {
+                                    layouts.push(Lay::Pressed(*number, index)).ok();
+                                    // break;
+                                }
                             }
-                        }
-                        KC::LayDead(number) => {
-                            if *mat_prev == 0 && *mat_cur > 0 {
-                                current_layout = *number;
-                                dead_lay = DeadLayout::new(true, index);
+                            KC::LayDead(number) => {
+                                if *mat_prev == 0 && *mat_cur > 0 {
+                                    layouts.push(Lay::Dead(*number, index, false)).ok();
 
-                                // Mandatory jump to avoid its own key pressed
-                                continue 'main;
+                                    // Mandatory jump to avoid its own key pressed
+                                    continue 'main;
+                                }
                             }
+                            _ => {}
                         }
-                        _ => {}
                     }
                 }
             }
+
+            // TODO: keep here or with a function ?
+            current_layout = match layouts.last().unwrap_or(&Lay::Pressed(0, 0)) {
+                Lay::Pressed(number, _) => *number,
+                Lay::Dead(number, _, _) => *number,
+            };
+
+            // match current_layout {
+            //     1 => led.light_on(BLUE),
+            //     2 => led.light_on(GREEN),
+            //     3 => led.light_on(RED),
+            //     _ => led.light_off(),
+            // }
 
             // Modifiers ----------------------------------------------------------------
             // Maintain them from the matrix level instead of the layout, so keep their indexes
@@ -270,9 +283,9 @@ fn main() -> ! {
                 .zip(matrix.cur.iter())
                 .filter(|(((index, _), _), _)| {
                     !mods.is_active(*index)
-                        && !(dead_lay.index < usize::MAX
-                            && matrix.cur[dead_lay.index] >= HOLD_TIME
-                            && dead_lay.index == *index)
+                    // && !(dead_lay.index < usize::MAX
+                    //     && matrix.cur[dead_lay.index] >= HOLD_TIME
+                    //     && dead_lay.index == *index)
                 })
             {
                 match layout {
@@ -284,7 +297,7 @@ fn main() -> ! {
                             key_buffer = KC::None.to_usb_code(&mods, key_buffer);
                         }
                     }
-                    k if (k >= &KC::ECircum && k <= &KC::EDiaer) => {
+                    k if (k >= &KC::ACircum && k <= &KC::YDiaer) => {
                         if *mat_prev == 0 && *mat_cur > 0 {
                             key_buffer = k.to_usb_code(&mods, key_buffer);
                         }
@@ -309,24 +322,22 @@ fn main() -> ! {
 
             // --
             homerow_history.retain(|&index| !(matrix.prev[index] > 0 && matrix.cur[index] == 0));
-
-            if dead_lay.active {
-                if !dead_lay.done {
-                    if matrix.prev[dead_lay.index] == 0 && matrix.cur[dead_lay.index] > 0 {
-                        dead_lay.done = true;
-                    } else if matrix.cur[dead_lay.index] == 0 {
-                        dead_lay.done = matrix.cur.iter().filter(|c| **c > 0).count() > mods.nb_on()
-                    } else if matrix.cur[dead_lay.index] > HOLD_TIME {
-                        dead_lay.done =
-                            matrix.cur.iter().filter(|c| **c > 0).count() > mods.nb_on() + 1
+            layouts.retain_mut(|l| match l {
+                Lay::Pressed(_, index) => matrix.cur[*index] > 0,
+                Lay::Dead(_, index, done) => {
+                    if !*done {
+                        if matrix.prev[*index] == 0 && matrix.cur[*index] > 0 {
+                            *done = true;
+                        } else if matrix.cur[*index] == 0 {
+                            *done = matrix.cur.iter().filter(|c| **c > 0).count() > mods.nb_on()
+                        } else if matrix.cur[*index] > HOLD_TIME {
+                            *done = matrix.cur.iter().filter(|c| **c > 0).count() > mods.nb_on() + 1
+                        }
                     }
-                }
 
-                if dead_lay.done && matrix.cur[dead_lay.index] < HOLD_TIME {
-                    dead_lay = DeadLayout::new(false, 0);
-                    key_buffer = KC::None.to_usb_code(&mods, key_buffer);
+                    !(*done && matrix.cur[*index] < HOLD_TIME)
                 }
-            }
+            });
         }
 
         // USB --------------------------------------------------------------------------
@@ -343,7 +354,7 @@ fn main() -> ! {
                             led.light_on(GREEN);
                         }
                         Ok(_) => {
-                            led.light_on(OFF);
+                            // led.light_on(OFF);
                         }
                         Err(e) => {
                             led.light_on(RED);

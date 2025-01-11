@@ -16,6 +16,7 @@ pub const OFF: [u8; 3] = [0, 0, 0];
 pub const GREEN: [u8; 3] = [255, 0, 0];
 pub const RED: [u8; 3] = [0, 255, 0];
 pub const BLUE: [u8; 3] = [0, 0, 255];
+pub const ORANGE: [u8; 3] = [0, 100, 100];
 
 type Neopixel<'a> = Ws2812<PIO0, SM0, CountDown<'a>, Pin<Gpio16, FunctionPio0, PullDown>>;
 
