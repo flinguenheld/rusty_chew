@@ -281,15 +281,10 @@ fn main() -> ! {
                 .enumerate()
                 .zip(matrix.prev.iter())
                 .zip(matrix.cur.iter())
-                .filter(|(((index, _), _), _)| {
-                    !mods.is_active(*index)
-                    // && !(dead_lay.index < usize::MAX
-                    //     && matrix.cur[dead_lay.index] >= HOLD_TIME
-                    //     && dead_lay.index == *index)
-                })
+                .filter(|(((index, _), _), _)| !mods.is_active(*index))
             {
                 match layout {
-                    k if (k >= &KC::A && k <= &KC::Question) => {
+                    k if (k >= &KC::A && k <= &KC::Yen) => {
                         // Last key is automatically repeated by the usb crate
                         if *mat_prev == 0 && *mat_cur > 0 {
                             key_buffer = k.to_usb_code(&mods, key_buffer);

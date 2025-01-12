@@ -15,11 +15,11 @@ pub const LAYOUTS: [[KC; 34]; 4] = [[
 ],
 [
 //-------------------|-------------------|-------------------|-------------------|-------------------|        |-------------------|-------------------|-------------------|-------------------|-------------------|
-      KC::Tilde      ,   KC::LowerThan   ,     KC::Equal     ,  KC::GreaterThan  ,    KC::Exclaim    ,              KC::None      ,      KC::Num7     ,      KC::Num8     ,      KC::Num9     ,      KC::Hash     ,
+      KC::Tilde      ,   KC::LowerThan   ,     KC::Equal     ,  KC::GreaterThan  ,    KC::Exclaim    ,              KC::Pound     ,      KC::Num7     ,      KC::Num8     ,      KC::Num9     ,      KC::Hash     ,
 //-------------------|-------------------|-------------------|-------------------|-------------------|        |-------------------|-------------------|-------------------|-------------------|-------------------|
-    KC::Backslash    ,     KC::Plus      ,    KC::Asterix    ,     KC::Slash     ,    KC::Question   ,              KC::None      ,      KC::Num4     ,      KC::Num5     ,      KC::Num6     ,      KC::Num0     ,
+    KC::Backslash    ,     KC::Plus      ,    KC::Asterix    ,     KC::Slash     ,    KC::Question   ,              KC::Euro      ,      KC::Num4     ,      KC::Num5     ,      KC::Num6     ,      KC::Num0     ,
 //-------------------|-------------------|-------------------|-------------------|-------------------|        |-------------------|-------------------|-------------------|-------------------|-------------------|
-      KC::None       ,   KC::Circumflex  ,   KC::Percentage  ,     KC::Dollar    ,                                                       KC::Num1     ,      KC::Num2     ,      KC::Num3     ,      KC::None     ,
+    KC::Diameter     ,   KC::Circumflex  ,   KC::Percentage  ,     KC::Dollar    ,                                                       KC::Num1     ,      KC::Num2     ,      KC::Num3     ,      KC::Degre    ,
 //-------------------|-------------------|-------------------|-------------------|                                                |-------------------|-------------------|-------------------|-------------------|
 //                                       |-------------------|-------------------|-------------------|        |-------------------|-------------------|-------------------|
                                                KC::Minus     ,      KC::Dot      ,     KC::Comma     ,               KC::None     ,      KC::None     ,      KC::None
@@ -27,11 +27,11 @@ pub const LAYOUTS: [[KC; 34]; 4] = [[
 ],
 [
 //-------------------|-------------------|-------------------|-------------------|-------------------|        |-------------------|-------------------|-------------------|-------------------|-------------------|
-        KC::At       ,  KC::LeftBracket  ,   KC::Ampersand   , KC::RightBracket  ,     KC::None      ,              KC::None      ,        KC::B      ,      KC::Num8     ,      KC::Num9     ,      KC::Hash     ,
+        KC::At       ,  KC::LeftBracket  ,   KC::Ampersand   , KC::RightBracket  ,     KC::None      ,              KC::None      ,      KC::Home     ,     KC::PageUp    ,    KC::PageDown   ,      KC::End      ,
 //-------------------|-------------------|-------------------|-------------------|-------------------|        |-------------------|-------------------|-------------------|-------------------|-------------------|
-    KC::DoubleQuote  ,  KC::LeftParent   ,    KC::Quote      ,  KC::RightParent  ,     KC::Grave     ,              KC::None      ,      KC::Left     ,      KC::Down     ,       KC::Up      ,      KC::Right    ,
+    KC::DoubleQuote  ,  KC::LeftParent   ,    KC::Quote      ,  KC::RightParent  ,     KC::Grave     ,              KC::None      ,      KC::Left     ,      KC::Down     ,       KC::Up      ,     KC::Right     ,
 //-------------------|-------------------|-------------------|-------------------|-------------------|        |-------------------|-------------------|-------------------|-------------------|-------------------|
-       KC::None      ,  KC::LeftCurly    ,    KC::Pipe       ,  KC::RightCurly   ,                                                       KC::Del      ,      KC::Tab      ,      KC::STab     ,    KC::STab  ,
+       KC::None      ,  KC::LeftCurly    ,    KC::Pipe       ,  KC::RightCurly   ,                                                       KC::Del      ,      KC::Tab      ,      KC::STab     ,   KC::BackSpace   ,
 //-------------------|-------------------|-------------------|-------------------|                                                |-------------------|-------------------|-------------------|-------------------|
 //                                       |-------------------|-------------------|-------------------|        |-------------------|-------------------|-------------------|
                                             KC::Underscore   ,     KC::Colon     ,   KC::SemiColon   ,               KC::None     ,      KC::None     ,      KC::None
@@ -39,11 +39,11 @@ pub const LAYOUTS: [[KC; 34]; 4] = [[
 ],
 [
 //-------------------|-------------------|-------------------|-------------------|-------------------|        |-------------------|-------------------|-------------------|-------------------|-------------------|
-      KC::ACircum    ,  KC::LeftBracket  ,    KC::ECircum    ,    KC::OCircum    ,     KC::None      ,              KC::None      ,      KC::None     ,     KC::YCircum   ,    KC::ICircum    ,     KC::UCircum   ,
+      KC::ACircum    ,   KC::CCedilla    ,    KC::ECircum    ,    KC::OCircum    ,     KC::None      ,              KC::None      ,      KC::None     ,     KC::YCircum   ,    KC::ICircum    ,     KC::UCircum   ,
 //-------------------|-------------------|-------------------|-------------------|-------------------|        |-------------------|-------------------|-------------------|-------------------|-------------------|
-       KC::AGrave    ,  KC::LeftParent   ,    KC::EGrave     ,    KC::OGrave     ,     KC::None      ,              KC::None      ,     KC::EAcute    ,     KC::YGrave    ,    KC::IGrave     ,     KC::UGrave    ,
+       KC::AGrave    ,      KC::OE       ,    KC::EGrave     ,    KC::OGrave     ,   KC::GuillemetL  ,            KC::GuillemetD  ,     KC::EAcute    ,     KC::YGrave    ,    KC::IGrave     ,     KC::UGrave    ,
 //-------------------|-------------------|-------------------|-------------------|-------------------|        |-------------------|-------------------|-------------------|-------------------|-------------------|
-       KC::ADiaer    ,  KC::LeftCurly    ,    KC::EDiaer     ,    KC::ODiaer     ,                                                       KC::None     ,     KC::YDiaer    ,    KC::IDiaer     ,     KC::UDiaer    ,
+       KC::ADiaer    ,      KC::AE       ,    KC::EDiaer     ,    KC::ODiaer     ,                                                       KC::None     ,     KC::YDiaer    ,    KC::IDiaer     ,     KC::UDiaer    ,
 //-------------------|-------------------|-------------------|-------------------|                                                |-------------------|-------------------|-------------------|-------------------|
 //                                       |-------------------|-------------------|-------------------|        |-------------------|-------------------|-------------------|
                                                KC::None      ,     KC::None      ,     KC::None      ,               KC::None     ,      KC::None     ,      KC::None

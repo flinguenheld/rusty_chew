@@ -108,7 +108,10 @@ pub enum KC {
     Y = 25,
     Z = 26,
 
-    EAcute = 50,
+    CCedilla = 50,
+    EAcute = 51,
+    AE = 52,
+    OE = 53,
 
     Enter = 100,
     Space = 101,
@@ -117,12 +120,17 @@ pub enum KC {
     BackSpace = 104,
     Tab = 105,
     STab = 106,
+    Home = 107,
+    End = 108,
+    PageUp = 109,
+    PageDown = 110,
 
     Left = 200,
     Down = 201,
     Up = 202,
     Right = 203,
 
+    // Num & symbols - No shift
     Num0 = 300,
     Num1 = 301,
     Num2 = 302,
@@ -170,6 +178,14 @@ pub enum KC {
     GreaterThan = 519,
     Question = 520,
 
+        GuillemetL = 521,
+        GuillemetD = 522,
+        Diameter = 523,
+        Degre = 524,
+        Euro = 525,
+        Pound = 526,
+        Yen = 527,
+
     // Macros - No held
     ACircum = 600,
     AGrave = 601,
@@ -216,7 +232,7 @@ impl KC {
         let mut output = EMPTY;
 
         // Exclude numbers and symbols from shift
-        if (modifiers.shift.0 || *self == KC::SHIFT) && (*self < KC::Num0 || *self > KC::Question) { output[0] = Keyboard::LeftShift; }
+        if (modifiers.shift.0 || *self == KC::SHIFT) && (*self < KC::Num0 || *self > KC::Yen) {      output[0] = Keyboard::LeftShift; }
         if modifiers.alt.0 || *self == KC::ALT {                                                     output[1] = Keyboard::LeftAlt; }
         if modifiers.alt_gr.0 || *self == KC::ALTGR {                                                output[2] = Keyboard::RightAlt; }
         if modifiers.ctrl.0 || *self == KC::CTRL {                                                   output[3] = Keyboard::LeftControl; }
@@ -260,7 +276,10 @@ impl KC {
             KC::Y => { output[5] = Keyboard::Y; buffer.push_back(output).ok(); },
             KC::Z => { output[5] = Keyboard::Z; buffer.push_back(output).ok(); },
 
-            KC::EAcute => { output[2] = Keyboard::RightAlt; output[5] = Keyboard::E; buffer.push_back(output).ok(); },
+            KC::CCedilla   => { output[2] = Keyboard::RightAlt; output[5] = Keyboard::Comma;      buffer.push_back(output).ok(); },
+            KC::EAcute     => { output[2] = Keyboard::RightAlt; output[5] = Keyboard::E;          buffer.push_back(output).ok(); },
+            KC::AE         => { output[2] = Keyboard::RightAlt; output[5] = Keyboard::Z;          buffer.push_back(output).ok(); },
+            KC::OE         => { output[2] = Keyboard::RightAlt; output[5] = Keyboard::K;          buffer.push_back(output).ok(); },
 
             KC::Enter     => {                                  output[5] = Keyboard::ReturnEnter;     buffer.push_back(output).ok(); },
             KC::Space     => {                                  output[5] = Keyboard::Space;           buffer.push_back(output).ok(); },
@@ -269,12 +288,15 @@ impl KC {
             KC::BackSpace => {                                  output[5] = Keyboard::DeleteForward;   buffer.push_back(output).ok(); },
             KC::Tab       => {                                  output[5] = Keyboard::Tab;             buffer.push_back(output).ok(); },
             KC::STab      => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Tab;             buffer.push_back(output).ok(); },
+            KC::Home      => {                                  output[5] = Keyboard::Home;            buffer.push_back(output).ok(); },
+            KC::End       => {                                  output[5] = Keyboard::End;             buffer.push_back(output).ok(); },
+            KC::PageUp    => {                                  output[5] = Keyboard::PageUp;          buffer.push_back(output).ok(); },
+            KC::PageDown  => {                                  output[5] = Keyboard::PageDown;        buffer.push_back(output).ok(); },
 
             KC::Left  => { output[5] = Keyboard::LeftArrow;  buffer.push_back(output).ok(); },
             KC::Down  => { output[5] = Keyboard::DownArrow;  buffer.push_back(output).ok(); },
             KC::Up    => { output[5] = Keyboard::UpArrow;    buffer.push_back(output).ok(); },
             KC::Right => { output[5] = Keyboard::RightArrow; buffer.push_back(output).ok(); },
-
 
             KC::ACircum => { buffer.push_back(DEAD_CIRCUMFLEX).ok(); output[5] = Keyboard::A; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
             KC::ADiaer  => { buffer.push_back(DEAD_DIAERIS).ok();    output[5] = Keyboard::A; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
@@ -346,6 +368,14 @@ impl KC {
             KC::LowerThan   => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Comma;        buffer.push_back(output).ok(); }
             KC::GreaterThan => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Dot;          buffer.push_back(output).ok(); }
             KC::Question    => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::ForwardSlash; buffer.push_back(output).ok(); }
+
+            KC::GuillemetL => { output[2] = Keyboard::RightAlt;  output[5] = Keyboard::LeftBrace;                                   buffer.push_back(output).ok(); },
+            KC::GuillemetD => { output[2] = Keyboard::RightAlt;  output[5] = Keyboard::RightBrace;                                  buffer.push_back(output).ok(); },
+            KC::Diameter   => { output[2] = Keyboard::RightAlt;  output[5] = Keyboard::L;                                           buffer.push_back(output).ok(); },
+            KC::Degre      => { output[0] = Keyboard::LeftShift; output[2] = Keyboard::RightAlt;   output[5] = Keyboard::Semicolon; buffer.push_back(output).ok(); },
+            KC::Euro       => { output[2] = Keyboard::RightAlt;  output[5] = Keyboard::Keyboard5;                                   buffer.push_back(output).ok(); },
+            KC::Pound      => { output[0] = Keyboard::LeftShift; output[2] = Keyboard::RightAlt;   output[5] = Keyboard::Keyboard4; buffer.push_back(output).ok(); },
+            KC::Yen        => { output[2] = Keyboard::RightAlt;  output[5] = Keyboard::Minus;                                       buffer.push_back(output).ok(); },
 
             KC::HomeAltA =>  { output[5] = Keyboard::A; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); }
             KC::HomeAltU =>  { output[5] = Keyboard::U; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); }
