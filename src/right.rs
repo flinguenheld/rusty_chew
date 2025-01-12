@@ -4,8 +4,8 @@
 mod utils;
 use crate::utils::options::TIMER_MAIN_LOOP;
 use utils::gpios::Gpios;
-use utils::led::{Led, OFF, RED};
-use utils::options::{TIMER_LED_STARTUP, UART_SPEED};
+use utils::led::{Led, LedColor};
+use utils::options::UART_SPEED;
 
 use waveshare_rp2040_zero as bsp;
 
@@ -141,13 +141,12 @@ fn main() -> ! {
     loop {
         if main_count_down.wait().is_ok() {
             let right_pins = gpios.update_states();
-            if tx.write_all(&right_pins).is_ok() {
-                led.light_on(OFF);
-            } else {
-                led.light_on(RED);
+            if tx.write_all(&right_pins).is_err() {
+                led.light_on(LedColor::Red);
                 continue;
             }
-            // led.startup(chew_timer.ticks);
+
+            led.startup(TIMER_MAIN_LOOP);
         }
 
         if tick_count_down.wait().is_ok() {

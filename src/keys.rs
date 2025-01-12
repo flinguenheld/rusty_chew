@@ -206,11 +206,11 @@ pub enum KC {
         YGrave = 616,
         YDiaer = 617,
 
-    ALT = 10000,
-    ALTGR = 10001,
-    CTRL = 10002,
-    GUI = 10003,
-    SHIFT = 10004,
+    Alt = 10000,
+    Altgr = 10001,
+    Ctrl = 10002,
+    Gui = 10003,
+    Shift = 10004,
 
     HomeAltA = 20000,
     HomeAltU = 20001,
@@ -232,17 +232,17 @@ impl KC {
         let mut output = EMPTY;
 
         // Exclude numbers and symbols from shift
-        if (modifiers.shift.0 || *self == KC::SHIFT) && (*self < KC::Num0 || *self > KC::Yen) {      output[0] = Keyboard::LeftShift; }
-        if modifiers.alt.0 || *self == KC::ALT {                                                     output[1] = Keyboard::LeftAlt; }
-        if modifiers.alt_gr.0 || *self == KC::ALTGR {                                                output[2] = Keyboard::RightAlt; }
-        if modifiers.ctrl.0 || *self == KC::CTRL {                                                   output[3] = Keyboard::LeftControl; }
-        if modifiers.gui.0 || *self == KC::GUI {                                                     output[4] = Keyboard::LeftGUI; }
+        if (modifiers.shift.0 || *self == KC::Shift) && (*self < KC::Num0 || *self > KC::Yen) {      output[0] = Keyboard::LeftShift; }
+        if modifiers.alt.0 || *self == KC::Alt {                                                     output[1] = Keyboard::LeftAlt; }
+        if modifiers.alt_gr.0 || *self == KC::Altgr {                                                output[2] = Keyboard::RightAlt; }
+        if modifiers.ctrl.0 || *self == KC::Ctrl {                                                   output[3] = Keyboard::LeftControl; }
+        if modifiers.gui.0 || *self == KC::Gui {                                                     output[4] = Keyboard::LeftGUI; }
 
         output
     }
 
     #[rustfmt::skip]
-    pub fn to_usb_code(&self, modifiers: &Modifiers, mut buffer: Deque<[Keyboard; 6], BUFFER_LENGTH>) -> Deque<[Keyboard; 6], BUFFER_LENGTH> {
+    pub fn usb_code(&self, modifiers: &Modifiers, mut buffer: Deque<[Keyboard; 6], BUFFER_LENGTH>) -> Deque<[Keyboard; 6], BUFFER_LENGTH> {
 
         let mut output = self.new_combination(modifiers);
 

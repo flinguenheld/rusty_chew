@@ -9,7 +9,7 @@ use keys::{Lay, Modifiers, KC};
 use layouts::LAYOUTS;
 use usbd_human_interface_device::page::Keyboard;
 use utils::gpios::Gpios;
-use utils::led::{Led, BLUE, GREEN, OFF, ORANGE, RED};
+use utils::led::{Led, LedColor};
 use utils::matrix::Matrix;
 use utils::options::{BUFFER_LENGTH, HOLD_TIME, TIMER_MAIN_LOOP, TIMER_USB_LOOP, UART_SPEED};
 
@@ -180,22 +180,18 @@ fn main() -> ! {
     let mut last_printed_key: [Keyboard; 6] = [Keyboard::NoEventIndicated; 6];
 
     'main: loop {
-        // TODO put in its owns timer
-        // led.startup(chew_timer.ticks);
         if main_count_down.wait().is_ok() {
             // Matrix update ------------------------------------------------------------
             let left_pins = gpios.update_states();
             let mut right_pins = [0_u8; 4];
-            if rx.read_exact(&mut right_pins).is_ok() {
-                // led.light_off();
-            } else {
-                led.light_on(RED);
+            if rx.read_exact(&mut right_pins).is_err() {
+                led.light_on(utils::led::LedColor::Red);
                 continue;
             }
             matrix.up(left_pins, right_pins);
 
             // Layouts ------------------------------------------------------------------
-            match layouts.last().unwrap_or(&mut Lay::Pressed(0, 0)) {
+            match layouts.last().unwrap_or(&Lay::Pressed(0, 0)) {
                 Lay::Dead(_, _, _) => {}
                 _ => {
                     for ((index, layout), (mat_prev, mat_cur)) in LAYOUTS[current_layout]
@@ -251,12 +247,12 @@ fn main() -> ! {
                 .iter()
                 .zip(matrix.cur.iter())
                 .enumerate()
-                .filter(|(_, (&la, &mc))| la >= KC::ALT && la <= KC::SHIFT && mc > 0)
+                .filter(|(_, (&la, &mc))| la >= KC::Alt && la <= KC::Shift && mc > 0)
                 .for_each(|(index, (layout, _))| match layout {
-                    KC::ALT => mods.alt = (true, index),
-                    KC::ALTGR => mods.alt_gr = (true, index),
-                    KC::CTRL => mods.ctrl = (true, index),
-                    KC::GUI => mods.gui = (true, index),
+                    KC::Alt => mods.alt = (true, index),
+                    KC::Altgr => mods.alt_gr = (true, index),
+                    KC::Ctrl => mods.ctrl = (true, index),
+                    KC::Gui => mods.gui = (true, index),
                     _ => mods.shift = (true, index),
                 });
 
@@ -287,14 +283,14 @@ fn main() -> ! {
                     k if (k >= &KC::A && k <= &KC::Yen) => {
                         // Last key is automatically repeated by the usb crate
                         if *mat_prev == 0 && *mat_cur > 0 {
-                            key_buffer = k.to_usb_code(&mods, key_buffer);
+                            key_buffer = k.usb_code(&mods, key_buffer);
                         } else if *mat_prev > 0 && *mat_cur == 0 {
-                            key_buffer = KC::None.to_usb_code(&mods, key_buffer);
+                            key_buffer = KC::None.usb_code(&mods, key_buffer);
                         }
                     }
                     k if (k >= &KC::ACircum && k <= &KC::YDiaer) => {
                         if *mat_prev == 0 && *mat_cur > 0 {
-                            key_buffer = k.to_usb_code(&mods, key_buffer);
+                            key_buffer = k.usb_code(&mods, key_buffer);
                         }
                     }
                     k if (k >= &KC::HomeAltA && k <= &KC::HomeSftR) => {
@@ -306,9 +302,9 @@ fn main() -> ! {
                             && *mat_cur == 0
                             && homerow_history.contains(&index)
                         {
-                            key_buffer = k.to_usb_code(&mods, key_buffer);
+                            key_buffer = k.usb_code(&mods, key_buffer);
                         } else if *mat_prev > 0 && *mat_cur == 0 {
-                            key_buffer = KC::None.to_usb_code(&mods, key_buffer);
+                            key_buffer = KC::None.usb_code(&mods, key_buffer);
                         }
                     }
                     _ => {}
@@ -333,26 +329,28 @@ fn main() -> ! {
                     !(*done && matrix.cur[*index] < HOLD_TIME)
                 }
             });
+
+            led.startup(TIMER_MAIN_LOOP);
         }
 
         // USB --------------------------------------------------------------------------
         if usb_count_down.wait().is_ok() {
             if let Some(to_print) = key_buffer.pop_front() {
                 if to_print != last_printed_key {
-                    last_printed_key = to_print.clone();
+                    last_printed_key = to_print;
 
                     match keyboard.device().write_report(to_print) {
                         Err(UsbHidError::WouldBlock) => {
-                            led.light_on(BLUE);
+                            led.light_on(LedColor::Yellow);
                         }
                         Err(UsbHidError::Duplicate) => {
-                            led.light_on(GREEN);
+                            led.light_on(LedColor::Blue);
                         }
                         Ok(_) => {
                             // led.light_on(OFF);
                         }
                         Err(e) => {
-                            led.light_on(RED);
+                            led.light_on(LedColor::Orange);
                             core::panic!("Failed to write keyboard report: {:?}", e)
                         }
                     }

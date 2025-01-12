@@ -14,12 +14,10 @@ impl Gpios {
         let mut pin_state_buffer = [0; 4];
 
         for (i, row) in self.pins.iter_mut().enumerate() {
-            for k in row.iter_mut() {
-                if let Some(key) = k {
-                    pin_state_buffer[i] <<= 1;
-                    if key.is_low().unwrap() {
-                        pin_state_buffer[i] |= 1;
-                    }
+            for key in row.iter_mut().flatten() {
+                pin_state_buffer[i] <<= 1;
+                if key.is_low().unwrap() {
+                    pin_state_buffer[i] |= 1;
                 }
             }
         }
