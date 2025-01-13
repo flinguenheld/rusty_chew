@@ -161,23 +161,18 @@ fn main() -> ! {
     let mut usb_count_down = timer.count_down();
     usb_count_down.start(TIMER_USB_LOOP.millis());
 
-    // TEST LAYOUT ---------------------------------------------------------------------------------
-    // TEST LAYOUT ---------------------------------------------------------------------------------
-
-    let mut layouts: Vec<Lay, 10> = Vec::new();
+    const NB_LAYOUTS: usize = LAYOUTS.len();
+    let mut layouts: Vec<Lay, NB_LAYOUTS> = Vec::new();
     let mut current_layout = 0;
-    let mut homerow_history: FnvIndexSet<usize, 8> = FnvIndexSet::new();
-
-    // TEST LAYOUT ---------------------------------------------------------------------------------
-    // TEST LAYOUT ---------------------------------------------------------------------------------
-
-    let mut led = Led::new(&mut neopixel);
 
     let mut matrix = Matrix::new();
     let mut mods = Modifiers::new();
+    let mut homerow_history: FnvIndexSet<usize, 8> = FnvIndexSet::new();
 
     let mut key_buffer: Deque<[Keyboard; 6], BUFFER_LENGTH> = Deque::new();
     let mut last_printed_key: [Keyboard; 6] = [Keyboard::NoEventIndicated; 6];
+
+    let mut led = Led::new(&mut neopixel);
 
     'main: loop {
         if main_count_down.wait().is_ok() {
@@ -220,7 +215,6 @@ fn main() -> ! {
                 }
             }
 
-            // TODO: keep here or with a function ?
             current_layout = match layouts.last().unwrap_or(&Lay::Pressed(0, 0)) {
                 Lay::Pressed(number, _) => *number,
                 Lay::Dead(number, _, _) => *number,
