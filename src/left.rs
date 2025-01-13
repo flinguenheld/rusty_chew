@@ -7,7 +7,6 @@ mod utils;
 
 use keys::{Lay, Modifiers, KC};
 use layouts::LAYOUTS;
-use usbd_human_interface_device::page::Keyboard;
 use utils::gpios::Gpios;
 use utils::led::{Led, LedColor};
 use utils::matrix::Matrix;
@@ -37,6 +36,9 @@ use ws2812_pio::Ws2812;
 #[allow(clippy::wildcard_imports)]
 use usb_device::class_prelude::*;
 use usb_device::prelude::*;
+use usbd_human_interface_device::device::keyboard::NKROBootKeyboard;
+use usbd_human_interface_device::device::mouse::{WheelMouse, WheelMouseReport};
+use usbd_human_interface_device::page::Keyboard;
 use usbd_human_interface_device::prelude::*;
 
 #[entry]
@@ -80,17 +82,19 @@ fn main() -> ! {
         &mut pac.RESETS,
     ));
 
-    let mut keyboard = UsbHidClassBuilder::new()
+    let mut rusty_chew = UsbHidClassBuilder::new()
         .add_device(
             usbd_human_interface_device::device::keyboard::NKROBootKeyboardConfig::default(),
         )
+        .add_device(usbd_human_interface_device::device::mouse::WheelMouseConfig::default())
         .build(&usb_bus);
 
-    let mut usb_dev = UsbDeviceBuilder::new(&usb_bus, UsbVidPid(0x1209, 0x0001))
+    // let mut usb_dev = UsbDeviceBuilder::new(&usb_bus, UsbVidPid(0x1209, 0x0001))
+    let mut usb_dev = UsbDeviceBuilder::new(&usb_bus, UsbVidPid(0x1337, 0x1985))
         .strings(&[StringDescriptors::default()
             .manufacturer("f@linguenheld.fr")
             .product("RustyChew")
-            .serial_number("TEST")])
+            .serial_number("hey")])
         .unwrap()
         .build();
 
@@ -331,9 +335,9 @@ fn main() -> ! {
         if usb_count_down.wait().is_ok() {
             if let Some(to_print) = key_buffer.pop_front() {
                 if to_print != last_printed_key {
-                    last_printed_key = to_print;
-
-                    match keyboard.device().write_report(to_print) {
+                    let keyboard = rusty_chew.device::<NKROBootKeyboard<'_, _>, _>();
+                    match keyboard.write_report(to_print) {
+                        // match keyboard.device().write_report(to_print) {
                         Err(UsbHidError::WouldBlock) => {
                             led.light_on(LedColor::Yellow);
                         }
@@ -341,6 +345,7 @@ fn main() -> ! {
                             led.light_on(LedColor::Blue);
                         }
                         Ok(_) => {
+                            last_printed_key = to_print;
                             // led.light_on(OFF);
                         }
                         Err(e) => {
@@ -350,19 +355,39 @@ fn main() -> ! {
                     }
                 }
             }
+
+            // if mouse_report.buttons != last_mouse_buttons
+            //     || mouse_report.x != 0
+            //     || mouse_report.y != 0
+            // {
+            let mouse = rusty_chew.device::<WheelMouse<'_, _>, _>();
+            // match mouse.write_report(&mouse_report) {
+            //     Err(UsbHidError::WouldBlock) => {}
+            //     Ok(_) => {
+            //         last_mouse_buttons = mouse_report.buttons;
+            //         mouse_report = Default::default();
+            //     }
+            //     Err(e) => {
+            //         core::panic!("Failed to write mouse report: {:?}", e)
+            //     }
+            // };
+            // }
         }
 
         // Tick once per ms -------------------------------------------------------------
         if tick_count_down.wait().is_ok() {
-            match keyboard.tick() {
+            match rusty_chew.tick() {
                 Err(UsbHidError::WouldBlock) => {}
                 Ok(_) => {}
                 Err(e) => core::panic!("Failed to process keyboard tick: {:?}", e),
             };
         }
 
-        if usb_dev.poll(&mut [&mut keyboard]) {
-            match keyboard.device().read_report() {
+        if usb_dev.poll(&mut [&mut rusty_chew]) {
+            match rusty_chew
+                .device::<NKROBootKeyboard<'_, _>, _>()
+                .read_report()
+            {
                 Err(UsbError::WouldBlock) => {}
                 Err(e) => {
                     core::panic!("Failed to read keyboard report: {:?}", e)

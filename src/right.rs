@@ -14,7 +14,6 @@ use bsp::hal::{
     entry, pac,
     pio::PIOExt,
     timer::Timer,
-    usb,
     watchdog::Watchdog,
     Sio,
 };
@@ -24,8 +23,6 @@ use defmt_rtt as _;
 use embedded_io::Write;
 use fugit::{ExtU32, RateExtU32};
 use panic_probe as _;
-use usb_device::class_prelude::*;
-use usbd_human_interface_device::prelude::*;
 use ws2812_pio::Ws2812;
 
 #[entry]
@@ -59,21 +56,6 @@ fn main() -> ! {
 
     // Configure the addressable LED
     let (mut pio, sm0, sm1, _, _) = pac.PIO0.split(&mut pac.RESETS);
-
-    // USB ------
-    let usb_bus = UsbBusAllocator::new(usb::UsbBus::new(
-        pac.USBCTRL_REGS,
-        pac.USBCTRL_DPRAM,
-        clocks.usb_clock,
-        true,
-        &mut pac.RESETS,
-    ));
-
-    let mut keyboard = UsbHidClassBuilder::new()
-        .add_device(
-            usbd_human_interface_device::device::keyboard::NKROBootKeyboardConfig::default(),
-        )
-        .build(&usb_bus);
 
     // GPIO -----
     let mut gpios: Gpios = Gpios {
@@ -130,9 +112,6 @@ fn main() -> ! {
     )
     .enable();
 
-    let mut tick_count_down = timer.count_down();
-    tick_count_down.start(1.millis());
-
     let mut main_count_down = timer.count_down();
     main_count_down.start(TIMER_MAIN_LOOP.millis());
 
@@ -147,14 +126,6 @@ fn main() -> ! {
             }
 
             led.startup(TIMER_MAIN_LOOP);
-        }
-
-        if tick_count_down.wait().is_ok() {
-            match keyboard.tick() {
-                Err(UsbHidError::WouldBlock) => {}
-                Ok(_) => {}
-                Err(e) => core::panic!("Failed to process keyboard tick: {:?}", e),
-            };
         }
     }
 }
