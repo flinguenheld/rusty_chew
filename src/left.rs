@@ -176,6 +176,13 @@ fn main() -> ! {
     let mut key_buffer: Deque<[Keyboard; 6], BUFFER_LENGTH> = Deque::new();
     let mut last_printed_key: [Keyboard; 6] = [Keyboard::NoEventIndicated; 6];
 
+    // MOUSE ----------------------------------------------------------------------------------------------
+    // MOUSE ----------------------------------------------------------------------------------------------
+    let mut last_mouse_buttons = 0;
+    let mut mouse_report = WheelMouseReport::default();
+    // MOUSE ----------------------------------------------------------------------------------------------
+    // MOUSE ----------------------------------------------------------------------------------------------
+
     let mut led = Led::new(&mut neopixel);
 
     'main: loop {
@@ -305,6 +312,32 @@ fn main() -> ! {
                             key_buffer = KC::None.usb_code(&mods, key_buffer);
                         }
                     }
+
+                    // Mouse ------------------------------------------------------------
+                    k if (k >= &KC::MouseLeft && k <= &KC::MouseRight) => {
+                        if *mat_cur > 0 {
+                            mouse_report = k.usb_mouse_move(
+                                mouse_report,
+                                &LAYOUTS[current_layout],
+                                &matrix.cur,
+                            );
+                        }
+                    }
+                    k if (k >= &KC::MouseBtLeft && k <= &KC::MouseBtRight) => {
+                        if *mat_cur > 0 {
+                            mouse_report.buttons |= match k {
+                                KC::MouseBtLeft => 0x1,
+                                KC::MouseBtMiddle => 0x4,
+                                _ => 0x2,
+                            }
+                        } else if *mat_prev > 0 && *mat_cur == 0 {
+                            mouse_report.buttons &= match k {
+                                KC::MouseBtLeft => 0xFF - 0x1,
+                                KC::MouseBtMiddle => 0xFF - 0x4,
+                                _ => 0xFF - 0x2,
+                            }
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -356,22 +389,22 @@ fn main() -> ! {
                 }
             }
 
-            // if mouse_report.buttons != last_mouse_buttons
-            //     || mouse_report.x != 0
-            //     || mouse_report.y != 0
-            // {
-            let mouse = rusty_chew.device::<WheelMouse<'_, _>, _>();
-            // match mouse.write_report(&mouse_report) {
-            //     Err(UsbHidError::WouldBlock) => {}
-            //     Ok(_) => {
-            //         last_mouse_buttons = mouse_report.buttons;
-            //         mouse_report = Default::default();
-            //     }
-            //     Err(e) => {
-            //         core::panic!("Failed to write mouse report: {:?}", e)
-            //     }
-            // };
-            // }
+            if mouse_report.buttons != last_mouse_buttons
+                || mouse_report.x != 0
+                || mouse_report.y != 0
+            {
+                let mouse = rusty_chew.device::<WheelMouse<'_, _>, _>();
+                match mouse.write_report(&mouse_report) {
+                    Err(UsbHidError::WouldBlock) => {}
+                    Ok(_) => {
+                        last_mouse_buttons = mouse_report.buttons;
+                        mouse_report = Default::default();
+                    }
+                    Err(e) => {
+                        core::panic!("Failed to write mouse report: {:?}", e)
+                    }
+                };
+            }
         }
 
         // Tick once per ms -------------------------------------------------------------
