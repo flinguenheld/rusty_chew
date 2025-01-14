@@ -92,8 +92,8 @@ fn main() -> ! {
     // let mut usb_dev = UsbDeviceBuilder::new(&usb_bus, UsbVidPid(0x1209, 0x0001))
     let mut usb_dev = UsbDeviceBuilder::new(&usb_bus, UsbVidPid(0x1337, 0x1985))
         .strings(&[StringDescriptors::default()
-            .manufacturer("f@linguenheld.fr")
-            .product("RustyChew")
+            .manufacturer("florent@linguenheld.fr")
+            .product("Rusty Chew")
             .serial_number("hey")])
         .unwrap()
         .build();
@@ -299,7 +299,7 @@ fn main() -> ! {
                         }
                     }
                     k if (k >= &KC::HomeAltA && k <= &KC::HomeSftR) => {
-                        // To be validated, the press event has to be saved in history
+                        // To validate the release, the press event has to be saved in the history
                         if *mat_prev == 0 && *mat_cur > 0 {
                             homerow_history.insert(index).ok();
                         } else if *mat_prev > 0

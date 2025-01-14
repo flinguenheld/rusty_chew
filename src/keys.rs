@@ -1,4 +1,6 @@
-use crate::utils::options::BUFFER_LENGTH;
+use crate::utils::options::{
+    BUFFER_LENGTH, MOUSE_SPEED_1, MOUSE_SPEED_2, MOUSE_SPEED_3, MOUSE_SPEED_4, MOUSE_SPEED_DEFAULT,
+};
 use heapless::Deque;
 use usbd_human_interface_device::{device::mouse::WheelMouseReport, page::Keyboard};
 
@@ -248,12 +250,12 @@ impl KC {
                                                          .filter(|(k, m)| **k >= KC::MouseSpeed1 && **k <= KC::MouseSpeed4 && **m > 0)
                                                          .last() {
                         match key {
-                            KC::MouseSpeed1 => 1,
-                            KC::MouseSpeed2 => 4,
-                            KC::MouseSpeed3 => 16,
-                            _               => 32,
+                            KC::MouseSpeed1 => MOUSE_SPEED_1,
+                            KC::MouseSpeed2 => MOUSE_SPEED_2,
+                            KC::MouseSpeed3 => MOUSE_SPEED_3,
+                            _               => MOUSE_SPEED_4,
                         }
-                    } else { 10 };
+                    } else { MOUSE_SPEED_DEFAULT };
         
         match *self{
             KC::MouseLeft  => report.x = i8::saturating_add(report.x, -speed),
@@ -270,11 +272,11 @@ impl KC {
         let mut output = EMPTY;
 
         // Exclude numbers and symbols from shift
-        if (modifiers.shift.0 || *self == KC::Shift) && (*self < KC::Num0 || *self > KC::Yen) {      output[0] = Keyboard::LeftShift; }
-        if modifiers.alt.0 || *self == KC::Alt {                                                     output[1] = Keyboard::LeftAlt; }
-        if modifiers.alt_gr.0 || *self == KC::Altgr {                                                output[2] = Keyboard::RightAlt; }
-        if modifiers.ctrl.0 || *self == KC::Ctrl {                                                   output[3] = Keyboard::LeftControl; }
-        if modifiers.gui.0 || *self == KC::Gui {                                                     output[4] = Keyboard::LeftGUI; }
+        if (modifiers.shift.0 || *self == KC::Shift) && (*self < KC::Num0 || *self > KC::Yen) { output[0] = Keyboard::LeftShift; }
+        if modifiers.alt.0    || *self == KC::Alt {                                             output[1] = Keyboard::LeftAlt; }
+        if modifiers.alt_gr.0 || *self == KC::Altgr {                                           output[2] = Keyboard::RightAlt; }
+        if modifiers.ctrl.0   || *self == KC::Ctrl {                                            output[3] = Keyboard::LeftControl; }
+        if modifiers.gui.0    || *self == KC::Gui {                                             output[4] = Keyboard::LeftGUI; }
 
         output
     }
@@ -415,14 +417,14 @@ impl KC {
             KC::Pound      => { output[0] = Keyboard::LeftShift; output[2] = Keyboard::RightAlt;   output[5] = Keyboard::Keyboard4; buffer.push_back(output).ok(); },
             KC::Yen        => { output[2] = Keyboard::RightAlt;  output[5] = Keyboard::Minus;                                       buffer.push_back(output).ok(); },
 
-            KC::HomeAltA =>  { output[5] = Keyboard::A; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); }
-            KC::HomeAltU =>  { output[5] = Keyboard::U; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); }
-            KC::HomeGuiS =>  { output[5] = Keyboard::S; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); }
-            KC::HomeGuiI =>  { output[5] = Keyboard::I; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); }
+            KC::HomeAltA  => { output[5] = Keyboard::A; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); }
+            KC::HomeAltU  => { output[5] = Keyboard::U; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); }
+            KC::HomeGuiS  => { output[5] = Keyboard::S; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); }
+            KC::HomeGuiI  => { output[5] = Keyboard::I; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); }
             KC::HomeCtrlE => { output[5] = Keyboard::E; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); }
             KC::HomeCtrlT => { output[5] = Keyboard::T; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); }
-            KC::HomeSftN =>  { output[5] = Keyboard::N; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); }
-            KC::HomeSftR =>  { output[5] = Keyboard::R; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); }
+            KC::HomeSftN  => { output[5] = Keyboard::N; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); }
+            KC::HomeSftR  => { output[5] = Keyboard::R; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); }
 
             _ => {}
         }
