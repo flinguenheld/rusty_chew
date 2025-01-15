@@ -1,5 +1,9 @@
-use crate::utils::options::{
-    BUFFER_LENGTH, MOUSE_SPEED_1, MOUSE_SPEED_2, MOUSE_SPEED_3, MOUSE_SPEED_4, MOUSE_SPEED_DEFAULT,
+use crate::utils::{
+    modifiers::Modifiers,
+    options::{
+        BUFFER_LENGTH, MOUSE_SPEED_1, MOUSE_SPEED_2, MOUSE_SPEED_3, MOUSE_SPEED_4,
+        MOUSE_SPEED_DEFAULT,
+    },
 };
 use heapless::Deque;
 use usbd_human_interface_device::{device::mouse::WheelMouseReport, page::Keyboard};
@@ -29,46 +33,6 @@ const DEAD_GRAVE: [Keyboard; 6] = [
     Keyboard::NoEventIndicated,
 ];
 const EMPTY: [Keyboard; 6] = [Keyboard::NoEventIndicated; 6];
-
-/// Keep the state and the matrix index for each modifier.
-pub struct Modifiers {
-    pub alt: (bool, usize),
-    pub alt_gr: (bool, usize),
-    pub ctrl: (bool, usize),
-    pub gui: (bool, usize),
-    pub shift: (bool, usize),
-}
-
-#[rustfmt::skip]
-impl Modifiers {
-    pub fn new() -> Modifiers {
-        Modifiers {
-            alt: (false, 0),
-            alt_gr: (false, 0),
-            ctrl: (false, 0),
-            gui: (false, 0),
-            shift: (false, 0),
-        }
-    }
-
-    pub fn is_active(&self, index: usize) -> bool {
-        (self.alt.0 && self.alt.1 == index)
-            || (self.alt_gr.0 && self.alt_gr.1 == index)
-            || (self.ctrl.0 && self.ctrl.1 == index)
-            || (self.gui.0 && self.gui.1 == index)
-            || (self.shift.0 && self.shift.1 == index)
-    }
-
-    pub fn nb_on(&self) -> usize {
-        let mut nb = 0;
-        if self.alt.0 { nb += 1 }
-        if self.alt_gr.0 { nb += 1 }
-        if self.ctrl.0 { nb += 1 }
-        if self.gui.0 { nb += 1 }
-        if self.shift.0 { nb += 1 }
-        nb
-    }
-}
 
 #[derive(Clone)]
 pub enum Lay {

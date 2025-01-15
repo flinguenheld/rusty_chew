@@ -122,7 +122,6 @@ fn main() -> ! {
             let right_pins = gpios.update_states();
             if tx.write_all(&right_pins).is_err() {
                 led.light_on(LedColor::Red);
-                continue;
             }
 
             led.startup(TIMER_MAIN_LOOP);

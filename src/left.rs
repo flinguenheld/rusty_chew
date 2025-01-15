@@ -5,11 +5,12 @@ mod keys;
 mod layouts;
 mod utils;
 
-use keys::{Lay, Modifiers, KC};
+use keys::{Lay, KC};
 use layouts::LAYOUTS;
 use utils::gpios::Gpios;
 use utils::led::{Led, LedColor};
 use utils::matrix::Matrix;
+use utils::modifiers::Modifiers;
 use utils::options::{BUFFER_LENGTH, HOLD_TIME, TIMER_MAIN_LOOP, TIMER_USB_LOOP, UART_SPEED};
 
 use heapless::{Deque, FnvIndexSet, Vec};
@@ -192,174 +193,163 @@ fn main() -> ! {
             let mut right_pins = [0_u8; 4];
             if rx.read_exact(&mut right_pins).is_err() {
                 led.light_on(utils::led::LedColor::Red);
-                continue;
-            }
-            matrix.up(left_pins, right_pins);
+                // continue;
+            } else {
+                matrix.up(left_pins, right_pins);
 
-            // Layouts ------------------------------------------------------------------
-            match layouts.last().unwrap_or(&Lay::Pressed(0, 0)) {
-                Lay::Dead(_, _, _) => {}
-                _ => {
-                    for ((index, layout), (mat_prev, mat_cur)) in LAYOUTS[current_layout]
-                        .iter()
-                        .enumerate()
-                        .zip(matrix.prev.iter().zip(matrix.cur.iter()))
-                    {
-                        match layout {
-                            KC::Layout(number) => {
-                                if *mat_cur > 0 {
-                                    layouts.push(Lay::Pressed(*number, index)).ok();
-                                    // break;
+                if matrix.prev != matrix.cur {
+                    // Layouts ------------------------------------------------------------------
+                    match layouts.last().unwrap_or(&Lay::Pressed(0, 0)) {
+                        Lay::Dead(_, _, _) => {}
+                        _ => {
+                            for ((index, layout), (mat_prev, mat_cur)) in LAYOUTS[current_layout]
+                                .iter()
+                                .enumerate()
+                                .zip(matrix.prev.iter().zip(matrix.cur.iter()))
+                            {
+                                match layout {
+                                    KC::Layout(number) => {
+                                        if *mat_cur > 0 {
+                                            layouts.push(Lay::Pressed(*number, index)).ok();
+                                            // break;
+                                        }
+                                    }
+                                    KC::LayDead(number) => {
+                                        if *mat_prev == 0 && *mat_cur > 0 {
+                                            layouts.push(Lay::Dead(*number, index, false)).ok();
+
+                                            // Mandatory jump to avoid its own key pressed
+                                            continue 'main;
+                                        }
+                                    }
+                                    _ => {}
                                 }
                             }
-                            KC::LayDead(number) => {
-                                if *mat_prev == 0 && *mat_cur > 0 {
-                                    layouts.push(Lay::Dead(*number, index, false)).ok();
+                        }
+                    }
 
-                                    // Mandatory jump to avoid its own key pressed
-                                    continue 'main;
+                    current_layout = match layouts.last().unwrap_or(&Lay::Pressed(0, 0)) {
+                        Lay::Pressed(number, _) => *number,
+                        Lay::Dead(number, _, _) => *number,
+                    };
+
+                    // Modifiers ----------------------------------------------------------------
+                    LAYOUTS[current_layout]
+                        .iter()
+                        .zip(matrix.cur.iter())
+                        .enumerate()
+                        .filter(|(_, (&la, &mc))| {
+                            mc > 0
+                                && ((la >= KC::Alt && la <= KC::Shift)
+                                    || (la >= KC::HomeAltA && la <= KC::HomeSftR))
+                        })
+                        .for_each(|(index, (layout, _))| match layout {
+                            KC::Alt => mods.alt = (true, index),
+                            KC::Altgr => mods.alt_gr = (true, index),
+                            KC::Ctrl => mods.ctrl = (true, index),
+                            KC::Gui => mods.gui = (true, index),
+                            KC::Shift => mods.shift = (true, index),
+
+                            KC::HomeAltA | KC::HomeAltU => mods.alt = (false, index),
+                            KC::HomeCtrlE | KC::HomeCtrlT => mods.ctrl = (false, index),
+                            KC::HomeGuiS | KC::HomeGuiI => mods.gui = (false, index),
+                            _ => mods.shift = (false, index),
+                        });
+
+                    mods.update_states(&matrix.cur);
+
+                    // Regular keys -------------------------------------------------------------
+                    for (((index, layout), mat_prev), mat_cur) in LAYOUTS[current_layout]
+                        .iter()
+                        .enumerate()
+                        .zip(matrix.prev.iter())
+                        .zip(matrix.cur.iter())
+                        .filter(|(((index, _), _), _)| !mods.is_active(*index))
+                    {
+                        match layout {
+                            k if (k >= &KC::A && k <= &KC::Yen) => {
+                                // Last key is automatically repeated by the usb crate
+                                if *mat_prev == 0 && *mat_cur > 0 {
+                                    key_buffer = k.usb_code(&mods, key_buffer);
+                                } else if *mat_prev > 0 && *mat_cur == 0 {
+                                    key_buffer = KC::None.usb_code(&mods, key_buffer);
+                                }
+                            }
+                            k if (k >= &KC::ACircum && k <= &KC::YDiaer) => {
+                                if *mat_prev == 0 && *mat_cur > 0 {
+                                    key_buffer = k.usb_code(&mods, key_buffer);
+                                }
+                            }
+                            k if (k >= &KC::HomeAltA && k <= &KC::HomeSftR) => {
+                                // To validate the release, the press event has to be saved in the history
+                                if *mat_prev == 0 && *mat_cur > 0 {
+                                    homerow_history.insert(index).ok();
+                                } else if *mat_prev > 0
+                                    && *mat_prev < HOLD_TIME
+                                    && *mat_cur == 0
+                                    && homerow_history.contains(&index)
+                                {
+                                    key_buffer = k.usb_code(&mods, key_buffer);
+                                } else if *mat_prev > 0 && *mat_cur == 0 {
+                                    key_buffer = KC::None.usb_code(&mods, key_buffer);
+                                }
+                            }
+
+                            // Mouse ------------------------------------------------------------
+                            k if (k >= &KC::MouseLeft && k <= &KC::MouseRight) => {
+                                if *mat_cur > 0 {
+                                    mouse_report = k.usb_mouse_move(
+                                        mouse_report,
+                                        &LAYOUTS[current_layout],
+                                        &matrix.cur,
+                                    );
+                                }
+                            }
+                            k if (k >= &KC::MouseBtLeft && k <= &KC::MouseBtRight) => {
+                                if *mat_cur > 0 {
+                                    mouse_report.buttons |= match k {
+                                        KC::MouseBtLeft => 0x1,
+                                        KC::MouseBtMiddle => 0x4,
+                                        _ => 0x2,
+                                    }
+                                } else if *mat_prev > 0 && *mat_cur == 0 {
+                                    mouse_report.buttons &= match k {
+                                        KC::MouseBtLeft => 0xFF - 0x1,
+                                        KC::MouseBtMiddle => 0xFF - 0x4,
+                                        _ => 0xFF - 0x2,
+                                    }
                                 }
                             }
                             _ => {}
                         }
                     }
+
+                    // --
+                    homerow_history
+                        .retain(|&index| !(matrix.prev[index] > 0 && matrix.cur[index] == 0));
+                    layouts.retain_mut(|l| match l {
+                        Lay::Pressed(_, index) => matrix.cur[*index] > 0,
+                        Lay::Dead(_, index, done) => {
+                            if !*done {
+                                if matrix.prev[*index] == 0 && matrix.cur[*index] > 0 {
+                                    *done = true;
+                                } else if matrix.cur[*index] == 0 {
+                                    *done =
+                                        matrix.cur.iter().filter(|c| **c > 0).count() > mods.nb_on()
+                                } else if matrix.cur[*index] > HOLD_TIME {
+                                    *done = matrix.cur.iter().filter(|c| **c > 0).count()
+                                        > mods.nb_on() + 1
+                                }
+                            }
+
+                            !(*done && matrix.cur[*index] < HOLD_TIME)
+                        }
+                    });
+                    led.light_off();
+                } else {
+                    led.light_on(LedColor::Blue)
                 }
             }
-
-            current_layout = match layouts.last().unwrap_or(&Lay::Pressed(0, 0)) {
-                Lay::Pressed(number, _) => *number,
-                Lay::Dead(number, _, _) => *number,
-            };
-
-            // match current_layout {
-            //     1 => led.light_on(BLUE),
-            //     2 => led.light_on(GREEN),
-            //     3 => led.light_on(RED),
-            //     _ => led.light_off(),
-            // }
-
-            // Modifiers ----------------------------------------------------------------
-            // Maintain them from the matrix level instead of the layout, so keep their indexes
-            // TODO add a trick to also include fast combinations ?
-            mods.alt.0 = mods.alt.0 && matrix.cur[mods.alt.1] >= HOLD_TIME;
-            mods.alt_gr.0 = mods.alt_gr.0 && matrix.cur[mods.alt_gr.1] >= HOLD_TIME;
-            mods.ctrl.0 = mods.ctrl.0 && matrix.cur[mods.ctrl.1] >= HOLD_TIME;
-            mods.gui.0 = mods.gui.0 && matrix.cur[mods.gui.1] >= HOLD_TIME;
-            mods.shift.0 = mods.shift.0 && matrix.cur[mods.shift.1] >= HOLD_TIME;
-
-            // Regular modifiers --
-            LAYOUTS[current_layout]
-                .iter()
-                .zip(matrix.cur.iter())
-                .enumerate()
-                .filter(|(_, (&la, &mc))| la >= KC::Alt && la <= KC::Shift && mc > 0)
-                .for_each(|(index, (layout, _))| match layout {
-                    KC::Alt => mods.alt = (true, index),
-                    KC::Altgr => mods.alt_gr = (true, index),
-                    KC::Ctrl => mods.ctrl = (true, index),
-                    KC::Gui => mods.gui = (true, index),
-                    _ => mods.shift = (true, index),
-                });
-
-            // Homerow modifiers --
-            LAYOUTS[current_layout]
-                .iter()
-                .zip(matrix.cur.iter())
-                .enumerate()
-                .filter(|(_, (&la, &ma))| {
-                    la >= KC::HomeAltA && la <= KC::HomeSftR && ma > HOLD_TIME
-                })
-                .for_each(|(index, (layout, _))| match layout {
-                    KC::HomeAltA | KC::HomeAltU => mods.alt = (true, index),
-                    KC::HomeCtrlE | KC::HomeCtrlT => mods.ctrl = (true, index),
-                    KC::HomeGuiS | KC::HomeGuiI => mods.gui = (true, index),
-                    _ => mods.shift = (true, index),
-                });
-
-            // Regular keys -------------------------------------------------------------
-            for (((index, layout), mat_prev), mat_cur) in LAYOUTS[current_layout]
-                .iter()
-                .enumerate()
-                .zip(matrix.prev.iter())
-                .zip(matrix.cur.iter())
-                .filter(|(((index, _), _), _)| !mods.is_active(*index))
-            {
-                match layout {
-                    k if (k >= &KC::A && k <= &KC::Yen) => {
-                        // Last key is automatically repeated by the usb crate
-                        if *mat_prev == 0 && *mat_cur > 0 {
-                            key_buffer = k.usb_code(&mods, key_buffer);
-                        } else if *mat_prev > 0 && *mat_cur == 0 {
-                            key_buffer = KC::None.usb_code(&mods, key_buffer);
-                        }
-                    }
-                    k if (k >= &KC::ACircum && k <= &KC::YDiaer) => {
-                        if *mat_prev == 0 && *mat_cur > 0 {
-                            key_buffer = k.usb_code(&mods, key_buffer);
-                        }
-                    }
-                    k if (k >= &KC::HomeAltA && k <= &KC::HomeSftR) => {
-                        // To validate the release, the press event has to be saved in the history
-                        if *mat_prev == 0 && *mat_cur > 0 {
-                            homerow_history.insert(index).ok();
-                        } else if *mat_prev > 0
-                            && *mat_prev < HOLD_TIME
-                            && *mat_cur == 0
-                            && homerow_history.contains(&index)
-                        {
-                            key_buffer = k.usb_code(&mods, key_buffer);
-                        } else if *mat_prev > 0 && *mat_cur == 0 {
-                            key_buffer = KC::None.usb_code(&mods, key_buffer);
-                        }
-                    }
-
-                    // Mouse ------------------------------------------------------------
-                    k if (k >= &KC::MouseLeft && k <= &KC::MouseRight) => {
-                        if *mat_cur > 0 {
-                            mouse_report = k.usb_mouse_move(
-                                mouse_report,
-                                &LAYOUTS[current_layout],
-                                &matrix.cur,
-                            );
-                        }
-                    }
-                    k if (k >= &KC::MouseBtLeft && k <= &KC::MouseBtRight) => {
-                        if *mat_cur > 0 {
-                            mouse_report.buttons |= match k {
-                                KC::MouseBtLeft => 0x1,
-                                KC::MouseBtMiddle => 0x4,
-                                _ => 0x2,
-                            }
-                        } else if *mat_prev > 0 && *mat_cur == 0 {
-                            mouse_report.buttons &= match k {
-                                KC::MouseBtLeft => 0xFF - 0x1,
-                                KC::MouseBtMiddle => 0xFF - 0x4,
-                                _ => 0xFF - 0x2,
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-            }
-
-            // --
-            homerow_history.retain(|&index| !(matrix.prev[index] > 0 && matrix.cur[index] == 0));
-            layouts.retain_mut(|l| match l {
-                Lay::Pressed(_, index) => matrix.cur[*index] > 0,
-                Lay::Dead(_, index, done) => {
-                    if !*done {
-                        if matrix.prev[*index] == 0 && matrix.cur[*index] > 0 {
-                            *done = true;
-                        } else if matrix.cur[*index] == 0 {
-                            *done = matrix.cur.iter().filter(|c| **c > 0).count() > mods.nb_on()
-                        } else if matrix.cur[*index] > HOLD_TIME {
-                            *done = matrix.cur.iter().filter(|c| **c > 0).count() > mods.nb_on() + 1
-                        }
-                    }
-
-                    !(*done && matrix.cur[*index] < HOLD_TIME)
-                }
-            });
 
             led.startup(TIMER_MAIN_LOOP);
         }
