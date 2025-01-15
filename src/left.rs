@@ -7,11 +7,13 @@ mod utils;
 
 use keys::{Lay, KC};
 use layouts::LAYOUTS;
+use usbd_serial::SerialPort;
 use utils::gpios::Gpios;
 use utils::led::{Led, LedColor};
 use utils::matrix::Matrix;
 use utils::modifiers::Modifiers;
 use utils::options::{BUFFER_LENGTH, HOLD_TIME, TIMER_MAIN_LOOP, TIMER_USB_LOOP, UART_SPEED};
+use utils::serial::*;
 
 use heapless::{Deque, FnvIndexSet, Vec};
 
@@ -29,7 +31,7 @@ use bsp::hal::{
 use cortex_m::prelude::*;
 use defmt::*;
 use defmt_rtt as _;
-use embedded_io::Read;
+use embedded_io::{Read, Write};
 use fugit::{ExtU32, RateExtU32};
 use panic_probe as _;
 use ws2812_pio::Ws2812;
@@ -83,6 +85,7 @@ fn main() -> ! {
         &mut pac.RESETS,
     ));
 
+    let mut serial = SerialPort::new(&usb_bus);
     let mut rusty_chew = UsbHidClassBuilder::new()
         .add_device(
             usbd_human_interface_device::device::keyboard::NKROBootKeyboardConfig::default(),
@@ -186,170 +189,206 @@ fn main() -> ! {
 
     let mut led = Led::new(&mut neopixel);
 
+    serial.write("Hello\r\n".as_bytes()).ok();
+
     'main: loop {
         if main_count_down.wait().is_ok() {
+            // Serial ----------------------------------------------------------------------------------------------
+            // Serial ----------------------------------------------------------------------------------------------
+
+            if !usb_dev.poll(&mut [&mut serial]) {
+                continue;
+            }
+
+            // Serial ----------------------------------------------------------------------------------------------
+            // Serial ----------------------------------------------------------------------------------------------
+
             // Matrix update ------------------------------------------------------------
             let left_pins = gpios.update_states();
+
             let mut right_pins = [0_u8; 4];
             if rx.read_exact(&mut right_pins).is_err() {
                 led.light_on(utils::led::LedColor::Red);
-                // continue;
-            } else {
-                matrix.up(left_pins, right_pins);
-
-                if matrix.prev != matrix.cur {
-                    // Layouts ------------------------------------------------------------------
-                    match layouts.last().unwrap_or(&Lay::Pressed(0, 0)) {
-                        Lay::Dead(_, _, _) => {}
-                        _ => {
-                            for ((index, layout), (mat_prev, mat_cur)) in LAYOUTS[current_layout]
-                                .iter()
-                                .enumerate()
-                                .zip(matrix.prev.iter().zip(matrix.cur.iter()))
-                            {
-                                match layout {
-                                    KC::Layout(number) => {
-                                        if *mat_cur > 0 {
-                                            layouts.push(Lay::Pressed(*number, index)).ok();
-                                            // break;
-                                        }
-                                    }
-                                    KC::LayDead(number) => {
-                                        if *mat_prev == 0 && *mat_cur > 0 {
-                                            layouts.push(Lay::Dead(*number, index, false)).ok();
-
-                                            // Mandatory jump to avoid its own key pressed
-                                            continue 'main;
-                                        }
-                                    }
-                                    _ => {}
-                                }
-                            }
-                        }
-                    }
-
-                    current_layout = match layouts.last().unwrap_or(&Lay::Pressed(0, 0)) {
-                        Lay::Pressed(number, _) => *number,
-                        Lay::Dead(number, _, _) => *number,
-                    };
-
-                    // Modifiers ----------------------------------------------------------------
-                    LAYOUTS[current_layout]
-                        .iter()
-                        .zip(matrix.cur.iter())
-                        .enumerate()
-                        .filter(|(_, (&la, &mc))| {
-                            mc > 0
-                                && ((la >= KC::Alt && la <= KC::Shift)
-                                    || (la >= KC::HomeAltA && la <= KC::HomeSftR))
-                        })
-                        .for_each(|(index, (layout, _))| match layout {
-                            KC::Alt => mods.alt = (true, index),
-                            KC::Altgr => mods.alt_gr = (true, index),
-                            KC::Ctrl => mods.ctrl = (true, index),
-                            KC::Gui => mods.gui = (true, index),
-                            KC::Shift => mods.shift = (true, index),
-
-                            KC::HomeAltA | KC::HomeAltU => mods.alt = (false, index),
-                            KC::HomeCtrlE | KC::HomeCtrlT => mods.ctrl = (false, index),
-                            KC::HomeGuiS | KC::HomeGuiI => mods.gui = (false, index),
-                            _ => mods.shift = (false, index),
-                        });
-
-                    mods.update_states(&matrix.cur);
-
-                    // Regular keys -------------------------------------------------------------
-                    for (((index, layout), mat_prev), mat_cur) in LAYOUTS[current_layout]
-                        .iter()
-                        .enumerate()
-                        .zip(matrix.prev.iter())
-                        .zip(matrix.cur.iter())
-                        .filter(|(((index, _), _), _)| !mods.is_active(*index))
-                    {
-                        match layout {
-                            k if (k >= &KC::A && k <= &KC::Yen) => {
-                                // Last key is automatically repeated by the usb crate
-                                if *mat_prev == 0 && *mat_cur > 0 {
-                                    key_buffer = k.usb_code(&mods, key_buffer);
-                                } else if *mat_prev > 0 && *mat_cur == 0 {
-                                    key_buffer = KC::None.usb_code(&mods, key_buffer);
-                                }
-                            }
-                            k if (k >= &KC::ACircum && k <= &KC::YDiaer) => {
-                                if *mat_prev == 0 && *mat_cur > 0 {
-                                    key_buffer = k.usb_code(&mods, key_buffer);
-                                }
-                            }
-                            k if (k >= &KC::HomeAltA && k <= &KC::HomeSftR) => {
-                                // To validate the release, the press event has to be saved in the history
-                                if *mat_prev == 0 && *mat_cur > 0 {
-                                    homerow_history.insert(index).ok();
-                                } else if *mat_prev > 0
-                                    && *mat_prev < HOLD_TIME
-                                    && *mat_cur == 0
-                                    && homerow_history.contains(&index)
-                                {
-                                    key_buffer = k.usb_code(&mods, key_buffer);
-                                } else if *mat_prev > 0 && *mat_cur == 0 {
-                                    key_buffer = KC::None.usb_code(&mods, key_buffer);
-                                }
-                            }
-
-                            // Mouse ------------------------------------------------------------
-                            k if (k >= &KC::MouseLeft && k <= &KC::MouseRight) => {
-                                if *mat_cur > 0 {
-                                    mouse_report = k.usb_mouse_move(
-                                        mouse_report,
-                                        &LAYOUTS[current_layout],
-                                        &matrix.cur,
-                                    );
-                                }
-                            }
-                            k if (k >= &KC::MouseBtLeft && k <= &KC::MouseBtRight) => {
-                                if *mat_cur > 0 {
-                                    mouse_report.buttons |= match k {
-                                        KC::MouseBtLeft => 0x1,
-                                        KC::MouseBtMiddle => 0x4,
-                                        _ => 0x2,
-                                    }
-                                } else if *mat_prev > 0 && *mat_cur == 0 {
-                                    mouse_report.buttons &= match k {
-                                        KC::MouseBtLeft => 0xFF - 0x1,
-                                        KC::MouseBtMiddle => 0xFF - 0x4,
-                                        _ => 0xFF - 0x2,
-                                    }
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-
-                    // --
-                    homerow_history
-                        .retain(|&index| !(matrix.prev[index] > 0 && matrix.cur[index] == 0));
-                    layouts.retain_mut(|l| match l {
-                        Lay::Pressed(_, index) => matrix.cur[*index] > 0,
-                        Lay::Dead(_, index, done) => {
-                            if !*done {
-                                if matrix.prev[*index] == 0 && matrix.cur[*index] > 0 {
-                                    *done = true;
-                                } else if matrix.cur[*index] == 0 {
-                                    *done =
-                                        matrix.cur.iter().filter(|c| **c > 0).count() > mods.nb_on()
-                                } else if matrix.cur[*index] > HOLD_TIME {
-                                    *done = matrix.cur.iter().filter(|c| **c > 0).count()
-                                        > mods.nb_on() + 1
-                                }
-                            }
-
-                            !(*done && matrix.cur[*index] < HOLD_TIME)
-                        }
-                    });
-                    led.light_off();
-                } else {
-                    led.light_on(LedColor::Blue)
-                }
+                serial
+                    .write("ERROR READING RIGHT SIDE !!!\r\n".as_bytes())
+                    .ok();
             }
+            // continue;
+            // } else {
+            matrix.up(left_pins, right_pins);
+
+            // if right_pins[0] == 0 {
+            //     serial.write("right pins == 0:\r\n".as_bytes()).ok();
+            // } else {
+            //     serial.write("NOT EQUAL TO 0 == 0:\r\n".as_bytes()).ok();
+            // }
+            serial
+                .write(pins_to_str(left_pins[0], right_pins[3], 5).as_bytes())
+                .ok();
+            serial
+                .write(pins_to_str(left_pins[1], right_pins[2], 5).as_bytes())
+                .ok();
+            serial
+                .write(pins_to_str(left_pins[2], right_pins[1], 4).as_bytes())
+                .ok();
+            serial
+                .write(pins_to_str(left_pins[3], right_pins[0], 3).as_bytes())
+                .ok();
+
+            if matrix.prev != matrix.cur {
+                serial.write("New matrix value:\r\n".as_bytes()).ok();
+
+                // Layouts ------------------------------------------------------------------
+                match layouts.last().unwrap_or(&Lay::Pressed(0, 0)) {
+                    Lay::Dead(_, _, _) => {}
+                    _ => {
+                        for ((index, layout), (mat_prev, mat_cur)) in LAYOUTS[current_layout]
+                            .iter()
+                            .enumerate()
+                            .zip(matrix.prev.iter().zip(matrix.cur.iter()))
+                        {
+                            match layout {
+                                KC::Layout(number) => {
+                                    if *mat_cur > 0 {
+                                        layouts.push(Lay::Pressed(*number, index)).ok();
+                                        // break;
+                                    }
+                                }
+                                KC::LayDead(number) => {
+                                    if *mat_prev == 0 && *mat_cur > 0 {
+                                        layouts.push(Lay::Dead(*number, index, false)).ok();
+
+                                        // Mandatory jump to avoid its own key pressed
+                                        continue 'main;
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+
+                current_layout = match layouts.last().unwrap_or(&Lay::Pressed(0, 0)) {
+                    Lay::Pressed(number, _) => *number,
+                    Lay::Dead(number, _, _) => *number,
+                };
+
+                // Modifiers ----------------------------------------------------------------
+                LAYOUTS[current_layout]
+                    .iter()
+                    .zip(matrix.cur.iter())
+                    .enumerate()
+                    .filter(|(_, (&la, &mc))| {
+                        mc > 0
+                            && ((la >= KC::Alt && la <= KC::Shift)
+                                || (la >= KC::HomeAltA && la <= KC::HomeSftR))
+                    })
+                    .for_each(|(index, (layout, _))| match layout {
+                        KC::Alt => mods.alt = (true, index),
+                        KC::Altgr => mods.alt_gr = (true, index),
+                        KC::Ctrl => mods.ctrl = (true, index),
+                        KC::Gui => mods.gui = (true, index),
+                        KC::Shift => mods.shift = (true, index),
+
+                        KC::HomeAltA | KC::HomeAltU => mods.alt = (false, index),
+                        KC::HomeCtrlE | KC::HomeCtrlT => mods.ctrl = (false, index),
+                        KC::HomeGuiS | KC::HomeGuiI => mods.gui = (false, index),
+                        _ => mods.shift = (false, index),
+                    });
+
+                mods.update_states(&matrix.cur);
+
+                // Regular keys -------------------------------------------------------------
+                for (((index, layout), mat_prev), mat_cur) in LAYOUTS[current_layout]
+                    .iter()
+                    .enumerate()
+                    .zip(matrix.prev.iter())
+                    .zip(matrix.cur.iter())
+                    .filter(|(((index, _), _), _)| !mods.is_active(*index))
+                {
+                    match layout {
+                        k if (k >= &KC::A && k <= &KC::Yen) => {
+                            // Last key is automatically repeated by the usb crate
+                            if *mat_prev == 0 && *mat_cur > 0 {
+                                key_buffer = k.usb_code(&mods, key_buffer);
+                            } else if *mat_prev > 0 && *mat_cur == 0 {
+                                key_buffer = KC::None.usb_code(&mods, key_buffer);
+                            }
+                        }
+                        k if (k >= &KC::ACircum && k <= &KC::YDiaer) => {
+                            if *mat_prev == 0 && *mat_cur > 0 {
+                                key_buffer = k.usb_code(&mods, key_buffer);
+                            }
+                        }
+                        k if (k >= &KC::HomeAltA && k <= &KC::HomeSftR) => {
+                            // To validate the release, the press event has to be saved in the history
+                            if *mat_prev == 0 && *mat_cur > 0 {
+                                homerow_history.insert(index).ok();
+                            } else if *mat_prev > 0
+                                && *mat_prev < HOLD_TIME
+                                && *mat_cur == 0
+                                && homerow_history.contains(&index)
+                            {
+                                key_buffer = k.usb_code(&mods, key_buffer);
+                            } else if *mat_prev > 0 && *mat_cur == 0 {
+                                key_buffer = KC::None.usb_code(&mods, key_buffer);
+                            }
+                        }
+
+                        // Mouse ------------------------------------------------------------
+                        k if (k >= &KC::MouseLeft && k <= &KC::MouseRight) => {
+                            if *mat_cur > 0 {
+                                mouse_report = k.usb_mouse_move(
+                                    mouse_report,
+                                    &LAYOUTS[current_layout],
+                                    &matrix.cur,
+                                );
+                            }
+                        }
+                        k if (k >= &KC::MouseBtLeft && k <= &KC::MouseBtRight) => {
+                            if *mat_cur > 0 {
+                                mouse_report.buttons |= match k {
+                                    KC::MouseBtLeft => 0x1,
+                                    KC::MouseBtMiddle => 0x4,
+                                    _ => 0x2,
+                                }
+                            } else if *mat_prev > 0 && *mat_cur == 0 {
+                                mouse_report.buttons &= match k {
+                                    KC::MouseBtLeft => 0xFF - 0x1,
+                                    KC::MouseBtMiddle => 0xFF - 0x4,
+                                    _ => 0xFF - 0x2,
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+
+                // --
+                homerow_history
+                    .retain(|&index| !(matrix.prev[index] > 0 && matrix.cur[index] == 0));
+                layouts.retain_mut(|l| match l {
+                    Lay::Pressed(_, index) => matrix.cur[*index] > 0,
+                    Lay::Dead(_, index, done) => {
+                        if !*done {
+                            if matrix.prev[*index] == 0 && matrix.cur[*index] > 0 {
+                                *done = true;
+                            } else if matrix.cur[*index] == 0 {
+                                *done = matrix.cur.iter().filter(|c| **c > 0).count() > mods.nb_on()
+                            } else if matrix.cur[*index] > HOLD_TIME {
+                                *done =
+                                    matrix.cur.iter().filter(|c| **c > 0).count() > mods.nb_on() + 1
+                            }
+                        }
+
+                        !(*done && matrix.cur[*index] < HOLD_TIME)
+                    }
+                });
+                led.light_off();
+            } else {
+                led.light_on(LedColor::Blue)
+            }
+            // }
 
             led.startup(TIMER_MAIN_LOOP);
         }
@@ -406,17 +445,17 @@ fn main() -> ! {
             };
         }
 
-        if usb_dev.poll(&mut [&mut rusty_chew]) {
-            match rusty_chew
-                .device::<NKROBootKeyboard<'_, _>, _>()
-                .read_report()
-            {
-                Err(UsbError::WouldBlock) => {}
-                Err(e) => {
-                    core::panic!("Failed to read keyboard report: {:?}", e)
-                }
-                Ok(_leds) => {}
-            }
-        }
+        // if usb_dev.poll(&mut [&mut rusty_chew]) {
+        //     match rusty_chew
+        //         .device::<NKROBootKeyboard<'_, _>, _>()
+        //         .read_report()
+        //     {
+        //         Err(UsbError::WouldBlock) => {}
+        //         Err(e) => {
+        //             core::panic!("Failed to read keyboard report: {:?}", e)
+        //         }
+        //         Ok(_leds) => {}
+        //     }
+        // }
     }
 }
