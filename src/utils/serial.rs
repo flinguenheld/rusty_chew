@@ -1,27 +1,40 @@
+use core::fmt::Write;
 use heapless::String;
 
-pub fn pins_to_str(left: u8, right: u8, length: u8) -> String<50> {
-    let mut aa: String<50> = String::new();
+pub fn pins_to_str(left: &[u8; 4], right: &[u8; 4]) -> [String<50>; 4] {
+    let mut rows: [String<50>; 4] = [String::new(), String::new(), String::new(), String::new()];
 
-    aa.push_str(rename(left, length).as_str()).ok();
-    aa.push_str("   ").ok();
-    aa.push_str(rename(right, length).as_str()).ok();
-    aa.push_str("\r\n").ok();
+    // write!(&mut rows[0], "{:05b}   {:05b}\r\n", left[0], right[0]).ok();
+    // write!(&mut rows[1], "{:05b}   {:05b}\r\n", left[1], right[1]).ok();
+    // write!(&mut rows[2], "{:04b}     {:04b}\r\n", left[2], right[2]).ok();
+    // write!(&mut rows[3], "   {:03b} {:03b}\r\n", left[3], right[3]).ok();
 
-    aa
+    write!(&mut rows[0], "{:08b}   {:08b}\r\n", left[0], right[0]).ok();
+    write!(&mut rows[1], "{:08b}   {:08b}\r\n", left[1], right[1]).ok();
+    write!(&mut rows[2], "{:08b}   {:08b}\r\n", left[2], right[2]).ok();
+    write!(&mut rows[3], "{:08b}   {:08b}\r\n", left[3], right[3]).ok();
+    rows
 }
 
-fn rename(mut pins: u8, length: u8) -> String<5> {
-    let mut aa: String<5> = String::new();
+pub fn num_to_str(num: u8) -> String<1> {
+    let mut l: String<1> = String::new();
+    write!(&mut l, "{}", num).ok();
+    l
+}
 
-    for _ in 0..length {
-        match pins & 1 == 1 {
-            true => aa.push('1').ok(),
-            false => aa.push('0').ok(),
-        };
-        pins >>= 1;
-    }
+pub fn line(ticks: u64) -> String<50> {
+    let mut l: String<50> = String::new();
 
-    aa
-    // aa.chars().rev().collect()
+    let ms = ticks / 1_000;
+    let seconds = ms / 1_000;
+    let minutes = seconds / 60;
+    let seconds = seconds % 60;
+
+    write!(
+        &mut l,
+        "------------------ {:02}:{:02}:{} -> \r\n",
+        minutes, seconds, ms
+    )
+    .ok();
+    l
 }

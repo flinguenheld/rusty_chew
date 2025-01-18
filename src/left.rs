@@ -14,8 +14,12 @@ use utils::matrix::Matrix;
 use utils::modifiers::Modifiers;
 use utils::options::{BUFFER_LENGTH, HOLD_TIME, TIMER_MAIN_LOOP, TIMER_USB_LOOP, UART_SPEED};
 use utils::serial::*;
+use utils::uart::Uart;
 
-use heapless::{Deque, FnvIndexSet, Vec};
+use core::fmt::Write;
+use core::panic;
+
+use heapless::{Deque, FnvIndexSet, String, Vec};
 
 use waveshare_rp2040_zero as bsp;
 
@@ -29,9 +33,10 @@ use bsp::hal::{
     Sio,
 };
 use cortex_m::prelude::*;
-use defmt::*;
+// use defmt::*;
 use defmt_rtt as _;
-use embedded_io::{Read, Write};
+// use embedded_io::Read;
+
 use fugit::{ExtU32, RateExtU32};
 use panic_probe as _;
 use ws2812_pio::Ws2812;
@@ -70,8 +75,6 @@ fn main() -> ! {
         sio.gpio_bank0,
         &mut pac.RESETS,
     );
-
-    info!("Starting");
 
     // Configure the addressable LED
     let (mut pio, sm0, sm1, _, _) = pac.PIO0.split(&mut pac.RESETS);
@@ -149,15 +152,7 @@ fn main() -> ! {
     );
 
     // UART -----
-    let mut rx_program = pio_uart::install_rx_program(&mut pio).ok().unwrap();
-    let mut rx = pio_uart::PioUartRx::new(
-        pins.gp11.reconfigure(),
-        sm1,
-        &mut rx_program,
-        UART_SPEED.Hz(),
-        bsp::XOSC_CRYSTAL_FREQ.Hz(),
-    )
-    .enable();
+    let mut uart = Uart::new(&mut pio, sm1, pins.gp11.reconfigure());
 
     // ----------
     let mut tick_count_down = timer.count_down();
@@ -191,52 +186,159 @@ fn main() -> ! {
 
     serial.write("Hello\r\n".as_bytes()).ok();
 
+    let mut mode = 0;
+
     'main: loop {
+        if !usb_dev.poll(&mut [&mut serial]) {
+            continue;
+        }
+
         if main_count_down.wait().is_ok() {
             // Serial ----------------------------------------------------------------------------------------------
             // Serial ----------------------------------------------------------------------------------------------
-
-            if !usb_dev.poll(&mut [&mut serial]) {
-                continue;
-            }
 
             // Serial ----------------------------------------------------------------------------------------------
             // Serial ----------------------------------------------------------------------------------------------
 
             // Matrix update ------------------------------------------------------------
             let left_pins = gpios.update_states();
-
             let mut right_pins = [0_u8; 4];
-            if rx.read_exact(&mut right_pins).is_err() {
-                led.light_on(utils::led::LedColor::Red);
-                serial
-                    .write("ERROR READING RIGHT SIDE !!!\r\n".as_bytes())
-                    .ok();
+
+            match mode {
+                0 => {
+                    serial
+                        .write(line(timer.get_counter().ticks()).as_bytes())
+                        .ok();
+                    serial.write("mode transmition".as_bytes()).ok();
+
+                    // SEND ------ ------------------------------------------------------------
+                    if left_pins[0] == 0b00000001 {
+                        uart.send(1);
+                        uart.send(243);
+                        mode = 1;
+                    }
+                    if left_pins[0] == 0b00000010 {
+                        uart.send(2);
+                        uart.send(243);
+                        mode = 1;
+                    }
+                    if left_pins[0] == 0b00000100 {
+                        uart.send(3);
+                        uart.send(243);
+                        mode = 1;
+                    }
+                    if left_pins[0] == 0b00001000 {
+                        uart.send(4);
+                        uart.send(243);
+                        mode = 1;
+                    }
+                }
+                _ => {
+                    serial
+                        .write(line(timer.get_counter().ticks()).as_bytes())
+                        .ok();
+                    serial.write("mode reception".as_bytes()).ok();
+
+                    // RECEIVE ------ ------------------------------------------------------------
+                    if let Some(value) = uart.receive() {
+                        if value == 243 {
+                            mode = 0;
+                        } else {
+                            match value {
+                                10 => {
+                                    serial.write("1 received\r\n".as_bytes()).ok();
+                                    led.light_on(LedColor::Blue);
+                                }
+                                20 => {
+                                    serial.write("2 received\r\n".as_bytes()).ok();
+                                    led.light_on(LedColor::Green);
+                                }
+                                30 => {
+                                    serial.write("3 received\r\n".as_bytes()).ok();
+                                    led.light_on(LedColor::Yellow);
+                                }
+                                40 => {
+                                    serial.write("3 received\r\n".as_bytes()).ok();
+                                    led.light_on(LedColor::Orange);
+                                }
+                                n => {
+                                    serial.write("Valeur inconnue: \r\n".as_bytes()).ok();
+                                    serial.write(num_to_str(n).as_bytes()).ok();
+                                    led.light_on(LedColor::Olive);
+                                }
+                            }
+                        }
+                    } else {
+                        serial.write("Nothing received".as_bytes()).ok();
+                    }
+                }
             }
+
+            // if rx.read_exact(&mut right_pins).is_err() {
+            //     led.light_on(utils::led::LedColor::Red);
+            //     serial
+            //         .write(line(timer.get_counter().ticks()).as_bytes())
+            //         .ok();
+            //     serial
+            //         .write("ERROR READING RIGHT SIDE !!!\r\n".as_bytes())
+            //         .ok();
+            // }
             // continue;
             // } else {
-            matrix.up(left_pins, right_pins);
+
+            // matrix.up(left_pins, right_pins);
+
+            continue;
+
+            if right_pins[0] > 63 || right_pins[1] > 63 || right_pins[2] > 15 || right_pins[3] > 7 {
+                serial
+                    .write(line(timer.get_counter().ticks()).as_bytes())
+                    .ok();
+                serial
+                    .write(
+                        ">>>>>>>>>>>>>>>>> ERREUR ICI >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\r\n"
+                            .as_bytes(),
+                    )
+                    .ok();
+
+                for row in pins_to_str(&left_pins, &right_pins).iter() {
+                    serial.write(row.as_bytes()).ok();
+                }
+                serial
+                    .write(
+                        "<<<<<<<<<<<<<<<<< ERREUR ICI -------------------------------\r\n"
+                            .as_bytes(),
+                    )
+                    .ok();
+            }
 
             // if right_pins[0] == 0 {
             //     serial.write("right pins == 0:\r\n".as_bytes()).ok();
             // } else {
             //     serial.write("NOT EQUAL TO 0 == 0:\r\n".as_bytes()).ok();
-            // }
-            serial
-                .write(pins_to_str(left_pins[0], right_pins[3], 5).as_bytes())
-                .ok();
-            serial
-                .write(pins_to_str(left_pins[1], right_pins[2], 5).as_bytes())
-                .ok();
-            serial
-                .write(pins_to_str(left_pins[2], right_pins[1], 4).as_bytes())
-                .ok();
-            serial
-                .write(pins_to_str(left_pins[3], right_pins[0], 3).as_bytes())
-                .ok();
 
             if matrix.prev != matrix.cur {
-                serial.write("New matrix value:\r\n".as_bytes()).ok();
+                serial
+                    .write(line(timer.get_counter().ticks()).as_bytes())
+                    .ok();
+                for row in pins_to_str(&left_pins, &right_pins).iter() {
+                    serial.write(row.as_bytes()).ok();
+                }
+
+                // let debug = format_args!("{} foo {:?}", 1, 2);
+
+                // serial
+                //     .write(pins_to_str(left_pins[0], right_pins[0], 5).as_bytes())
+                //     .ok();
+                // serial
+                //     .write(pins_to_str(left_pins[1], right_pins[1], 5).as_bytes())
+                //     .ok();
+                // serial
+                //     .write(pins_to_str(left_pins[2], right_pins[2], 4).as_bytes())
+                //     .ok();
+                // serial
+                //     .write(pins_to_str(left_pins[3], right_pins[3], 3).as_bytes())
+                //     .ok();
 
                 // Layouts ------------------------------------------------------------------
                 match layouts.last().unwrap_or(&Lay::Pressed(0, 0)) {

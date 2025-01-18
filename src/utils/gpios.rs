@@ -1,7 +1,6 @@
 use waveshare_rp2040_zero as bsp;
 
 use bsp::hal::gpio::{DynPinId, FunctionSio, Pin, PullUp, SioInput};
-use defmt_rtt as _;
 use embedded_hal::digital::*;
 use panic_probe as _;
 

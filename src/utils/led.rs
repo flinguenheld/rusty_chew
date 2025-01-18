@@ -11,6 +11,7 @@ use ws2812_pio::Ws2812;
 use super::options::TIMER_LED_STARTUP;
 
 #[allow(dead_code)]
+#[derive(Clone, Copy)]
 pub enum LedColor {
     Green,
     Red,

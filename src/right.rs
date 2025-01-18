@@ -2,12 +2,18 @@
 #![no_main]
 
 mod utils;
-use crate::utils::options::TIMER_MAIN_LOOP;
+
+use embedded_hal::digital::InputPin;
+use embedded_io::Write;
+use usbd_human_interface_device::page::Leds;
+use utils::options::TIMER_MAIN_LOOP;
+use utils::uart::{self, Uart};
+
+use waveshare_rp2040_zero as bsp;
+
 use utils::gpios::Gpios;
 use utils::led::{Led, LedColor};
 use utils::options::UART_SPEED;
-
-use waveshare_rp2040_zero as bsp;
 
 use bsp::hal::{
     clocks::{init_clocks_and_plls, Clock},
@@ -20,7 +26,6 @@ use bsp::hal::{
 use cortex_m::prelude::*;
 use defmt::*;
 use defmt_rtt as _;
-use embedded_io::Write;
 use fugit::{ExtU32, RateExtU32};
 use panic_probe as _;
 use ws2812_pio::Ws2812;
@@ -42,7 +47,12 @@ fn main() -> ! {
     .ok()
     .unwrap();
 
-    let timer = Timer::new(pac.TIMER, &mut pac.RESETS, &clocks);
+    let mut timer = Timer::new(pac.TIMER, &mut pac.RESETS, &clocks);
+
+    // Remove ------------------------------------------------------------------------------
+    // Remove ------------------------------------------------------------------------------
+    let core = pac::CorePeripherals::take().unwrap();
+    let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
 
     let sio = Sio::new(pac.SIO);
     let pins = bsp::Pins::new(
@@ -52,9 +62,7 @@ fn main() -> ! {
         &mut pac.RESETS,
     );
 
-    info!("Starting");
-
-    // Configure the addressable LED
+    // --
     let (mut pio, sm0, sm1, _, _) = pac.PIO0.split(&mut pac.RESETS);
 
     // GPIO -----
@@ -102,29 +110,75 @@ fn main() -> ! {
     );
 
     // UART -----
-    let mut tx_program = pio_uart::install_tx_program(&mut pio).ok().unwrap();
-    let mut tx = pio_uart::PioUartTx::new(
-        pins.gp11.reconfigure(),
-        sm1,
-        &mut tx_program,
-        UART_SPEED.Hz(),
-        bsp::XOSC_CRYSTAL_FREQ.Hz(),
-    )
-    .enable();
+    let mut uart = Uart::new(&mut pio, sm1, pins.gp11.reconfigure());
 
     let mut main_count_down = timer.count_down();
     main_count_down.start(TIMER_MAIN_LOOP.millis());
 
+    let mut test_count_down = timer.count_down();
+    test_count_down.start(1.millis());
+
     let mut led = Led::new(&mut neopixel);
 
+    let mut mode = 1;
+    let mut last_value = 0;
+
     loop {
-        if main_count_down.wait().is_ok() {
-            let right_pins = gpios.update_states();
-            if tx.write_all(&right_pins).is_err() {
-                led.light_on(LedColor::Red);
+        // if main_count_down.wait().is_ok() {
+        if test_count_down.wait().is_ok() {
+            if mode == 0 {
+                match last_value {
+                    1 => {
+                        led.light_on(LedColor::Blue);
+                        uart.send(10);
+                        // delay.delay_ms(500);
+                        uart.send(243);
+                        delay.delay_ms(20);
+                        mode = 1;
+                    }
+                    2 => {
+                        led.light_on(LedColor::Green);
+                        uart.send(20);
+                        // delay.delay_ms(500);
+                        uart.send(243);
+                        delay.delay_ms(20);
+                        mode = 1;
+                    }
+                    3 => {
+                        led.light_on(LedColor::Yellow);
+                        uart.send(30);
+                        // delay.delay_ms(500);
+                        uart.send(243);
+                        delay.delay_ms(20);
+                        mode = 1;
+                    }
+                    4 => {
+                        led.light_on(LedColor::Orange);
+                        uart.send(40);
+                        uart.send(243);
+                        delay.delay_ms(20);
+                        mode = 1;
+                    }
+                    _ => {}
+                }
+            } else {
+                // RECEIVE ------ ------------------------------------------------------------
+                if let Some(value) = uart.receive() {
+                    if value == 243 {
+                        led.light_on(LedColor::Gray);
+                        mode = 0;
+                        delay.delay_ms(20);
+                    } else {
+                        last_value = value;
+                    }
+                }
             }
 
-            led.startup(TIMER_MAIN_LOOP);
+            // if uart.write_all(&right_pins).is_err() {
+            //     led.light_on(LedColor::Red);
         }
+
+        // led.startup(TIMER_MAIN_LOOP);
+        // }
     }
 }

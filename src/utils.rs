@@ -4,3 +4,4 @@ pub mod matrix;
 pub mod modifiers;
 pub mod options;
 pub mod serial;
+pub mod uart;
