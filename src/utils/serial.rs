@@ -16,9 +16,9 @@ pub fn pins_to_str(left: &[u8; 4], right: &[u8; 4]) -> [String<50>; 4] {
     rows
 }
 
-pub fn num_to_str(num: u8) -> String<1> {
-    let mut l: String<1> = String::new();
-    write!(&mut l, "{}", num).ok();
+pub fn num_to_str(num: u8) -> String<10> {
+    let mut l: String<10> = String::new();
+    write!(&mut l, "{:08b}", num).ok();
     l
 }
 

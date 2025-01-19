@@ -5,8 +5,9 @@ mod utils;
 
 use embedded_hal::digital::InputPin;
 use embedded_io::Write;
+use usbd_human_interface_device::interface::ReportBuffer;
 use usbd_human_interface_device::page::Leds;
-use utils::options::TIMER_MAIN_LOOP;
+use utils::options::{DELAY, TIMER_MAIN_LOOP, TIMER_RIGHT_LOOP};
 use utils::uart::{self, Uart};
 
 use waveshare_rp2040_zero as bsp;
@@ -111,71 +112,46 @@ fn main() -> ! {
 
     // UART -----
     let mut uart = Uart::new(&mut pio, sm1, pins.gp11.reconfigure());
+    let _ = uart.receive();
 
     let mut main_count_down = timer.count_down();
-    main_count_down.start(TIMER_MAIN_LOOP.millis());
-
-    let mut test_count_down = timer.count_down();
-    test_count_down.start(1.millis());
+    main_count_down.start(TIMER_RIGHT_LOOP.millis());
 
     let mut led = Led::new(&mut neopixel);
-
-    let mut mode = 1;
-    let mut last_value = 0;
+    let mut mode = 0;
 
     loop {
-        // if main_count_down.wait().is_ok() {
-        if test_count_down.wait().is_ok() {
-            if mode == 0 {
-                match last_value {
-                    1 => {
-                        led.light_on(LedColor::Blue);
-                        uart.send(10);
-                        // delay.delay_ms(500);
-                        uart.send(243);
-                        delay.delay_ms(20);
-                        mode = 1;
+        if main_count_down.wait().is_ok() {
+            match mode {
+                0 => {
+                    led.light_on(LedColor::Green);
+                    // RECEIVE ------ ------------------------------------------------------------
+                    // led.light_on(LedColor::Gray);
+                    if let Some(value) = uart.receive() {
+                        if value == 0b01111010 {
+                            mode = 1;
+                            delay.delay_us(DELAY);
+                        }
                     }
-                    2 => {
-                        led.light_on(LedColor::Green);
-                        uart.send(20);
-                        // delay.delay_ms(500);
-                        uart.send(243);
-                        delay.delay_ms(20);
-                        mode = 1;
-                    }
-                    3 => {
-                        led.light_on(LedColor::Yellow);
-                        uart.send(30);
-                        // delay.delay_ms(500);
-                        uart.send(243);
-                        delay.delay_ms(20);
-                        mode = 1;
-                    }
-                    4 => {
-                        led.light_on(LedColor::Orange);
-                        uart.send(40);
-                        uart.send(243);
-                        delay.delay_ms(20);
-                        mode = 1;
-                    }
-                    _ => {}
                 }
-            } else {
-                // RECEIVE ------ ------------------------------------------------------------
-                if let Some(value) = uart.receive() {
-                    if value == 243 {
-                        led.light_on(LedColor::Gray);
-                        mode = 0;
-                        delay.delay_ms(20);
-                    } else {
-                        last_value = value;
+
+                _ => {
+                    // TRANSMIT ------ ------------------------------------------------------------
+                    led.light_on(LedColor::Orange);
+
+                    // led.light_on(LedColor::Blue);
+                    let right_pins = gpios.get_active_indexes();
+
+                    uart.send((right_pins.len() as u8) | 0b10100000);
+                    delay.delay_us(DELAY);
+                    for index in right_pins.iter() {
+                        uart.send(index | 0b11000000);
+                        // delay.delay_ms();
                     }
+                    delay.delay_us(DELAY);
+                    // mode = 0;
                 }
             }
-
-            // if uart.write_all(&right_pins).is_err() {
-            //     led.light_on(LedColor::Red);
         }
 
         // led.startup(TIMER_MAIN_LOOP);

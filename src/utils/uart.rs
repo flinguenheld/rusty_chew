@@ -19,6 +19,27 @@ use bsp::{
 use fugit::RateExtU32;
 use pio_uart::{PioUartRx, PioUartTx, RxProgram, TxProgram};
 
+// Message Frame
+//
+//  Opening       Title        Value       Closure
+// 1010 1010 -> 0000 0000 -> 0000 0000 -> 0101 0101
+
+const OPENING: u8 = 0b10101010;
+const CLOSURE: u8 = 0b01010101;
+
+pub enum ReadUartError {
+    Header,
+    Type,
+    Value,
+    NothingToRead,
+    Uart,
+}
+
+#[repr(u8)]
+enum UartType {
+    Ask = 0b11110000,
+}
+
 pub struct Uart {
     tx_program: TxProgram<PIO0>,
     rx_program: RxProgram<PIO0>,
@@ -55,26 +76,38 @@ impl Uart {
         uart
     }
 
-    pub fn send(&mut self, value: u8) -> bool {
+    pub fn send(&mut self, message_type: UartType, value: u8) -> bool {
         self.switch_to_transmiter();
 
         if let Some(transmiter) = &mut self.transmiter {
-            return transmiter.write_all(&[value; 1]).is_ok();
+            return transmiter
+                .write_all(&[OPENING, message_type as u8, value, CLOSURE])
+                .is_ok();
         }
         false
     }
 
-    pub fn receive(&mut self) -> Option<u8> {
+    pub fn receive(&mut self, message_type: UartType) -> Result<u8, ReadUartError> {
         self.switch_to_receiver();
 
         if let Some(receiver) = &mut self.receiver {
-            let mut buffer = [0; 1];
+            let mut buffer = [0; 4];
+
             return match receiver.read_exact(&mut buffer) {
-                Ok(_) => Some(buffer[0]),
-                _ => None,
+                Ok(_) => {
+                    if buffer[0] != OPENING || buffer[3] != CLOSURE {
+                        Err(ReadUartError::Header)
+                    } else if buffer[1] != message_type as u8 {
+                        Err(ReadUartError::Type)
+                    } else {
+                        Ok(buffer[2])
+                    }
+                }
+                _ => Err(ReadUartError::NothingToRead),
             };
         }
-        None
+
+        Err(ReadUartError::Uart)
     }
 
     fn switch_to_transmiter(&mut self) {

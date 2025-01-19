@@ -12,9 +12,11 @@ use utils::gpios::Gpios;
 use utils::led::{Led, LedColor};
 use utils::matrix::Matrix;
 use utils::modifiers::Modifiers;
-use utils::options::{BUFFER_LENGTH, HOLD_TIME, TIMER_MAIN_LOOP, TIMER_USB_LOOP, UART_SPEED};
-use utils::serial::*;
+use utils::options::{
+    BUFFER_LENGTH, DELAY, HOLD_TIME, TIMER_MAIN_LOOP, TIMER_USB_LOOP, UART_SPEED,
+};
 use utils::uart::Uart;
+use utils::{serial::*, uart};
 
 use core::fmt::Write;
 use core::panic;
@@ -67,6 +69,11 @@ fn main() -> ! {
     .unwrap();
 
     let timer = Timer::new(pac.TIMER, &mut pac.RESETS, &clocks);
+
+    // Remove ------------------------------------------------------------------------------
+    // Remove ------------------------------------------------------------------------------
+    let core = pac::CorePeripherals::take().unwrap();
+    let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
 
     let sio = Sio::new(pac.SIO);
     let pins = bsp::Pins::new(
@@ -185,8 +192,10 @@ fn main() -> ! {
     let mut led = Led::new(&mut neopixel);
 
     serial.write("Hello\r\n".as_bytes()).ok();
+    // delay.delay_ms(500);
 
     let mut mode = 0;
+    let mut num_to_update = 0;
 
     'main: loop {
         if !usb_dev.poll(&mut [&mut serial]) {
@@ -204,112 +213,91 @@ fn main() -> ! {
             let left_pins = gpios.update_states();
             let mut right_pins = [0_u8; 4];
 
-            match mode {
-                0 => {
-                    serial
-                        .write(line(timer.get_counter().ticks()).as_bytes())
-                        .ok();
-                    serial.write("mode transmition".as_bytes()).ok();
+            serial.write("NEW MAIN LOOP".as_bytes()).ok();
 
-                    // SEND ------ ------------------------------------------------------------
-                    if left_pins[0] == 0b00000001 {
-                        uart.send(1);
-                        uart.send(243);
-                        mode = 1;
-                    }
-                    if left_pins[0] == 0b00000010 {
-                        uart.send(2);
-                        uart.send(243);
-                        mode = 1;
-                    }
-                    if left_pins[0] == 0b00000100 {
-                        uart.send(3);
-                        uart.send(243);
-                        mode = 1;
-                    }
-                    if left_pins[0] == 0b00001000 {
-                        uart.send(4);
-                        uart.send(243);
-                        mode = 1;
-                    }
-                }
-                _ => {
-                    serial
-                        .write(line(timer.get_counter().ticks()).as_bytes())
-                        .ok();
-                    serial.write("mode reception".as_bytes()).ok();
-
-                    // RECEIVE ------ ------------------------------------------------------------
-                    if let Some(value) = uart.receive() {
-                        if value == 243 {
-                            mode = 0;
-                        } else {
-                            match value {
-                                10 => {
-                                    serial.write("1 received\r\n".as_bytes()).ok();
-                                    led.light_on(LedColor::Blue);
-                                }
-                                20 => {
-                                    serial.write("2 received\r\n".as_bytes()).ok();
-                                    led.light_on(LedColor::Green);
-                                }
-                                30 => {
-                                    serial.write("3 received\r\n".as_bytes()).ok();
-                                    led.light_on(LedColor::Yellow);
-                                }
-                                40 => {
-                                    serial.write("3 received\r\n".as_bytes()).ok();
-                                    led.light_on(LedColor::Orange);
-                                }
-                                n => {
-                                    serial.write("Valeur inconnue: \r\n".as_bytes()).ok();
-                                    serial.write(num_to_str(n).as_bytes()).ok();
-                                    led.light_on(LedColor::Olive);
-                                }
-                            }
+            mode = 0;
+            loop {
+                delay.delay_us(DELAY);
+                match mode {
+                    0 => {
+                        // serial.write("SEND mode... \r\n".as_bytes()).ok();
+                        // led.light_on(LedColor::Blue);
+                        delay.delay_us(DELAY);
+                        // Ask ---
+                        if uart.send(0b01111010) {
+                            delay.delay_us(DELAY);
+                            mode = 1;
                         }
-                    } else {
-                        serial.write("Nothing received".as_bytes()).ok();
                     }
+                    1 => {
+                        // serial.write("Receive mode... \r\n".as_bytes()).ok();
+                        if let Some(value) = uart.receive() {
+                            // serial.write("Wait number of keys: ".as_bytes()).ok();
+                            // serial.write(num_to_str(value).as_bytes()).ok();
+                            // serial.write("\r\n".as_bytes()).ok();
+
+                            if value & 0b10100000 == 0b10100000 {
+                                num_to_update = value & 0b00011111;
+
+                                if num_to_update > 0 {
+                                    serial.write("\r\n".as_bytes()).ok();
+                                    serial.write("Number to update:\r\n".as_bytes()).ok();
+                                    serial.write(num_to_str(num_to_update).as_bytes()).ok();
+                                    serial.write("\r\n".as_bytes()).ok();
+                                }
+
+                                // serial.write("Now get the indexes:\r\n".as_bytes()).ok();
+                                delay.delay_us(DELAY);
+                                for _ in 0..num_to_update {
+                                    delay.delay_us(DELAY);
+                                    if let Some(aaa) = uart.receive() {
+                                        if aaa & 0b11000000 == 0b11000000 {
+                                            serial.write("Index:   ".as_bytes()).ok();
+                                            serial
+                                                .write(num_to_str(aaa & 0b00111111).as_bytes())
+                                                .ok();
+                                            serial.write("\r\n".as_bytes()).ok();
+                                        }
+                                        serial.write("\r\n".as_bytes()).ok();
+                                    }
+                                }
+
+                                mode = 0;
+                                // serial.write("BREAK\r\n".as_bytes()).ok();
+                                break;
+                            }
+                            // serial.write("failed\r\n".as_bytes()).ok();
+                            // break;
+                        } else {
+                            led.light_on(LedColor::Yellow);
+                            // serial.write("Nothing to read\r\n".as_bytes()).ok();
+                        }
+                    }
+
+                    _ => {}
                 }
             }
-
-            // if rx.read_exact(&mut right_pins).is_err() {
-            //     led.light_on(utils::led::LedColor::Red);
-            //     serial
-            //         .write(line(timer.get_counter().ticks()).as_bytes())
-            //         .ok();
-            //     serial
-            //         .write("ERROR READING RIGHT SIDE !!!\r\n".as_bytes())
-            //         .ok();
-            // }
-            // continue;
-            // } else {
-
-            // matrix.up(left_pins, right_pins);
 
             continue;
 
             if right_pins[0] > 63 || right_pins[1] > 63 || right_pins[2] > 15 || right_pins[3] > 7 {
-                serial
-                    .write(line(timer.get_counter().ticks()).as_bytes())
-                    .ok();
-                serial
-                    .write(
-                        ">>>>>>>>>>>>>>>>> ERREUR ICI >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\r\n"
-                            .as_bytes(),
-                    )
-                    .ok();
+                // serial.write(line(timer.get_counter().ticks())).ok();
+                // serial
+                //     .write(
+                //         ">>>>>>>>>>>>>>>>> ERREUR ICI >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\r\n"
+                //             .as_bytes(),
+                //     )
+                //     .ok();
 
-                for row in pins_to_str(&left_pins, &right_pins).iter() {
-                    serial.write(row.as_bytes()).ok();
-                }
-                serial
-                    .write(
-                        "<<<<<<<<<<<<<<<<< ERREUR ICI -------------------------------\r\n"
-                            .as_bytes(),
-                    )
-                    .ok();
+                // for row in pins_to_str(&left_pins, &right_pins).iter() {
+                //     serial.write(row.as_bytes()).ok();
+                // }
+                // serial
+                //     .write(
+                //         "<<<<<<<<<<<<<<<<< ERREUR ICI -------------------------------\r\n"
+                //             .as_bytes(),
+                //     )
+                //     .ok();
             }
 
             // if right_pins[0] == 0 {
@@ -318,9 +306,7 @@ fn main() -> ! {
             //     serial.write("NOT EQUAL TO 0 == 0:\r\n".as_bytes()).ok();
 
             if matrix.prev != matrix.cur {
-                serial
-                    .write(line(timer.get_counter().ticks()).as_bytes())
-                    .ok();
+                // serial.write(line(timer.get_counter().ticks())).ok();
                 for row in pins_to_str(&left_pins, &right_pins).iter() {
                     serial.write(row.as_bytes()).ok();
                 }
