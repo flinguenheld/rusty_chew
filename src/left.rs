@@ -15,7 +15,7 @@ use utils::modifiers::Modifiers;
 use utils::options::{
     BUFFER_LENGTH, DELAY, HOLD_TIME, TIMER_MAIN_LOOP, TIMER_USB_LOOP, UART_SPEED,
 };
-use utils::uart::Uart;
+use utils::uart::{Uart, UartError};
 use utils::{serial::*, uart};
 
 use core::fmt::Write;
@@ -162,6 +162,7 @@ fn main() -> ! {
     let mut uart = Uart::new(&mut pio, sm1, pins.gp11.reconfigure());
 
     // ----------
+
     let mut tick_count_down = timer.count_down();
     tick_count_down.start(1.millis());
 
@@ -195,7 +196,6 @@ fn main() -> ! {
     // delay.delay_ms(500);
 
     let mut mode = 0;
-    let mut num_to_update = 0;
 
     'main: loop {
         if !usb_dev.poll(&mut [&mut serial]) {
@@ -213,70 +213,58 @@ fn main() -> ! {
             let left_pins = gpios.update_states();
             let mut right_pins = [0_u8; 4];
 
-            serial.write("NEW MAIN LOOP".as_bytes()).ok();
+            if left_pins[0] > 0 {
+                led.light_on(LedColor::Red);
+            }
+            if left_pins[1] > 0 {
+                led.light_off();
+            }
 
-            mode = 0;
-            loop {
-                delay.delay_us(DELAY);
-                match mode {
-                    0 => {
-                        // serial.write("SEND mode... \r\n".as_bytes()).ok();
-                        // led.light_on(LedColor::Blue);
-                        delay.delay_us(DELAY);
-                        // Ask ---
-                        if uart.send(0b01111010) {
-                            delay.delay_us(DELAY);
+            serial.write("NEW MAIN LOOP ".as_bytes()).ok();
+
+            // loop {
+            // delay.delay_us(DELAY);
+            match mode {
+                0 => {
+                    led.light_on(LedColor::Green);
+                    match uart.receive() {
+                        Ok(num_to_update) => {
+                            serial.write("\r\n".as_bytes()).ok();
+                            serial.write("Test Number to update: ".as_bytes()).ok();
+                            serial.write(num_to_str(num_to_update[0]).as_bytes()).ok();
+                            serial.write("\r\n".as_bytes()).ok();
                             mode = 1;
                         }
-                    }
-                    1 => {
-                        // serial.write("Receive mode... \r\n".as_bytes()).ok();
-                        if let Some(value) = uart.receive() {
-                            // serial.write("Wait number of keys: ".as_bytes()).ok();
-                            // serial.write(num_to_str(value).as_bytes()).ok();
-                            // serial.write("\r\n".as_bytes()).ok();
-
-                            if value & 0b10100000 == 0b10100000 {
-                                num_to_update = value & 0b00011111;
-
-                                if num_to_update > 0 {
-                                    serial.write("\r\n".as_bytes()).ok();
-                                    serial.write("Number to update:\r\n".as_bytes()).ok();
-                                    serial.write(num_to_str(num_to_update).as_bytes()).ok();
-                                    serial.write("\r\n".as_bytes()).ok();
-                                }
-
-                                // serial.write("Now get the indexes:\r\n".as_bytes()).ok();
-                                delay.delay_us(DELAY);
-                                for _ in 0..num_to_update {
-                                    delay.delay_us(DELAY);
-                                    if let Some(aaa) = uart.receive() {
-                                        if aaa & 0b11000000 == 0b11000000 {
-                                            serial.write("Index:   ".as_bytes()).ok();
-                                            serial
-                                                .write(num_to_str(aaa & 0b00111111).as_bytes())
-                                                .ok();
-                                            serial.write("\r\n".as_bytes()).ok();
-                                        }
-                                        serial.write("\r\n".as_bytes()).ok();
-                                    }
-                                }
-
-                                mode = 0;
-                                // serial.write("BREAK\r\n".as_bytes()).ok();
-                                break;
+                        Err(e) => match e {
+                            UartError::Header => {
+                                serial.write("Header error -----\r\n".as_bytes()).ok();
                             }
-                            // serial.write("failed\r\n".as_bytes()).ok();
-                            // break;
-                        } else {
-                            led.light_on(LedColor::Yellow);
-                            // serial.write("Nothing to read\r\n".as_bytes()).ok();
-                        }
+                            UartError::NothingToRead => {
+                                // serial.write("Nothing to read -----\r\n".as_bytes()).ok();
+                            }
+                            UartError::NotComplete => {
+                                serial
+                                    .write("Buffer Not complete -----\r\n".as_bytes())
+                                    .ok();
+                            }
+                            UartError::Uart => {
+                                serial.write("Uart error -----\r\n".as_bytes()).ok();
+                            }
+                            UartError::NotReciever => {
+                                serial.write("Not receiver -----\r\n".as_bytes()).ok();
+                            }
+                        },
                     }
-
-                    _ => {}
                 }
+                1 => {
+                    led.light_on(LedColor::Orange);
+                    delay = uart.send([5, 10], delay);
+                    mode = 0;
+                }
+
+                _ => {}
             }
+            // }
 
             continue;
 

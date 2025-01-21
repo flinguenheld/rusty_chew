@@ -3,18 +3,14 @@
 
 mod utils;
 
-use embedded_hal::digital::InputPin;
-use embedded_io::Write;
 use usbd_human_interface_device::interface::ReportBuffer;
-use usbd_human_interface_device::page::Leds;
-use utils::options::{DELAY, TIMER_MAIN_LOOP, TIMER_RIGHT_LOOP};
-use utils::uart::{self, Uart};
+use utils::options::{DELAY, TIMER_RIGHT_LOOP};
+use utils::uart::Uart;
 
 use waveshare_rp2040_zero as bsp;
 
 use utils::gpios::Gpios;
 use utils::led::{Led, LedColor};
-use utils::options::UART_SPEED;
 
 use bsp::hal::{
     clocks::{init_clocks_and_plls, Clock},
@@ -48,7 +44,7 @@ fn main() -> ! {
     .ok()
     .unwrap();
 
-    let mut timer = Timer::new(pac.TIMER, &mut pac.RESETS, &clocks);
+    let timer = Timer::new(pac.TIMER, &mut pac.RESETS, &clocks);
 
     // Remove ------------------------------------------------------------------------------
     // Remove ------------------------------------------------------------------------------
@@ -112,45 +108,47 @@ fn main() -> ! {
 
     // UART -----
     let mut uart = Uart::new(&mut pio, sm1, pins.gp11.reconfigure());
-    let _ = uart.receive();
 
     let mut main_count_down = timer.count_down();
     main_count_down.start(TIMER_RIGHT_LOOP.millis());
 
     let mut led = Led::new(&mut neopixel);
-    let mut mode = 0;
+    let mut mode = 2;
 
+    delay.delay_ms(2000);
     loop {
         if main_count_down.wait().is_ok() {
             match mode {
-                0 => {
+                1 => {
                     led.light_on(LedColor::Green);
                     // RECEIVE ------ ------------------------------------------------------------
-                    // led.light_on(LedColor::Gray);
-                    if let Some(value) = uart.receive() {
-                        if value == 0b01111010 {
-                            mode = 1;
-                            delay.delay_us(DELAY);
+                    match uart.receive() {
+                        Ok(v) => {
+                            if v[1] == 10 {
+                                led.light_off();
+                                mode = 2;
+                            }
+                        }
+                        _ => {
+                            led.light_on(LedColor::Red);
                         }
                     }
                 }
 
-                _ => {
+                2 => {
                     // TRANSMIT ------ ------------------------------------------------------------
-                    led.light_on(LedColor::Orange);
 
                     // led.light_on(LedColor::Blue);
                     let right_pins = gpios.get_active_indexes();
 
-                    uart.send((right_pins.len() as u8) | 0b10100000);
-                    delay.delay_us(DELAY);
-                    for index in right_pins.iter() {
-                        uart.send(index | 0b11000000);
-                        // delay.delay_ms();
-                    }
-                    delay.delay_us(DELAY);
-                    // mode = 0;
+                    delay.delay_ms(200);
+                    led.light_on(LedColor::Aqua);
+                    delay = uart.send([right_pins.len() as u8, 2], delay);
+
+                    mode = 1;
                 }
+
+                _ => {}
             }
         }
 
