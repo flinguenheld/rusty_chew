@@ -1,8 +1,6 @@
 use super::options::UART_SPEED;
-use cortex_m::delay::Delay;
-use embedded_io::{Read, Write};
-use heapless::Vec;
 
+use heapless::Vec;
 use waveshare_rp2040_zero as bsp;
 
 use bsp::{
@@ -14,23 +12,27 @@ use bsp::{
     },
     pac::PIO0,
 };
+use cortex_m::delay::Delay;
 use fugit::RateExtU32;
 use pio_uart::{PioUartRx, PioUartTx, RxProgram, TxProgram};
+use usbd_human_interface_device::interface::ReportBuffer;
 
-// Message Frame
-//
-//  Opening       Title        Value       Closure
-// 1010 1010 -> 0000 0000 -> 0000 0000 -> 0101 0101
-
-const OPENING: u8 = 0b10101010;
-const CLOSURE: u8 = 0b01010101;
+const MAX_MESSAGE_LENGTH: usize = 9;
+pub const HR_KEYS: u8 = 0b11010000;
+pub const HR_PLEASE_RESTART: u8 = 0b11100111;
 
 pub enum UartError {
+    Capacity,
     Header,
     NothingToRead,
-    Uart,
     NotReciever,
+    NotTransmitter,
     NotComplete,
+    Uart,
+}
+pub struct Mail {
+    pub header: u8,
+    pub values: Vec<u8, 8>,
 }
 
 pub struct Uart {
@@ -40,9 +42,18 @@ pub struct Uart {
     transmiter: Option<PioUartTx<Gpio11, PIO0, SM1, Running>>,
     receiver: Option<PioUartRx<Gpio11, PIO0, SM1, Running>>,
 
-    buffer: Vec<u8, 4>,
+    // 9 bytes is the buffer's maximum
+    buffer: Vec<u8, 9>,
 }
 
+// Message Frame
+//
+//  Openning                 Values (8 bytes maximum)
+//    /
+// 1010 1010   ->    0000 0000 - 0000 0000 ...
+//        \
+//      Number of values
+//
 impl Uart {
     pub fn new(
         pio: &mut PIO<PIO0>,
@@ -73,59 +84,83 @@ impl Uart {
         uart
     }
 
-    pub fn send(&mut self, value: [u8; 2], mut delay: Delay) -> Delay {
-        self.switch_to_transmiter();
+    pub fn send(&mut self, header: u8, values: &[u8], delay: &mut Delay) -> Result<(), UartError> {
+        let ok;
+        self.switch_to_transmitter();
 
+        // TODO delay length ??
+        delay.delay_us(500);
         if let Some(transmiter) = &mut self.transmiter {
-            transmiter
-                .write_all(&[OPENING, value[0], value[1], CLOSURE])
-                .ok();
+            if values.len() < MAX_MESSAGE_LENGTH {
+                let mut to_send: Vec<u8, MAX_MESSAGE_LENGTH> = Vec::new();
+                to_send.push(header | (values.len() as u8)).ok();
+                values.iter().for_each(|v| to_send.push(*v).unwrap());
+
+                ok = transmiter.write_raw(&to_send).is_ok();
+            } else {
+                return Err(UartError::Capacity);
+            }
+        } else {
+            return Err(UartError::NotTransmitter);
         }
-        delay.delay_us(100);
+        delay.delay_us(500);
         self.switch_to_receiver();
 
-        delay
+        match ok {
+            true => Ok(()),
+            false => Err(UartError::Uart),
+        }
     }
 
-    pub fn receive(&mut self) -> Result<[u8; 2], UartError> {
+    pub fn receive(&mut self) -> Result<Mail, UartError> {
         if self.read_uart_buffer().is_err() {
             return Err(UartError::Uart);
         }
 
         if self.buffer.is_empty() {
             Err(UartError::NothingToRead)
-        } else if !self.buffer.is_full() {
-            Err(UartError::NotComplete)
-        } else {
-            if self.buffer[0] != OPENING || self.buffer[3] != CLOSURE {
-                Err(UartError::Header)
+        } else if let Some(first) = self.buffer.first() {
+            if first & 0b11110000 == HR_KEYS {
+                let l = first & 0b00001111;
+
+                if self.buffer.len() == (l + 1) as usize {
+                    let m = Mail {
+                        header: self.buffer.first().cloned().unwrap() & 0b11110000,
+                        values: self.buffer.iter().skip(1).cloned().collect(),
+                    };
+                    self.buffer.clear();
+                    Ok(m)
+                } else {
+                    // TODO: Add a check to avoid infinite NotComplete ?
+                    Err(UartError::NotComplete)
+                }
             } else {
-                let v = [self.buffer[1], self.buffer[2]];
-                self.buffer.clear();
-                Ok(v)
+                Err(UartError::Header)
             }
+        } else {
+            Err(UartError::NotComplete)
         }
     }
 
     fn read_uart_buffer(&mut self) -> Result<(), UartError> {
         if let Some(receiver) = &mut self.receiver {
-            let mut temp_buffer = [0; 32];
+            let mut temp_buffer = [0; 9];
 
-            return match receiver.read(&mut temp_buffer) {
-                Ok(nb) => {
-                    for i in 0..nb {
-                        self.buffer.push(temp_buffer[i]).ok();
+            match receiver.read_raw(&mut temp_buffer) {
+                Ok(n) => {
+                    for v in temp_buffer.iter().take(n) {
+                        self.buffer.push(*v).ok();
                     }
                     Ok(())
                 }
                 Err(_) => Err(UartError::Uart),
-            };
+            }
         } else {
             Err(UartError::NotReciever)
         }
     }
 
-    fn switch_to_transmiter(&mut self) {
+    fn switch_to_transmitter(&mut self) {
         if let Some(receiver) = self.receiver.take() {
             let (sm1, gp11) = receiver.stop().free();
 

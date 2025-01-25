@@ -16,13 +16,14 @@ pub fn pins_to_str(left: &[u8; 4], right: &[u8; 4]) -> [String<50>; 4] {
     rows
 }
 
-pub fn num_to_str(num: u8) -> String<10> {
+pub fn num_to_str(num: u32) -> String<10> {
     let mut l: String<10> = String::new();
-    write!(&mut l, "{:08b}", num).ok();
+    // write!(&mut l, "{:08b}", num).ok();
+    write!(&mut l, "{}", num).ok();
     l
 }
 
-pub fn line(ticks: u64) -> String<50> {
+pub fn line(txt: &str, ticks: u64) -> String<50> {
     let mut l: String<50> = String::new();
 
     let ms = ticks / 1_000;
@@ -32,8 +33,8 @@ pub fn line(ticks: u64) -> String<50> {
 
     write!(
         &mut l,
-        "------------------ {:02}:{:02}:{} -> \r\n",
-        minutes, seconds, ms
+        "{} --------------- {:02}:{:02}:{} \r\n",
+        txt, minutes, seconds, ms
     )
     .ok();
     l

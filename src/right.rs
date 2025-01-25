@@ -3,9 +3,8 @@
 
 mod utils;
 
-use usbd_human_interface_device::interface::ReportBuffer;
-use utils::options::{DELAY, TIMER_RIGHT_LOOP};
-use utils::uart::Uart;
+use utils::options::{DELAY, TIMER_RIGHT_LOOP, TIMER_UART_LOOP};
+use utils::uart::{Uart, UartError, HR_KEYS};
 
 use waveshare_rp2040_zero as bsp;
 
@@ -23,7 +22,7 @@ use bsp::hal::{
 use cortex_m::prelude::*;
 use defmt::*;
 use defmt_rtt as _;
-use fugit::{ExtU32, RateExtU32};
+use fugit::ExtU32;
 use panic_probe as _;
 use ws2812_pio::Ws2812;
 
@@ -109,46 +108,44 @@ fn main() -> ! {
     // UART -----
     let mut uart = Uart::new(&mut pio, sm1, pins.gp11.reconfigure());
 
-    let mut main_count_down = timer.count_down();
-    main_count_down.start(TIMER_RIGHT_LOOP.millis());
+    let mut uart_count_down = timer.count_down();
+    uart_count_down.start(TIMER_UART_LOOP.millis());
+
+    let mut gpio_count_down = timer.count_down();
+    gpio_count_down.start(3.millis());
 
     let mut led = Led::new(&mut neopixel);
-    let mut mode = 2;
+    let mut right_pins = gpios.get_right_indexes();
 
-    delay.delay_ms(2000);
     loop {
-        if main_count_down.wait().is_ok() {
-            match mode {
-                1 => {
-                    led.light_on(LedColor::Green);
-                    // RECEIVE ------ ------------------------------------------------------------
-                    match uart.receive() {
-                        Ok(v) => {
-                            if v[1] == 10 {
-                                led.light_off();
-                                mode = 2;
-                            }
-                        }
-                        _ => {
-                            led.light_on(LedColor::Red);
-                        }
+        if gpio_count_down.wait().is_ok() {
+            right_pins = gpios.get_right_indexes();
+        }
+
+        if uart_count_down.wait().is_ok() {
+            match uart.receive() {
+                Ok(mail) => match mail.header {
+                    HR_KEYS => {
+                        uart.send(HR_KEYS, &right_pins, &mut delay);
                     }
-                }
+                    _ => {
+                        led.light_on(LedColor::Aqua);
+                    }
+                },
 
-                2 => {
-                    // TRANSMIT ------ ------------------------------------------------------------
-
+                Err(UartError::NothingToRead) => {
                     // led.light_on(LedColor::Blue);
-                    let right_pins = gpios.get_active_indexes();
-
-                    delay.delay_ms(200);
-                    led.light_on(LedColor::Aqua);
-                    delay = uart.send([right_pins.len() as u8, 2], delay);
-
-                    mode = 1;
                 }
-
-                _ => {}
+                Err(UartError::NotComplete) => {
+                    led.light_on(LedColor::Yellow);
+                }
+                // Err(UartError::Header) => {
+                //     led.light_on(LedColor::Olive);
+                // }
+                _ => {
+                    // uart.send(HR_PLEASE_RESTART, [0, 1, 2, 3, 4, 5, 6], &mut delay);
+                    led.light_on(LedColor::Red);
+                }
             }
         }
 
