@@ -104,6 +104,7 @@ fn main() -> ! {
         clocks.peripheral_clock.freq(),
         timer.count_down(),
     );
+    let mut led = Led::new(&mut neopixel);
 
     // UART -----
     let mut uart = Uart::new(&mut pio, sm1, pins.gp11.reconfigure());
@@ -111,39 +112,36 @@ fn main() -> ! {
     let mut uart_count_down = timer.count_down();
     uart_count_down.start(TIMER_UART_LOOP.millis());
 
-    let mut gpio_count_down = timer.count_down();
-    gpio_count_down.start(3.millis());
-
-    let mut led = Led::new(&mut neopixel);
-    let mut right_pins = gpios.get_right_indexes();
-
     loop {
-        if gpio_count_down.wait().is_ok() {
-            right_pins = gpios.get_right_indexes();
-        }
-
         if uart_count_down.wait().is_ok() {
             match uart.receive() {
                 Ok(mail) => match mail.header {
                     HR_KEYS => {
-                        uart.send(HR_KEYS, &right_pins, &mut delay);
+                        led.light_off();
+                        let active_indexes = gpios.get_right_indexes();
+                        if uart.send(HR_KEYS, &active_indexes, &mut delay).is_err() {
+                            led.light_on(LedColor::Red);
+                        }
                     }
+                    // TODO: add leds status
                     _ => {
-                        led.light_on(LedColor::Aqua);
+                        // led.light_on(LedColor::Aqua);
                     }
                 },
 
                 Err(UartError::NothingToRead) => {
                     // led.light_on(LedColor::Blue);
                 }
-                Err(UartError::NotComplete) => {
-                    led.light_on(LedColor::Yellow);
+                Err(UartError::NothingToReadMax) => {
+                    led.light_on(LedColor::Gray);
                 }
-                // Err(UartError::Header) => {
-                //     led.light_on(LedColor::Olive);
-                // }
+                Err(UartError::NotComplete) => {
+                    led.light_on(LedColor::Orange);
+                }
+                Err(UartError::Header) => {
+                    led.light_on(LedColor::Olive);
+                }
                 _ => {
-                    // uart.send(HR_PLEASE_RESTART, [0, 1, 2, 3, 4, 5, 6], &mut delay);
                     led.light_on(LedColor::Red);
                 }
             }

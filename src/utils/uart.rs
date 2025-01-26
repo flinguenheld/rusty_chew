@@ -1,6 +1,6 @@
 use super::options::UART_SPEED;
 
-use heapless::Vec;
+use heapless::{String, Vec};
 use waveshare_rp2040_zero as bsp;
 
 use bsp::{
@@ -18,18 +18,40 @@ use pio_uart::{PioUartRx, PioUartTx, RxProgram, TxProgram};
 use usbd_human_interface_device::interface::ReportBuffer;
 
 const MAX_MESSAGE_LENGTH: usize = 9;
+const MAX_NOT_COMPLETE: u32 = 3;
+const MAX_NOTHING_RECEIVED: u32 = 100;
 pub const HR_KEYS: u8 = 0b11010000;
-pub const HR_PLEASE_RESTART: u8 = 0b11100111;
 
 pub enum UartError {
     Capacity,
     Header,
     NothingToRead,
+    NothingToReadMax,
     NotReciever,
     NotTransmitter,
     NotComplete,
     Uart,
 }
+
+impl UartError {
+    pub fn to_serial(&self) -> String<40> {
+        let mut output = String::new();
+        output
+            .push_str(match self {
+                UartError::Capacity => "-- Error Capacity --\r\n",
+                UartError::Header => "-- Error Header --\r\n",
+                UartError::NothingToRead => "-- Error Nothing to read --\r\n",
+                UartError::NothingToReadMax => "-- Error Nothing to read MAX --\r\n",
+                UartError::NotReciever => "-- Error Not reciever --\r\n",
+                UartError::NotTransmitter => "-- Error Not transmitter --\r\n",
+                UartError::NotComplete => "-- Error Not complete --\r\n",
+                UartError::Uart => "-- Error Uart --\r\n",
+            })
+            .ok();
+        output
+    }
+}
+
 pub struct Mail {
     pub header: u8,
     pub values: Vec<u8, 8>,
@@ -44,6 +66,9 @@ pub struct Uart {
 
     // 9 bytes is the buffer's maximum
     buffer: Vec<u8, 9>,
+
+    counter_not_complete: u32,
+    counter_nothing_to_read: u32,
 }
 
 // Message Frame
@@ -68,6 +93,9 @@ impl Uart {
             receiver: None,
 
             buffer: Vec::new(),
+
+            counter_not_complete: 0,
+            counter_nothing_to_read: 0,
         };
 
         uart.receiver = Some(
@@ -114,12 +142,10 @@ impl Uart {
 
     pub fn receive(&mut self) -> Result<Mail, UartError> {
         if self.read_uart_buffer().is_err() {
-            return Err(UartError::Uart);
-        }
-
-        if self.buffer.is_empty() {
-            Err(UartError::NothingToRead)
+            Err(UartError::Uart)
         } else if let Some(first) = self.buffer.first() {
+            self.counter_nothing_to_read = 0;
+
             if first & 0b11110000 == HR_KEYS {
                 let l = first & 0b00001111;
 
@@ -129,16 +155,26 @@ impl Uart {
                         values: self.buffer.iter().skip(1).cloned().collect(),
                     };
                     self.buffer.clear();
+                    self.counter_not_complete = 0;
+
                     Ok(m)
+                } else if self.counter_not_complete > MAX_NOT_COMPLETE {
+                    self.counter_not_complete = 0;
+                    self.buffer.clear();
+                    Err(UartError::NothingToRead)
                 } else {
-                    // TODO: Add a check to avoid infinite NotComplete ?
+                    self.counter_not_complete += 1;
                     Err(UartError::NotComplete)
                 }
             } else {
                 Err(UartError::Header)
             }
+        } else if self.counter_nothing_to_read >= MAX_NOTHING_RECEIVED {
+            self.counter_nothing_to_read = 0;
+            Err(UartError::NothingToReadMax)
         } else {
-            Err(UartError::NotComplete)
+            self.counter_nothing_to_read += 1;
+            Err(UartError::NothingToRead)
         }
     }
 

@@ -15,7 +15,7 @@ use utils::modifiers::Modifiers;
 use utils::options::{
     BUFFER_LENGTH, DELAY, HOLD_TIME, TIMER_MAIN_LOOP, TIMER_UART_LOOP, TIMER_USB_LOOP, UART_SPEED,
 };
-use utils::uart::{Mail, Uart, UartError, HR_KEYS, HR_PLEASE_RESTART};
+use utils::uart::{Mail, Uart, UartError, HR_KEYS};
 use utils::{serial::*, uart};
 
 use core::fmt::Write;
@@ -193,11 +193,6 @@ fn main() -> ! {
     // MOUSE ----------------------------------------------------------------------------------------------
     // MOUSE ----------------------------------------------------------------------------------------------
 
-    let mut last_header = 0;
-    // uart.send(HR_KEYS, &[0, 1], &mut delay);
-
-    let mut counter_ok = 0;
-
     'main: loop {
         if !usb_dev.poll(&mut [&mut serial]) {
             continue;
@@ -211,57 +206,33 @@ fn main() -> ! {
                 Ok(mail) => match mail.header {
                     HR_KEYS => {
                         led.light_on(LedColor::Blue);
-                        // serial
-                        //     .write(line("Keys received ", timer.get_counter().ticks()).as_bytes())
-                        //     .ok();
-
-                        // serial.write(num_to_str(mail.values.len() as u32).as_bytes());
-                        // serial.write(" -----\r\n".as_bytes()).ok();
                         for k in mail.values {
                             serial.write(num_to_str(k as u32).as_bytes()).ok();
                             serial.write(" -----\r\n".as_bytes()).ok();
                         }
 
                         // ---------------------------------------------------------
-                        last_header = HR_KEYS;
-                        uart.send(HR_KEYS, &[0, 1], &mut delay);
+                        uart.send(HR_KEYS, &[], &mut delay).ok();
                     }
-                    // HR_PLEASE_RESTART => {
-                    //     // serial.write("please restart received ---------------------------------------------- \r\n".as_bytes()).ok();
-                    //     serial
-                    //         .write(
-                    //             line("Fail, please restart", timer.get_counter().ticks())
-                    //                 .as_bytes(),
-                    //         )
-                    //         .ok();
-                    //     uart.send(last_header, [0; 7], &mut delay);
-                    // }
+
                     _ => {
                         serial
                             .write(line("Error !!", timer.get_counter().ticks()).as_bytes())
                             .ok();
                         led.light_on(LedColor::Red);
-                        delay.delay_ms(2000);
                     }
                 },
 
                 Err(e) => match e {
-                    UartError::NothingToRead => {
-                        if last_header != HR_KEYS {
-                            last_header = HR_KEYS;
-                            uart.send(last_header, &[0, 1], &mut delay);
-                            serial.write("bah merde -----\r\n".as_bytes()).ok();
-                        }
-                        // serial.write("Nothing to read -----\r\n".as_bytes()).ok();
-                    }
-                    UartError::NotComplete => {
+                    UartError::NothingToReadMax => {
                         serial
-                            .write("Buffer Not complete -----\r\n".as_bytes())
+                            .write("Nothing to read maximum reached -----\r\n".as_bytes())
                             .ok();
+                        uart.send(HR_KEYS, &[], &mut delay).ok();
+                        serial.write("Send a new request -----\r\n".as_bytes()).ok();
                     }
-                    _ => {
-                        serial.write("Unknown error -----\r\n".as_bytes()).ok();
-                        // uart.send(last_header, [0; 7], &mut delay);
+                    err => {
+                        serial.write(err.to_serial().as_bytes()).ok();
                     }
                 },
             }
