@@ -52,6 +52,7 @@ impl UartError {
     }
 }
 
+#[derive(Clone)]
 pub struct Mail {
     pub header: u8,
     pub values: Vec<u8, 8>,

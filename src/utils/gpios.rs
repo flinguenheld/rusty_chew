@@ -15,21 +15,6 @@ impl Gpios {
     // 20  21  22  23        |        24  25  26  27
     //         28  29  30    |    31  32  33
 
-    pub fn read(&mut self) -> [u8; 4] {
-        let mut pin_state_buffer = [0; 4];
-
-        for (i, row) in self.pins.iter_mut().enumerate() {
-            for key in row.iter_mut().flatten() {
-                pin_state_buffer[i] <<= 1;
-                if key.is_low().unwrap() {
-                    pin_state_buffer[i] |= 1;
-                }
-            }
-        }
-
-        pin_state_buffer
-    }
-
     pub fn get_left_indexes(&mut self) -> Vec<u8, 8> {
         self.get_indexes([0, 10, 20, 28])
     }

@@ -1,5 +1,7 @@
 use core::mem::swap;
 
+use heapless::Vec;
+
 use super::options::TIMER_MAIN_LOOP;
 
 // 00  01  02  03  04    |    05  06  07  08  09
@@ -10,16 +12,39 @@ use super::options::TIMER_MAIN_LOOP;
 pub struct Matrix {
     pub cur: [u32; 34],
     pub prev: [u32; 34],
+
+    last_ticks: u32,
 }
 
 impl Matrix {
-    pub fn new() -> Matrix {
+    pub fn new(ticks: u32) -> Matrix {
         Matrix {
             cur: [0; 34],
             prev: [0; 34],
+            last_ticks: ticks,
         }
     }
 
+    pub fn update(&mut self, active_indexes: Vec<u8, 16>, ticks: u32) {
+        swap(&mut self.cur, &mut self.prev);
+        let diff = match self.last_ticks <= ticks {
+            true => ticks - self.last_ticks,
+            false => ticks + (u32::MAX - self.last_ticks),
+        };
+
+        for index in 0..self.cur.len() {
+            match active_indexes.contains(&(index as u8)) {
+                true => self.cur[index] = self.prev[index] + diff,
+                false => self.cur[index] = 0,
+            }
+        }
+
+        self.last_ticks = ticks;
+    }
+
+    // REMOVE --------------------------------********************
+    // REMOVE --------------------------------********************
+    // REMOVE --------------------------------********************
     pub fn up(&mut self, left_rows: [u8; 4], right_rows: [u8; 4]) {
         swap(&mut self.cur, &mut self.prev);
 

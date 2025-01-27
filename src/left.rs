@@ -1,17 +1,16 @@
 #![no_std]
 #![no_main]
 
+mod chew;
 mod keys;
 mod layouts;
 mod utils;
 
-use keys::{Lay, KC};
-use layouts::LAYOUTS;
+use chew::Chew;
 use usbd_serial::SerialPort;
 use utils::gpios::Gpios;
 use utils::led::{Led, LedColor};
 use utils::matrix::Matrix;
-use utils::modifiers::Modifiers;
 use utils::options::{
     BUFFER_LENGTH, DELAY, HOLD_TIME, TIMER_MAIN_LOOP, TIMER_UART_LOOP, TIMER_USB_LOOP, UART_SPEED,
 };
@@ -175,14 +174,6 @@ fn main() -> ! {
     let mut usb_count_down = timer.count_down();
     usb_count_down.start(TIMER_USB_LOOP.millis());
 
-    const NB_LAYOUTS: usize = LAYOUTS.len();
-    let mut layouts: Vec<Lay, NB_LAYOUTS> = Vec::new();
-    let mut current_layout = 0;
-
-    let mut matrix = Matrix::new();
-    let mut mods = Modifiers::new();
-    let mut homerow_history: FnvIndexSet<usize, 8> = FnvIndexSet::new();
-
     let mut key_buffer: Deque<[Keyboard; 6], BUFFER_LENGTH> = Deque::new();
     let mut last_printed_key: [Keyboard; 6] = [Keyboard::NoEventIndicated; 6];
 
@@ -193,11 +184,10 @@ fn main() -> ! {
     // MOUSE ----------------------------------------------------------------------------------------------
     // MOUSE ----------------------------------------------------------------------------------------------
 
-    'main: loop {
-        if !usb_dev.poll(&mut [&mut serial]) {
-            continue;
-        }
+    let mut ticks: u32 = 0;
+    let mut chew = Chew::new(ticks);
 
+    loop {
         led.light_off();
         if uart_count_down.wait().is_ok() {
             // serial.write("raaaa\r\n".as_bytes()).ok();
@@ -205,11 +195,37 @@ fn main() -> ! {
             match uart.receive() {
                 Ok(mail) => match mail.header {
                     HR_KEYS => {
-                        led.light_on(LedColor::Blue);
-                        for k in mail.values {
-                            serial.write(num_to_str(k as u32).as_bytes()).ok();
-                            serial.write(" -----\r\n".as_bytes()).ok();
-                        }
+                        // led.light_on(LedColor::Blue);
+                        // for k in mail.values.iter() {
+                        //     serial.write(num_to_str(*k as u32).as_bytes()).ok();
+                        //     serial.write(" -----\r\n".as_bytes()).ok();
+                        // }
+
+                        // ---------------------------------------------------------
+                        // Keyboard logic here
+                        // serial
+                        //     .write(time("logic here", timer.get_counter().ticks()).as_bytes())
+                        //     .ok();
+
+                        chew.update_matrix(
+                            &gpios.get_left_indexes(),
+                            &mail.values.iter().cloned().collect(),
+                            ticks,
+                        );
+
+                        (key_buffer, mouse_report) = chew.run(key_buffer, mouse_report);
+                        // if !key_buffer.is_empty() {
+                        // if chew.matrix.cur[2] > 0 {
+                        //     serial.write(num_to_str(chew.matrix.cur[2]).as_bytes());
+                        //     serial.write("\r\n".as_bytes());
+                        // }
+
+                        // if !chew.matrix.cur[5] > 0 {
+                        //     led.light_on(LedColor::Blue);
+                        // } else {
+                        //     // led.light_on(LedColor::Green);
+                        //     led.light_off();
+                        // }
 
                         // ---------------------------------------------------------
                         uart.send(HR_KEYS, &[], &mut delay).ok();
@@ -217,7 +233,7 @@ fn main() -> ! {
 
                     _ => {
                         serial
-                            .write(line("Error !!", timer.get_counter().ticks()).as_bytes())
+                            .write(time("Error !!", timer.get_counter().ticks()).as_bytes())
                             .ok();
                         led.light_on(LedColor::Red);
                     }
@@ -237,254 +253,6 @@ fn main() -> ! {
                 },
             }
         }
-
-        // if main_count_down.wait().is_ok() {
-        //     // Matrix update ------------------------------------------------------------
-        // let left_pins = gpios.read();
-        // let mut right_pins = [0_u8; 4];
-
-        // if left_pins[0] > 0 {
-        //     led.light_on(LedColor::Red);
-        // }
-        // if left_pins[1] > 0 {
-        //     led.light_off();
-        // }
-
-        //     // serial.write("NEW MAIN LOOP ".as_bytes()).ok();
-        //     // serial
-        //     //     .write(line(timer.get_counter().ticks()).as_bytes())
-        //     //     .ok();
-
-        //     // loop {
-        //     // delay.delay_us(DELAY);
-
-        //     led.light_on(LedColor::Orange);
-        //     if !in_progress {
-        //         counter_ok += 1;
-
-        //         serial
-        //             .write("NEW UART START !! ------------------   : ".as_bytes())
-        //             .ok();
-        //         serial.write(num_to_str(counter_ok).as_bytes()).ok();
-        //         serial.write("\r\n".as_bytes()).ok();
-        //         // serial
-        //         //     .write(line(timer.get_counter().ticks()).as_bytes())
-        //         //     .ok();
-
-        //         delay = uart.send(HR_ROWS01, [0; 2], delay);
-        //         in_progress = true;
-        //     } else {
-        //         counter_too_late += 1;
-        //         // serial
-        //         //     .write("Uart not fast enough  ------------------    : ".as_bytes())
-        //         //     .ok();
-        //         // serial.write(num_to_str(counter_too_late).as_bytes()).ok();
-        //         // serial.write("\r\n".as_bytes()).ok();
-        //     }
-        // }
-
-        //     continue;
-
-        //     if right_pins[0] > 63 || right_pins[1] > 63 || right_pins[2] > 15 || right_pins[3] > 7 {
-        //         // serial.write(line(timer.get_counter().ticks())).ok();
-        //         // serial
-        //         //     .write(
-        //         //         ">>>>>>>>>>>>>>>>> ERREUR ICI >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\r\n"
-        //         //             .as_bytes(),
-        //         //     )
-        //         //     .ok();
-
-        //         // for row in pins_to_str(&left_pins, &right_pins).iter() {
-        //         //     serial.write(row.as_bytes()).ok();
-        //         // }
-        //         // serial
-        //         //     .write(
-        //         //         "<<<<<<<<<<<<<<<<< ERREUR ICI -------------------------------\r\n"
-        //         //             .as_bytes(),
-        //         //     )
-        //         //     .ok();
-        //     }
-
-        //     // if right_pins[0] == 0 {
-        //     //     serial.write("right pins == 0:\r\n".as_bytes()).ok();
-        //     // } else {
-        //     //     serial.write("NOT EQUAL TO 0 == 0:\r\n".as_bytes()).ok();
-
-        //     if matrix.prev != matrix.cur {
-        //         // serial.write(line(timer.get_counter().ticks())).ok();
-        //         for row in pins_to_str(&left_pins, &right_pins).iter() {
-        //             serial.write(row.as_bytes()).ok();
-        //         }
-
-        //         // let debug = format_args!("{} foo {:?}", 1, 2);
-
-        //         // serial
-        //         //     .write(pins_to_str(left_pins[0], right_pins[0], 5).as_bytes())
-        //         //     .ok();
-        //         // serial
-        //         //     .write(pins_to_str(left_pins[1], right_pins[1], 5).as_bytes())
-        //         //     .ok();
-        //         // serial
-        //         //     .write(pins_to_str(left_pins[2], right_pins[2], 4).as_bytes())
-        //         //     .ok();
-        //         // serial
-        //         //     .write(pins_to_str(left_pins[3], right_pins[3], 3).as_bytes())
-        //         //     .ok();
-
-        //         // Layouts ------------------------------------------------------------------
-        //         match layouts.last().unwrap_or(&Lay::Pressed(0, 0)) {
-        //             Lay::Dead(_, _, _) => {}
-        //             _ => {
-        //                 for ((index, layout), (mat_prev, mat_cur)) in LAYOUTS[current_layout]
-        //                     .iter()
-        //                     .enumerate()
-        //                     .zip(matrix.prev.iter().zip(matrix.cur.iter()))
-        //                 {
-        //                     match layout {
-        //                         KC::Layout(number) => {
-        //                             if *mat_cur > 0 {
-        //                                 layouts.push(Lay::Pressed(*number, index)).ok();
-        //                                 // break;
-        //                             }
-        //                         }
-        //                         KC::LayDead(number) => {
-        //                             if *mat_prev == 0 && *mat_cur > 0 {
-        //                                 layouts.push(Lay::Dead(*number, index, false)).ok();
-
-        //                                 // Mandatory jump to avoid its own key pressed
-        //                                 continue 'main;
-        //                             }
-        //                         }
-        //                         _ => {}
-        //                     }
-        //                 }
-        //             }
-        //         }
-
-        //         current_layout = match layouts.last().unwrap_or(&Lay::Pressed(0, 0)) {
-        //             Lay::Pressed(number, _) => *number,
-        //             Lay::Dead(number, _, _) => *number,
-        //         };
-
-        //         // Modifiers ----------------------------------------------------------------
-        //         LAYOUTS[current_layout]
-        //             .iter()
-        //             .zip(matrix.cur.iter())
-        //             .enumerate()
-        //             .filter(|(_, (&la, &mc))| {
-        //                 mc > 0
-        //                     && ((la >= KC::Alt && la <= KC::Shift)
-        //                         || (la >= KC::HomeAltA && la <= KC::HomeSftR))
-        //             })
-        //             .for_each(|(index, (layout, _))| match layout {
-        //                 KC::Alt => mods.alt = (true, index),
-        //                 KC::Altgr => mods.alt_gr = (true, index),
-        //                 KC::Ctrl => mods.ctrl = (true, index),
-        //                 KC::Gui => mods.gui = (true, index),
-        //                 KC::Shift => mods.shift = (true, index),
-
-        //                 KC::HomeAltA | KC::HomeAltU => mods.alt = (false, index),
-        //                 KC::HomeCtrlE | KC::HomeCtrlT => mods.ctrl = (false, index),
-        //                 KC::HomeGuiS | KC::HomeGuiI => mods.gui = (false, index),
-        //                 _ => mods.shift = (false, index),
-        //             });
-
-        //         mods.update_states(&matrix.cur);
-
-        //         // Regular keys -------------------------------------------------------------
-        //         for (((index, layout), mat_prev), mat_cur) in LAYOUTS[current_layout]
-        //             .iter()
-        //             .enumerate()
-        //             .zip(matrix.prev.iter())
-        //             .zip(matrix.cur.iter())
-        //             .filter(|(((index, _), _), _)| !mods.is_active(*index))
-        //         {
-        //             match layout {
-        //                 k if (k >= &KC::A && k <= &KC::Yen) => {
-        //                     // Last key is automatically repeated by the usb crate
-        //                     if *mat_prev == 0 && *mat_cur > 0 {
-        //                         key_buffer = k.usb_code(&mods, key_buffer);
-        //                     } else if *mat_prev > 0 && *mat_cur == 0 {
-        //                         key_buffer = KC::None.usb_code(&mods, key_buffer);
-        //                     }
-        //                 }
-        //                 k if (k >= &KC::ACircum && k <= &KC::YDiaer) => {
-        //                     if *mat_prev == 0 && *mat_cur > 0 {
-        //                         key_buffer = k.usb_code(&mods, key_buffer);
-        //                     }
-        //                 }
-        //                 k if (k >= &KC::HomeAltA && k <= &KC::HomeSftR) => {
-        //                     // To validate the release, the press event has to be saved in the history
-        //                     if *mat_prev == 0 && *mat_cur > 0 {
-        //                         homerow_history.insert(index).ok();
-        //                     } else if *mat_prev > 0
-        //                         && *mat_prev < HOLD_TIME
-        //                         && *mat_cur == 0
-        //                         && homerow_history.contains(&index)
-        //                     {
-        //                         key_buffer = k.usb_code(&mods, key_buffer);
-        //                     } else if *mat_prev > 0 && *mat_cur == 0 {
-        //                         key_buffer = KC::None.usb_code(&mods, key_buffer);
-        //                     }
-        //                 }
-
-        //                 // Mouse ------------------------------------------------------------
-        //                 k if (k >= &KC::MouseLeft && k <= &KC::MouseRight) => {
-        //                     if *mat_cur > 0 {
-        //                         mouse_report = k.usb_mouse_move(
-        //                             mouse_report,
-        //                             &LAYOUTS[current_layout],
-        //                             &matrix.cur,
-        //                         );
-        //                     }
-        //                 }
-        //                 k if (k >= &KC::MouseBtLeft && k <= &KC::MouseBtRight) => {
-        //                     if *mat_cur > 0 {
-        //                         mouse_report.buttons |= match k {
-        //                             KC::MouseBtLeft => 0x1,
-        //                             KC::MouseBtMiddle => 0x4,
-        //                             _ => 0x2,
-        //                         }
-        //                     } else if *mat_prev > 0 && *mat_cur == 0 {
-        //                         mouse_report.buttons &= match k {
-        //                             KC::MouseBtLeft => 0xFF - 0x1,
-        //                             KC::MouseBtMiddle => 0xFF - 0x4,
-        //                             _ => 0xFF - 0x2,
-        //                         }
-        //                     }
-        //                 }
-        //                 _ => {}
-        //             }
-        //         }
-
-        //         // --
-        //         homerow_history
-        //             .retain(|&index| !(matrix.prev[index] > 0 && matrix.cur[index] == 0));
-        //         layouts.retain_mut(|l| match l {
-        //             Lay::Pressed(_, index) => matrix.cur[*index] > 0,
-        //             Lay::Dead(_, index, done) => {
-        //                 if !*done {
-        //                     if matrix.prev[*index] == 0 && matrix.cur[*index] > 0 {
-        //                         *done = true;
-        //                     } else if matrix.cur[*index] == 0 {
-        //                         *done = matrix.cur.iter().filter(|c| **c > 0).count() > mods.nb_on()
-        //                     } else if matrix.cur[*index] > HOLD_TIME {
-        //                         *done =
-        //                             matrix.cur.iter().filter(|c| **c > 0).count() > mods.nb_on() + 1
-        //                     }
-        //                 }
-
-        //                 !(*done && matrix.cur[*index] < HOLD_TIME)
-        //             }
-        //         });
-        //         led.light_off();
-        //     } else {
-        //         led.light_on(LedColor::Blue)
-        //     }
-        //     // }
-
-        //     led.startup(TIMER_MAIN_LOOP);
-        // }
 
         // USB --------------------------------------------------------------------------
         if usb_count_down.wait().is_ok() {
@@ -531,6 +299,7 @@ fn main() -> ! {
 
         // Tick once per ms -------------------------------------------------------------
         if tick_count_down.wait().is_ok() {
+            ticks = ticks.wrapping_add(1);
             match rusty_chew.tick() {
                 Err(UsbHidError::WouldBlock) => {}
                 Ok(_) => {}
@@ -538,17 +307,21 @@ fn main() -> ! {
             };
         }
 
-        // if usb_dev.poll(&mut [&mut rusty_chew]) {
-        //     match rusty_chew
-        //         .device::<NKROBootKeyboard<'_, _>, _>()
-        //         .read_report()
-        //     {
-        //         Err(UsbError::WouldBlock) => {}
-        //         Err(e) => {
-        //             core::panic!("Failed to read keyboard report: {:?}", e)
-        //         }
-        //         Ok(_leds) => {}
-        //     }
+        // if !usb_dev.poll(&mut [&mut serial]) {
+        //     continue;
         // }
+
+        if usb_dev.poll(&mut [&mut rusty_chew]) {
+            match rusty_chew
+                .device::<NKROBootKeyboard<'_, _>, _>()
+                .read_report()
+            {
+                Err(UsbError::WouldBlock) => {}
+                Err(e) => {
+                    core::panic!("Failed to read keyboard report: {:?}", e)
+                }
+                Ok(_leds) => {}
+            }
+        }
     }
 }

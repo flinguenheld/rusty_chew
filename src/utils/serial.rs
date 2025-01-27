@@ -23,7 +23,7 @@ pub fn num_to_str(num: u32) -> String<10> {
     l
 }
 
-pub fn line(txt: &str, ticks: u64) -> String<50> {
+pub fn time(txt: &str, ticks: u64) -> String<50> {
     let mut l: String<50> = String::new();
 
     let ms = ticks / 1_000;
@@ -33,7 +33,7 @@ pub fn line(txt: &str, ticks: u64) -> String<50> {
 
     write!(
         &mut l,
-        "{} --------------- {:02}:{:02}:{} \r\n",
+        "{} ----------- {:02}:{:02}:{} \r\n",
         txt, minutes, seconds, ms
     )
     .ok();

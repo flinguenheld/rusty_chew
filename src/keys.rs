@@ -246,7 +246,7 @@ impl KC {
     }
 
     #[rustfmt::skip]
-    pub fn usb_code(&self, modifiers: &Modifiers, mut buffer: Deque<[Keyboard; 6], BUFFER_LENGTH>) -> Deque<[Keyboard; 6], BUFFER_LENGTH> {
+    pub fn usb_code(&self, modifiers: &Modifiers, buffer: &mut Deque<[Keyboard; 6], BUFFER_LENGTH>) {
 
         let mut output = self.new_combination(modifiers);
 
@@ -392,7 +392,5 @@ impl KC {
 
             _ => {}
         }
-
-        buffer
     }
 }
