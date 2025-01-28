@@ -2,14 +2,12 @@
 #![no_main]
 
 mod utils;
-
-use utils::options::{DELAY, TIMER_RIGHT_LOOP, TIMER_UART_LOOP};
+use utils::gpios::Gpios;
+use utils::led::{Led, LedColor};
+use utils::options::TIMER_UART_LOOP;
 use utils::uart::{Uart, UartError, HR_KEYS};
 
 use waveshare_rp2040_zero as bsp;
-
-use utils::gpios::Gpios;
-use utils::led::{Led, LedColor};
 
 use bsp::hal::{
     clocks::{init_clocks_and_plls, Clock},
@@ -44,9 +42,6 @@ fn main() -> ! {
     .unwrap();
 
     let timer = Timer::new(pac.TIMER, &mut pac.RESETS, &clocks);
-
-    // Remove ------------------------------------------------------------------------------
-    // Remove ------------------------------------------------------------------------------
     let core = pac::CorePeripherals::take().unwrap();
     let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
 
@@ -58,7 +53,6 @@ fn main() -> ! {
         &mut pac.RESETS,
     );
 
-    // --
     let (mut pio, sm0, sm1, _, _) = pac.PIO0.split(&mut pac.RESETS);
 
     // GPIO -----

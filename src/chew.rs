@@ -1,6 +1,3 @@
-use heapless::{Deque, FnvIndexSet, Vec};
-use usbd_human_interface_device::{device::mouse::WheelMouseReport, page::Keyboard};
-
 use crate::{
     keys::{Lay, KC},
     layouts::LAYOUTS,
@@ -11,22 +8,21 @@ use crate::{
     },
 };
 
+use heapless::{Deque, FnvIndexSet, Vec};
+use usbd_human_interface_device::{device::mouse::WheelMouseReport, page::Keyboard};
+
 const NB_LAYOUTS: usize = LAYOUTS.len();
 
+/// This is the core of this keyboard,
+/// The Run function proceeds all the keyboard hacks to fill the key buffer according
+/// to the LAYOUT.
 pub struct Chew {
     layouts: Vec<Lay, NB_LAYOUTS>,
     current_layout: usize,
 
-    pub matrix: Matrix,
+    matrix: Matrix,
     mods: Modifiers,
     homerow_history: FnvIndexSet<usize, 8>,
-    // key_buffer: Deque<[Keyboard; 6], BUFFER_LENGTH>,
-    // last_printed_key: [Keyboard; 6],
-
-    // MOUSE ----------------------------------------------------------------------------------------------
-    // MOUSE ----------------------------------------------------------------------------------------------
-    // last_mouse_buttons: u8,
-    // mouse_report: WheelMouseReport,
 }
 
 impl Chew {
@@ -38,17 +34,12 @@ impl Chew {
             matrix: Matrix::new(ticks),
             mods: Modifiers::new(),
             homerow_history: FnvIndexSet::new(),
-            // key_buffer: Deque::new(),
-            // last_printed_key: [Keyboard::NoEventIndicated; 6],
-            // last_mouse_buttons: 0,
-            // mouse_report: WheelMouseReport::default(),
         }
     }
 
     pub fn update_matrix(&mut self, left: &Vec<u8, 8>, right: &Vec<u8, 8>, ticks: u32) {
         self.matrix
             .update(left.iter().chain(right.iter()).cloned().collect(), ticks);
-        // blah
     }
 
     pub fn run(
@@ -205,11 +196,7 @@ impl Chew {
                     !(*done && self.matrix.cur[*index] < HOLD_TIME)
                 }
             });
-            // led.light_off();
-        } else {
-            // led.light_on(LedColor::Blue)
         }
-        // }
 
         (key_buffer, mouse_report)
     }

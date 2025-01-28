@@ -1,4 +1,4 @@
-use super::options::UART_SPEED;
+use super::options::{UART_SEND_DELAY, UART_SPEED};
 
 use heapless::{String, Vec};
 use waveshare_rp2040_zero as bsp;
@@ -17,9 +17,11 @@ use fugit::RateExtU32;
 use pio_uart::{PioUartRx, PioUartTx, RxProgram, TxProgram};
 use usbd_human_interface_device::interface::ReportBuffer;
 
-const MAX_MESSAGE_LENGTH: usize = 9;
+const MAX_MESSAGE_LENGTH: usize = 9; // Max tested in January 2025
 const MAX_NOT_COMPLETE: u32 = 3;
 const MAX_NOTHING_RECEIVED: u32 = 100;
+
+// Values used as a header to validated a message
 pub const HR_KEYS: u8 = 0b11010000;
 
 pub enum UartError {
@@ -52,12 +54,31 @@ impl UartError {
     }
 }
 
-#[derive(Clone)]
+/// Message Frame
+///
+///  Openning                 Values (8 bytes maximum)
+///    /
+/// 1010 1010   ->    0000 0000 - 0000 0000 ...
+///        \
+///      Number of values
+///    
 pub struct Mail {
     pub header: u8,
     pub values: Vec<u8, 8>,
 }
 
+/// Half-duplex uart, the system is on receiver mode all the time except to send a mail.
+/// The RP2040-zero board buffer is limited to 9 bytes messages.
+/// So here it uses one byte as a header to know what they want and give the amount of bytes
+/// which are following.
+/// The purpose for Chew is:
+///     - Left sends a request of the right active keys.
+///     - Right receives the request and return the indexes (see gpios).
+///     - Left receives them and procedes to the keyboard logic.
+///     - Left sends a request of the right active keys...
+///
+/// In case of bug, the const MAX_NOT_COMPLETE & MAX_NOTHING_RECEIVED allow the uart struct to not get
+/// stuct and return an error. In this case the left restarts the loop.
 pub struct Uart {
     tx_program: TxProgram<PIO0>,
     rx_program: RxProgram<PIO0>,
@@ -72,14 +93,6 @@ pub struct Uart {
     counter_nothing_to_read: u32,
 }
 
-// Message Frame
-//
-//  Openning                 Values (8 bytes maximum)
-//    /
-// 1010 1010   ->    0000 0000 - 0000 0000 ...
-//        \
-//      Number of values
-//
 impl Uart {
     pub fn new(
         pio: &mut PIO<PIO0>,
@@ -113,12 +126,12 @@ impl Uart {
         uart
     }
 
+    /// Switch in transmitter mode, send, and come back to receiver mode
     pub fn send(&mut self, header: u8, values: &[u8], delay: &mut Delay) -> Result<(), UartError> {
         let ok;
         self.switch_to_transmitter();
 
-        // TODO delay length ??
-        delay.delay_us(500);
+        delay.delay_us(UART_SEND_DELAY);
         if let Some(transmiter) = &mut self.transmiter {
             if values.len() < MAX_MESSAGE_LENGTH {
                 let mut to_send: Vec<u8, MAX_MESSAGE_LENGTH> = Vec::new();
@@ -132,7 +145,7 @@ impl Uart {
         } else {
             return Err(UartError::NotTransmitter);
         }
-        delay.delay_us(500);
+        delay.delay_us(UART_SEND_DELAY);
         self.switch_to_receiver();
 
         match ok {
@@ -141,6 +154,8 @@ impl Uart {
         }
     }
 
+    /// Empty the uart buffer to fill the struct buffer.
+    /// Proceede to checks and return a mail which contains the header & the values.
     pub fn receive(&mut self) -> Result<Mail, UartError> {
         if self.read_uart_buffer().is_err() {
             Err(UartError::Uart)

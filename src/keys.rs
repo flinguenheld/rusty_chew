@@ -245,6 +245,8 @@ impl KC {
         output
     }
 
+    /// Convert a Chew keycode into an array of Keyboard page.
+    /// It allows the usb write report to print each key with its modifiers.
     #[rustfmt::skip]
     pub fn usb_code(&self, modifiers: &Modifiers, buffer: &mut Deque<[Keyboard; 6], BUFFER_LENGTH>) {
 

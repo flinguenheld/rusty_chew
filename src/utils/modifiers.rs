@@ -1,6 +1,8 @@
 use super::options::HOLD_TIME;
 
-/// Keep the state and the matrix index for each modifier.
+/// Due to layers and homerow mods, modifiers have to be manage with their matrix
+/// status directly.
+/// This struct keeps the state and the matrix index for each modifier.
 pub struct Modifiers {
     pub alt: (bool, usize),
     pub alt_gr: (bool, usize),
