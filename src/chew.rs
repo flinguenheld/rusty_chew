@@ -23,6 +23,9 @@ pub struct Chew {
     matrix: Matrix,
     mods: Modifiers,
     homerow_history: FnvIndexSet<usize, 8>,
+
+    // Manage mouse move whatever the uart loop elasped time
+    mouse_move_tempo: u32,
 }
 
 impl Chew {
@@ -34,6 +37,8 @@ impl Chew {
             matrix: Matrix::new(ticks),
             mods: Modifiers::new(),
             homerow_history: FnvIndexSet::new(),
+
+            mouse_move_tempo: 0,
         }
     }
 
@@ -69,7 +74,6 @@ impl Chew {
                                     self.layouts.push(Lay::Dead(*number, index, false)).ok();
 
                                     // Mandatorily jump to avoid its own key pressed
-                                    // continue 'main;
                                     return (key_buffer, mouse_report);
                                 }
                             }
@@ -149,11 +153,18 @@ impl Chew {
                     // Mouse ------------------------------------------------------------
                     k if (k >= &KC::MouseLeft && k <= &KC::MouseRight) => {
                         if *mat_cur > 0 {
-                            mouse_report = k.usb_mouse_move(
-                                mouse_report,
-                                &LAYOUTS[self.current_layout],
-                                &self.matrix.cur,
-                            );
+                            // Only move on each 100ms
+                            self.mouse_move_tempo += mat_cur;
+                            if self.mouse_move_tempo >= 100 {
+                                self.mouse_move_tempo -= 100;
+                                mouse_report = k.usb_mouse_move(
+                                    mouse_report,
+                                    &LAYOUTS[self.current_layout],
+                                    &self.matrix.cur,
+                                );
+                            }
+                        } else {
+                            self.mouse_move_tempo = 0;
                         }
                     }
                     k if (k >= &KC::MouseBtLeft && k <= &KC::MouseBtRight) => {
