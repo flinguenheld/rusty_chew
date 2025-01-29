@@ -239,6 +239,8 @@ fn main() -> ! {
             if mouse_report.buttons != last_mouse_buttons
                 || mouse_report.x != 0
                 || mouse_report.y != 0
+                || mouse_report.vertical_wheel != 0
+                || mouse_report.horizontal_wheel != 0
             {
                 let mouse = rusty_chew.device::<WheelMouse<'_, _>, _>();
                 match mouse.write_report(&mouse_report) {

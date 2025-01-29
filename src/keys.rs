@@ -195,10 +195,14 @@ pub enum KC {
         MouseDown = 50021,
         MouseUp = 50022,
         MouseRight = 50023,
-    MouseSpeed1 = 50030,
-    MouseSpeed2 = 50031,
-    MouseSpeed3 = 50032,
-    MouseSpeed4 = 50033,
+    MouseWheelLeft = 50030,
+    MouseWheelDown = 50031,
+    MouseWheelUp = 50032,
+    MouseWheelRight = 50033,
+        MouseSpeed1 = 50040,
+        MouseSpeed2 = 50041,
+        MouseSpeed3 = 50042,
+        MouseSpeed4 = 50043,
 
     Layout(usize) = 60000,
     LayDead(usize) = 60001,
@@ -208,29 +212,35 @@ pub enum KC {
 impl KC {
 
     // Mouse ----------------------------------------------------------------------------
-    pub fn usb_mouse_move(&self, mut report: WheelMouseReport, layout: &[KC; 34], matrix: &[u32; 34]) -> WheelMouseReport 
+    // pub fn usb_mouse_move(&self, mut report: WheelMouseReport, layout: &[KC; 34], matrix: &[u32; 34]) -> WheelMouseReport 
+    pub fn usb_mouse_move(&self, mut report: WheelMouseReport, speed: i8) -> WheelMouseReport 
     {
-        let speed = if let Some((key, _)) = layout.iter().zip(matrix.iter())
-                                                         .filter(|(k, m)| **k >= KC::MouseSpeed1 && **k <= KC::MouseSpeed4 && **m > 0)
-                                                         .last() {
-                        match key {
-                            KC::MouseSpeed1 => MOUSE_SPEED_1,
-                            KC::MouseSpeed2 => MOUSE_SPEED_2,
-                            KC::MouseSpeed3 => MOUSE_SPEED_3,
-                            _               => MOUSE_SPEED_4,
-                        }
-                    } else { MOUSE_SPEED_DEFAULT };
-        
-        match *self{
+        // let speed = if let Some((key, _)) = layout.iter().zip(matrix.iter())
+        //                                                  .filter(|(k, m)| **k >= KC::MouseSpeed1 && **k <= KC::MouseSpeed4 && **m > 0)
+        //                                                  .last() {
+        //     match key {
+        //         KC::MouseSpeed1 => MOUSE_SPEED_1,
+        //         KC::MouseSpeed2 => MOUSE_SPEED_2,
+        //         KC::MouseSpeed3 => MOUSE_SPEED_3,
+        //         _               => MOUSE_SPEED_4,
+        //     }
+        // } else { MOUSE_SPEED_DEFAULT };
+
+        match *self {
             KC::MouseLeft  => report.x = i8::saturating_add(report.x, -speed),
             KC::MouseDown  => report.y = i8::saturating_add(report.y,  speed),
             KC::MouseUp    => report.y = i8::saturating_add(report.y, -speed),
             KC::MouseRight => report.x = i8::saturating_add(report.x,  speed),
+
+            KC::MouseWheelLeft  => report.horizontal_wheel = i8::saturating_add(report.horizontal_wheel,  speed),
+            KC::MouseWheelDown  => report.vertical_wheel   = i8::saturating_add(report.vertical_wheel,   -speed),
+            KC::MouseWheelUp    => report.vertical_wheel   = i8::saturating_add(report.vertical_wheel,    speed),
+            KC::MouseWheelRight => report.horizontal_wheel = i8::saturating_add(report.horizontal_wheel, -speed),
             _=>{}
         }
         report
     }
-    
+
     // Keyboard -------------------------------------------------------------------------
     fn new_combination(&self, modifiers: &Modifiers) -> [Keyboard; 6] {
         let mut output = EMPTY;

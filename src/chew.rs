@@ -4,7 +4,11 @@ use crate::{
     utils::{
         matrix::Matrix,
         modifiers::Modifiers,
-        options::{BUFFER_LENGTH, HOLD_TIME},
+        options::{
+            BUFFER_LENGTH, HOLD_TIME, MOUSE_SPEED_1, MOUSE_SPEED_2, MOUSE_SPEED_3, MOUSE_SPEED_4,
+            MOUSE_SPEED_DEFAULT, SCROLL_TEMP_SPEED_1, SCROLL_TEMP_SPEED_2, SCROLL_TEMP_SPEED_3,
+            SCROLL_TEMP_SPEED_4, SCROLL_TEMP_SPEED_DEFAULT,
+        },
     },
 };
 
@@ -24,8 +28,8 @@ pub struct Chew {
     mods: Modifiers,
     homerow_history: FnvIndexSet<usize, 8>,
 
-    // Manage mouse move whatever the uart loop elasped time
-    mouse_move_tempo: u32,
+    // Allow to drastically slow down the wheel
+    mouse_scroll_tempo: u32,
 }
 
 impl Chew {
@@ -38,7 +42,7 @@ impl Chew {
             mods: Modifiers::new(),
             homerow_history: FnvIndexSet::new(),
 
-            mouse_move_tempo: 0,
+            mouse_scroll_tempo: 0,
         }
     }
 
@@ -151,20 +155,37 @@ impl Chew {
                     }
 
                     // Mouse ------------------------------------------------------------
-                    k if (k >= &KC::MouseLeft && k <= &KC::MouseRight) => {
+                    k if (k >= &KC::MouseLeft && k <= &KC::MouseWheelRight) => {
                         if *mat_cur > 0 {
-                            // Only move on each 100ms
-                            self.mouse_move_tempo += mat_cur;
-                            if self.mouse_move_tempo >= 100 {
-                                self.mouse_move_tempo -= 100;
-                                mouse_report = k.usb_mouse_move(
-                                    mouse_report,
-                                    &LAYOUTS[self.current_layout],
-                                    &self.matrix.cur,
-                                );
+                            self.mouse_scroll_tempo += 1;
+
+                            let (speed, (scroll_temp, scroll_speed)) = if let Some((key, _)) =
+                                LAYOUTS[self.current_layout]
+                                    .iter()
+                                    .zip(self.matrix.cur.iter())
+                                    .filter(|(k, m)| {
+                                        **k >= KC::MouseSpeed1 && **k <= KC::MouseSpeed4 && **m > 0
+                                    })
+                                    .last()
+                            {
+                                match key {
+                                    KC::MouseSpeed1 => (MOUSE_SPEED_1, SCROLL_TEMP_SPEED_1),
+                                    KC::MouseSpeed2 => (MOUSE_SPEED_2, SCROLL_TEMP_SPEED_2),
+                                    KC::MouseSpeed3 => (MOUSE_SPEED_3, SCROLL_TEMP_SPEED_3),
+                                    _ => (MOUSE_SPEED_4, SCROLL_TEMP_SPEED_4),
+                                }
+                            } else {
+                                (MOUSE_SPEED_DEFAULT, SCROLL_TEMP_SPEED_DEFAULT)
+                            };
+
+                            if k <= &KC::MouseRight {
+                                mouse_report = k.usb_mouse_move(mouse_report, speed);
+                            } else {
+                                if self.mouse_scroll_tempo >= scroll_temp {
+                                    self.mouse_scroll_tempo = 0;
+                                    mouse_report = k.usb_mouse_move(mouse_report, scroll_speed);
+                                }
                             }
-                        } else {
-                            self.mouse_move_tempo = 0;
                         }
                     }
                     k if (k >= &KC::MouseBtLeft && k <= &KC::MouseBtRight) => {
