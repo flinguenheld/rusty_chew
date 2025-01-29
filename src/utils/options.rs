@@ -3,7 +3,7 @@ pub const BUFFER_LENGTH: usize = 20;
 
 // Milliseconds
 pub const TIMER_UART_LOOP: u32 = 10;
-pub const TIMER_USB_LOOP: u32 = 12;
+pub const TIMER_USB_LOOP: u32 = 25;
 pub const TIMER_LED_STARTUP: u32 = 2_000;
 
 // pub const UART_SPEED: u32 = 115_200;
@@ -12,10 +12,10 @@ pub const UART_SEND_DELAY: u32 = 500; // microseconds
 
 // Mouse
 pub const MOUSE_SPEED_1: i8 = 1;
-pub const MOUSE_SPEED_2: i8 = 6;
-pub const MOUSE_SPEED_3: i8 = 25;
-pub const MOUSE_SPEED_4: i8 = 45;
-pub const MOUSE_SPEED_DEFAULT: i8 = 17;
+pub const MOUSE_SPEED_2: i8 = 5;
+pub const MOUSE_SPEED_3: i8 = 22;
+pub const MOUSE_SPEED_4: i8 = 40;
+pub const MOUSE_SPEED_DEFAULT: i8 = 12;
 
 pub const SCROLL_TEMP_SPEED_1: (u32, i8) = (80, 1);
 pub const SCROLL_TEMP_SPEED_2: (u32, i8) = (40, 1);

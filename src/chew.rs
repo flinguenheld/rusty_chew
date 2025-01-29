@@ -155,10 +155,25 @@ impl Chew {
                     }
 
                     // Mouse ------------------------------------------------------------
-                    k if (k >= &KC::MouseLeft && k <= &KC::MouseWheelRight) => {
+                    k if (k >= &KC::MouseBtLeft && k <= &KC::MouseBtRight) => {
                         if *mat_cur > 0 {
-                            self.mouse_scroll_tempo += 1;
+                            mouse_report.buttons |= match k {
+                                KC::MouseBtLeft => 0x1,
+                                KC::MouseBtMiddle => 0x4,
+                                _ => 0x2,
+                            }
+                        } else {
+                            mouse_report.buttons &= match k {
+                                KC::MouseBtLeft => 0xFF - 0x1,
+                                KC::MouseBtMiddle => 0xFF - 0x4,
+                                _ => 0xFF - 0x2,
+                            }
+                        }
+                    }
+                    k if (k >= &KC::MouseLeft && k <= &KC::MouseWheelRight) => {
+                        self.mouse_scroll_tempo += 1;
 
+                        if *mat_cur > 0 {
                             let (speed, (scroll_temp, scroll_speed)) = if let Some((key, _)) =
                                 LAYOUTS[self.current_layout]
                                     .iter()
@@ -188,21 +203,7 @@ impl Chew {
                             }
                         }
                     }
-                    k if (k >= &KC::MouseBtLeft && k <= &KC::MouseBtRight) => {
-                        if *mat_cur > 0 {
-                            mouse_report.buttons |= match k {
-                                KC::MouseBtLeft => 0x1,
-                                KC::MouseBtMiddle => 0x4,
-                                _ => 0x2,
-                            }
-                        } else if *mat_prev > 0 && *mat_cur == 0 {
-                            mouse_report.buttons &= match k {
-                                KC::MouseBtLeft => 0xFF - 0x1,
-                                KC::MouseBtMiddle => 0xFF - 0x4,
-                                _ => 0xFF - 0x2,
-                            }
-                        }
-                    }
+
                     _ => {}
                 }
             }

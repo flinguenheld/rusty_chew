@@ -190,6 +190,30 @@ fn main() -> ! {
 
                         (key_buffer, mouse_report) = chew.run(key_buffer, mouse_report);
 
+                        // Mouse report directly done here ------------------------------
+                        // Keyboard has its own timer two allow combinations
+                        if mouse_report.buttons != last_mouse_buttons
+                            || mouse_report.x != 0
+                            || mouse_report.y != 0
+                            || mouse_report.vertical_wheel != 0
+                            || mouse_report.horizontal_wheel != 0
+                        {
+                            let mouse = rusty_chew.device::<WheelMouse<'_, _>, _>();
+                            match mouse.write_report(&mouse_report) {
+                                Err(UsbHidError::WouldBlock) => {
+                                    led.light_on(LedColor::Red);
+                                }
+                                Ok(_) => {
+                                    last_mouse_buttons = mouse_report.buttons;
+                                    mouse_report = WheelMouseReport::default();
+                                }
+                                Err(e) => {
+                                    led.light_on(LedColor::Orange);
+                                    core::panic!("Failed to write mouse report: {:?}", e)
+                                }
+                            };
+                        }
+
                         // New loop --
                         uart.send(HR_KEYS, &[], &mut delay).ok();
                     }
@@ -234,25 +258,6 @@ fn main() -> ! {
                         }
                     }
                 }
-            }
-
-            if mouse_report.buttons != last_mouse_buttons
-                || mouse_report.x != 0
-                || mouse_report.y != 0
-                || mouse_report.vertical_wheel != 0
-                || mouse_report.horizontal_wheel != 0
-            {
-                let mouse = rusty_chew.device::<WheelMouse<'_, _>, _>();
-                match mouse.write_report(&mouse_report) {
-                    Err(UsbHidError::WouldBlock) => {}
-                    Ok(_) => {
-                        last_mouse_buttons = mouse_report.buttons;
-                        mouse_report = Default::default();
-                    }
-                    Err(e) => {
-                        core::panic!("Failed to write mouse report: {:?}", e)
-                    }
-                };
             }
         }
 
