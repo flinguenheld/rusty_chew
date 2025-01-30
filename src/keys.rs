@@ -296,29 +296,29 @@ impl KC {
             KC::Up    => { output[5] = Keyboard::UpArrow;    buffer.push_back(output).ok(); },
             KC::Right => { output[5] = Keyboard::RightArrow; buffer.push_back(output).ok(); },
 
-            KC::ACircum => { buffer.push_back(DEAD_CIRCUMFLEX).ok(); output[5] = Keyboard::A; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
-            KC::ADiaer  => { buffer.push_back(DEAD_DIAERIS).ok();    output[5] = Keyboard::A; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
-            KC::AGrave  => { buffer.push_back(DEAD_GRAVE).ok();      output[5] = Keyboard::A; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+            KC::ACircum => { buffer.push_back(DEAD_CIRCUMFLEX).ok(); output[5] = Keyboard::A; buffer.push_back(EMPTY).ok(); buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+            KC::ADiaer  => { buffer.push_back(DEAD_DIAERIS).ok();    output[5] = Keyboard::A; buffer.push_back(EMPTY).ok(); buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+            KC::AGrave  => { buffer.push_back(DEAD_GRAVE).ok();      output[5] = Keyboard::A; buffer.push_back(EMPTY).ok(); buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
 
-            KC::ECircum => { buffer.push_back(DEAD_CIRCUMFLEX).ok(); output[5] = Keyboard::E; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
-            KC::EDiaer  => { buffer.push_back(DEAD_DIAERIS).ok();    output[5] = Keyboard::E; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
-            KC::EGrave  => { buffer.push_back(DEAD_GRAVE).ok();      output[5] = Keyboard::E; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+            KC::ECircum => { buffer.push_back(DEAD_CIRCUMFLEX).ok(); output[5] = Keyboard::E; buffer.push_back(EMPTY).ok(); buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+            KC::EDiaer  => { buffer.push_back(DEAD_DIAERIS).ok();    output[5] = Keyboard::E; buffer.push_back(EMPTY).ok(); buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+            KC::EGrave  => { buffer.push_back(DEAD_GRAVE).ok();      output[5] = Keyboard::E; buffer.push_back(EMPTY).ok(); buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
 
-            KC::ICircum => { buffer.push_back(DEAD_CIRCUMFLEX).ok(); output[5] = Keyboard::I; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
-            KC::IDiaer  => { buffer.push_back(DEAD_DIAERIS).ok();    output[5] = Keyboard::I; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
-            KC::IGrave  => { buffer.push_back(DEAD_GRAVE).ok();      output[5] = Keyboard::I; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+            KC::ICircum => { buffer.push_back(DEAD_CIRCUMFLEX).ok(); output[5] = Keyboard::I; buffer.push_back(EMPTY).ok(); buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+            KC::IDiaer  => { buffer.push_back(DEAD_DIAERIS).ok();    output[5] = Keyboard::I; buffer.push_back(EMPTY).ok(); buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+            KC::IGrave  => { buffer.push_back(DEAD_GRAVE).ok();      output[5] = Keyboard::I; buffer.push_back(EMPTY).ok(); buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
 
-            KC::OCircum => { buffer.push_back(DEAD_CIRCUMFLEX).ok(); output[5] = Keyboard::O; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
-            KC::ODiaer  => { buffer.push_back(DEAD_DIAERIS).ok();    output[5] = Keyboard::O; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
-            KC::OGrave  => { buffer.push_back(DEAD_GRAVE).ok();      output[5] = Keyboard::O; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+            KC::OCircum => { buffer.push_back(DEAD_CIRCUMFLEX).ok(); output[5] = Keyboard::O; buffer.push_back(EMPTY).ok(); buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+            KC::ODiaer  => { buffer.push_back(DEAD_DIAERIS).ok();    output[5] = Keyboard::O; buffer.push_back(EMPTY).ok(); buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+            KC::OGrave  => { buffer.push_back(DEAD_GRAVE).ok();      output[5] = Keyboard::O; buffer.push_back(EMPTY).ok(); buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
 
-            KC::UCircum => { buffer.push_back(DEAD_CIRCUMFLEX).ok(); output[5] = Keyboard::U; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
-            KC::UDiaer  => { buffer.push_back(DEAD_DIAERIS).ok();    output[5] = Keyboard::U; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
-            KC::UGrave  => { buffer.push_back(DEAD_GRAVE).ok();      output[5] = Keyboard::U; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+            KC::UCircum => { buffer.push_back(DEAD_CIRCUMFLEX).ok(); output[5] = Keyboard::U; buffer.push_back(EMPTY).ok(); buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+            KC::UDiaer  => { buffer.push_back(DEAD_DIAERIS).ok();    output[5] = Keyboard::U; buffer.push_back(EMPTY).ok(); buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+            KC::UGrave  => { buffer.push_back(DEAD_GRAVE).ok();      output[5] = Keyboard::U; buffer.push_back(EMPTY).ok(); buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
 
-            KC::YCircum => { buffer.push_back(DEAD_CIRCUMFLEX).ok(); output[5] = Keyboard::Y; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
-            KC::YDiaer  => { buffer.push_back(DEAD_DIAERIS).ok();    output[5] = Keyboard::Y; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
-            KC::YGrave  => { buffer.push_back(DEAD_GRAVE).ok();      output[5] = Keyboard::Y; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+            KC::YCircum => { buffer.push_back(DEAD_CIRCUMFLEX).ok(); output[5] = Keyboard::Y; buffer.push_back(EMPTY).ok(); buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+            KC::YDiaer  => { buffer.push_back(DEAD_DIAERIS).ok();    output[5] = Keyboard::Y; buffer.push_back(EMPTY).ok(); buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+            KC::YGrave  => { buffer.push_back(DEAD_GRAVE).ok();      output[5] = Keyboard::Y; buffer.push_back(EMPTY).ok(); buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
 
             KC::Num0 => { output[5] = Keyboard::Keyboard0; buffer.push_back(output).ok(); }
             KC::Num1 => { output[5] = Keyboard::Keyboard1; buffer.push_back(output).ok(); }

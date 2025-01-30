@@ -106,12 +106,7 @@ fn main() -> ! {
     let mut uart_count_down = timer.count_down();
     uart_count_down.start(TIMER_UART_LOOP.millis());
 
-    let mut led_count_down = timer.count_down();
-    led_count_down.start(100.millis());
-
     loop {
-        if led_count_down.wait().is_ok() {}
-
         if uart_count_down.wait().is_ok() {
             match uart.receive() {
                 Ok(mail) => match mail.header {

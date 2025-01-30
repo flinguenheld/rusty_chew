@@ -3,7 +3,7 @@ pub const BUFFER_LENGTH: usize = 20;
 
 // Milliseconds
 pub const TIMER_UART_LOOP: u32 = 5;
-pub const TIMER_USB_LOOP: u32 = 25;
+pub const TIMER_USB_LOOP: u32 = 12;
 pub const TIMER_LED_STARTUP: u32 = 2_000;
 
 // pub const UART_SPEED: u32 = 115_200;

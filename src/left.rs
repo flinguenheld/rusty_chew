@@ -166,9 +166,6 @@ fn main() -> ! {
     let mut usb_count_down = timer.count_down();
     usb_count_down.start(TIMER_USB_LOOP.millis());
 
-    let mut test_count_down = timer.count_down();
-    test_count_down.start(102.millis());
-
     // --
     let mut ticks: u32 = 0;
     let mut chew = Chew::new(ticks);
