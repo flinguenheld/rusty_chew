@@ -23,6 +23,7 @@ const MAX_NOTHING_RECEIVED: u32 = 100;
 
 // Values used as a header to validated a message
 pub const HR_KEYS: u8 = 0b11010000;
+pub const HR_LED: u8 = 0b10110000;
 
 pub enum UartError {
     Capacity,
@@ -162,7 +163,7 @@ impl Uart {
         } else if let Some(first) = self.buffer.first() {
             self.counter_nothing_to_read = 0;
 
-            if first & 0b11110000 == HR_KEYS {
+            if first & 0b11110000 == HR_KEYS || first & 0b11110000 == HR_LED {
                 let l = first & 0b00001111;
 
                 if self.buffer.len() == (l + 1) as usize {

@@ -2,7 +2,7 @@ pub const HOLD_TIME: u32 = 150; // From free to held (ms)
 pub const BUFFER_LENGTH: usize = 20;
 
 // Milliseconds
-pub const TIMER_UART_LOOP: u32 = 10;
+pub const TIMER_UART_LOOP: u32 = 5;
 pub const TIMER_USB_LOOP: u32 = 25;
 pub const TIMER_LED_STARTUP: u32 = 2_000;
 

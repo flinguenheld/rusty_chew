@@ -3,9 +3,9 @@
 
 mod utils;
 use utils::gpios::Gpios;
-use utils::led::{Led, LedColor};
+use utils::led::{Led, LedColor, LED_LAYOUT_FR};
 use utils::options::TIMER_UART_LOOP;
-use utils::uart::{Uart, UartError, HR_KEYS};
+use utils::uart::{Uart, UartError, HR_KEYS, HR_LED};
 
 use waveshare_rp2040_zero as bsp;
 
@@ -106,34 +106,47 @@ fn main() -> ! {
     let mut uart_count_down = timer.count_down();
     uart_count_down.start(TIMER_UART_LOOP.millis());
 
+    let mut led_count_down = timer.count_down();
+    led_count_down.start(100.millis());
+
     loop {
+        if led_count_down.wait().is_ok() {}
+
         if uart_count_down.wait().is_ok() {
             match uart.receive() {
                 Ok(mail) => match mail.header {
                     HR_KEYS => {
-                        led.light_off();
                         let active_indexes = gpios.get_right_indexes();
                         if uart.send(HR_KEYS, &active_indexes, &mut delay).is_err() {
                             led.light_on(LedColor::Red);
                         }
                     }
-                    // TODO: add leds status
-                    _ => {
-                        // led.light_on(LedColor::Aqua);
+
+                    HR_LED => {
+                        match mail.values[0] {
+                            LED_LAYOUT_FR => led.light_on(LedColor::Aqua),
+                            _ => led.light_off(),
+                        }
+
+                        if uart.send(HR_LED, &[mail.values[0]], &mut delay).is_err() {
+                            led.light_on(LedColor::Red);
+                        }
                     }
+
+                    _ => {}
                 },
 
                 Err(UartError::NothingToRead) => {
                     // led.light_on(LedColor::Blue);
                 }
                 Err(UartError::NothingToReadMax) => {
-                    led.light_on(LedColor::Gray);
+                    led.light_on(LedColor::Yellow);
                 }
                 Err(UartError::NotComplete) => {
-                    led.light_on(LedColor::Orange);
+                    // led.light_on(LedColor::Yellow);
                 }
                 Err(UartError::Header) => {
-                    led.light_on(LedColor::Olive);
+                    // led.light_on(LedColor::Olive);
                 }
                 _ => {
                     led.light_on(LedColor::Red);

@@ -2,8 +2,9 @@ use crate::{
     keys::{Lay, KC},
     layouts::LAYOUTS,
     utils::{
+        led::LED_LAYOUT_FR,
         matrix::Matrix,
-        modifiers::Modifiers,
+        modifiers::{self, Modifiers},
         options::{
             BUFFER_LENGTH, HOLD_TIME, MOUSE_SPEED_1, MOUSE_SPEED_2, MOUSE_SPEED_3, MOUSE_SPEED_4,
             MOUSE_SPEED_DEFAULT, SCROLL_TEMP_SPEED_1, SCROLL_TEMP_SPEED_2, SCROLL_TEMP_SPEED_3,
@@ -23,6 +24,7 @@ const NB_LAYOUTS: usize = LAYOUTS.len();
 pub struct Chew {
     layouts: Vec<Lay, NB_LAYOUTS>,
     current_layout: usize,
+    led_status: u8,
 
     matrix: Matrix,
     mods: Modifiers,
@@ -37,6 +39,7 @@ impl Chew {
         Chew {
             layouts: Vec::new(),
             current_layout: 0,
+            led_status: 0,
 
             matrix: Matrix::new(ticks),
             mods: Modifiers::new(),
@@ -55,7 +58,7 @@ impl Chew {
         &mut self,
         mut key_buffer: Deque<[Keyboard; 6], BUFFER_LENGTH>,
         mut mouse_report: WheelMouseReport,
-    ) -> (Deque<[Keyboard; 6], BUFFER_LENGTH>, WheelMouseReport) {
+    ) -> (Deque<[Keyboard; 6], BUFFER_LENGTH>, WheelMouseReport, u8) {
         if self.matrix.prev != self.matrix.cur {
             // Layouts ------------------------------------------------------------------
             match self.layouts.last().unwrap_or(&Lay::Pressed(0, 0)) {
@@ -76,9 +79,10 @@ impl Chew {
                             KC::LayDead(number) => {
                                 if *mat_prev == 0 && *mat_cur > 0 {
                                     self.layouts.push(Lay::Dead(*number, index, false)).ok();
+                                    // led_status = LED_LAYOUT_FR;
 
                                     // Mandatorily jump to avoid its own key pressed
-                                    return (key_buffer, mouse_report);
+                                    return (key_buffer, mouse_report, self.led_status);
                                 }
                             }
                             _ => {}
@@ -231,6 +235,14 @@ impl Chew {
             });
         }
 
-        (key_buffer, mouse_report)
+        self.led_status = 0;
+        if let Some(last) = self.layouts.last() {
+            match last {
+                Lay::Dead(4, _, _) => self.led_status = LED_LAYOUT_FR,
+                _ => {}
+            }
+        }
+
+        (key_buffer, mouse_report, self.led_status)
     }
 }

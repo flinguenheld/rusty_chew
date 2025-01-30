@@ -9,10 +9,10 @@ mod utils;
 use chew::Chew;
 use usbd_serial::SerialPort;
 use utils::gpios::Gpios;
-use utils::led::{Led, LedColor};
+use utils::led::{Led, LedColor, LED_LAYOUT_FR};
 use utils::options::{BUFFER_LENGTH, TIMER_UART_LOOP, TIMER_USB_LOOP};
 use utils::serial::*;
-use utils::uart::{Uart, UartError, HR_KEYS};
+use utils::uart::{Uart, UartError, HR_KEYS, HR_LED};
 
 // use core::fmt::Write;
 // use core::panic;
@@ -166,6 +166,9 @@ fn main() -> ! {
     let mut usb_count_down = timer.count_down();
     usb_count_down.start(TIMER_USB_LOOP.millis());
 
+    let mut test_count_down = timer.count_down();
+    test_count_down.start(102.millis());
+
     // --
     let mut ticks: u32 = 0;
     let mut chew = Chew::new(ticks);
@@ -176,8 +179,11 @@ fn main() -> ! {
     let mut last_mouse_buttons = 0;
     let mut mouse_report = WheelMouseReport::default();
 
+    let mut led_status;
+
     loop {
-        led.light_off();
+        // led.light_off();
+
         if uart_count_down.wait().is_ok() {
             match uart.receive() {
                 Ok(mail) => match mail.header {
@@ -188,7 +194,7 @@ fn main() -> ! {
                             ticks,
                         );
 
-                        (key_buffer, mouse_report) = chew.run(key_buffer, mouse_report);
+                        (key_buffer, mouse_report, led_status) = chew.run(key_buffer, mouse_report);
 
                         // Mouse report directly done here ------------------------------
                         // Keyboard has its own timer two allow combinations
@@ -214,10 +220,21 @@ fn main() -> ! {
                             };
                         }
 
+                        // Update Led --
+                        if uart.send(HR_LED, &[led_status], &mut delay).is_err() {
+                            led.light_on(LedColor::Red);
+                        }
+                    }
+
+                    HR_LED => {
+                        match mail.values[0] {
+                            LED_LAYOUT_FR => led.light_on(LedColor::Aqua),
+                            _ => led.light_off(),
+                        }
+
                         // New loop --
                         uart.send(HR_KEYS, &[], &mut delay).ok();
                     }
-
                     _ => {
                         serial
                             .write(time("Error !!", timer.get_counter().ticks()).as_bytes())
@@ -235,7 +252,7 @@ fn main() -> ! {
                         serial.write("Send a new request -----\r\n".as_bytes()).ok();
                     }
                     err => {
-                        serial.write(err.to_serial().as_bytes()).ok();
+                        // serial.write(err.to_serial().as_bytes()).ok();
                     }
                 },
             }

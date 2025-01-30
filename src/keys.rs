@@ -1,10 +1,4 @@
-use crate::utils::{
-    modifiers::Modifiers,
-    options::{
-        BUFFER_LENGTH, MOUSE_SPEED_1, MOUSE_SPEED_2, MOUSE_SPEED_3, MOUSE_SPEED_4,
-        MOUSE_SPEED_DEFAULT,
-    },
-};
+use crate::utils::{modifiers::Modifiers, options::BUFFER_LENGTH};
 use heapless::Deque;
 use usbd_human_interface_device::{device::mouse::WheelMouseReport, page::Keyboard};
 
@@ -212,20 +206,8 @@ pub enum KC {
 impl KC {
 
     // Mouse ----------------------------------------------------------------------------
-    // pub fn usb_mouse_move(&self, mut report: WheelMouseReport, layout: &[KC; 34], matrix: &[u32; 34]) -> WheelMouseReport 
     pub fn usb_mouse_move(&self, mut report: WheelMouseReport, speed: i8) -> WheelMouseReport 
     {
-        // let speed = if let Some((key, _)) = layout.iter().zip(matrix.iter())
-        //                                                  .filter(|(k, m)| **k >= KC::MouseSpeed1 && **k <= KC::MouseSpeed4 && **m > 0)
-        //                                                  .last() {
-        //     match key {
-        //         KC::MouseSpeed1 => MOUSE_SPEED_1,
-        //         KC::MouseSpeed2 => MOUSE_SPEED_2,
-        //         KC::MouseSpeed3 => MOUSE_SPEED_3,
-        //         _               => MOUSE_SPEED_4,
-        //     }
-        // } else { MOUSE_SPEED_DEFAULT };
-
         match *self {
             KC::MouseLeft  => report.x = i8::saturating_add(report.x, -speed),
             KC::MouseDown  => report.y = i8::saturating_add(report.y,  speed),

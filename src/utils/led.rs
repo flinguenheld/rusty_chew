@@ -1,3 +1,5 @@
+use super::options::TIMER_LED_STARTUP;
+
 use core::iter::once;
 use smart_leds::{brightness, SmartLedsWrite, RGB8};
 use waveshare_rp2040_zero::hal::{
@@ -8,7 +10,9 @@ use waveshare_rp2040_zero::hal::{
 };
 use ws2812_pio::Ws2812;
 
-use super::options::TIMER_LED_STARTUP;
+// Status --
+pub const LED_LAYOUT_FR: u8 = 1;
+// pub const LED_CAPLOCK: u8 = 2;
 
 #[allow(dead_code)]
 #[derive(Clone, Copy)]
