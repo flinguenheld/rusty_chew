@@ -1,8 +1,8 @@
 use crate::{
-    keys::{Lay, KC},
+    keys::{Lay, KC, LEADER_KEY_COMBINATIONS},
     layouts::LAYOUTS,
     utils::{
-        led::LED_LAYOUT_FR,
+        led::{LED_LAYOUT_FR, LED_LEADER_KEY},
         matrix::Matrix,
         modifiers::{self, Modifiers},
         options::{
@@ -32,6 +32,9 @@ pub struct Chew {
 
     // Allow to drastically slow down the wheel
     mouse_scroll_tempo: u32,
+
+    leader_key: bool,
+    leader_buffer: Vec<KC, 3>,
 }
 
 impl Chew {
@@ -46,6 +49,9 @@ impl Chew {
             homerow_history: FnvIndexSet::new(),
 
             mouse_scroll_tempo: 0,
+
+            leader_key: false,
+            leader_buffer: Vec::new(),
         }
     }
 
@@ -79,7 +85,6 @@ impl Chew {
                             KC::LayDead(number) => {
                                 if *mat_prev == 0 && *mat_cur > 0 {
                                     self.layouts.push(Lay::Dead(*number, index, false)).ok();
-                                    // led_status = LED_LAYOUT_FR;
 
                                     // Mandatorily jump to avoid its own key pressed
                                     return (key_buffer, mouse_report, self.led_status);
@@ -96,119 +101,172 @@ impl Chew {
                 Lay::Dead(number, _, _) => *number,
             };
 
-            // Modifiers ----------------------------------------------------------------
-            LAYOUTS[self.current_layout]
-                .iter()
-                .zip(self.matrix.cur.iter())
-                .enumerate()
-                .filter(|(_, (&la, &mc))| {
-                    mc > 0
-                        && ((la >= KC::Alt && la <= KC::Shift)
-                            || (la >= KC::HomeAltA && la <= KC::HomeSftR))
-                })
-                .for_each(|(index, (layout, _))| match layout {
-                    KC::Alt => self.mods.alt = (true, index),
-                    KC::Altgr => self.mods.alt_gr = (true, index),
-                    KC::Ctrl => self.mods.ctrl = (true, index),
-                    KC::Gui => self.mods.gui = (true, index),
-                    KC::Shift => self.mods.shift = (true, index),
-
-                    KC::HomeAltA | KC::HomeAltU => self.mods.alt = (false, index),
-                    KC::HomeCtrlE | KC::HomeCtrlT => self.mods.ctrl = (false, index),
-                    KC::HomeGuiS | KC::HomeGuiI => self.mods.gui = (false, index),
-                    _ => self.mods.shift = (false, index),
-                });
-
-            self.mods.update_states(&self.matrix.cur);
-
-            // Regular keys -------------------------------------------------------------
-            for (((index, layout), mat_prev), mat_cur) in LAYOUTS[self.current_layout]
-                .iter()
-                .enumerate()
-                .zip(self.matrix.prev.iter())
-                .zip(self.matrix.cur.iter())
-                .filter(|(((index, _), _), _)| !self.mods.is_active(*index))
+            // Leader key ---------------------------------------------------------------
+            // Once activated, leave it with ESC or a wrong combination
+            if self.leader_key
+                || LAYOUTS[self.current_layout]
+                    .iter()
+                    .zip(self.matrix.cur.iter())
+                    .filter(|(&k, &m)| k == KC::LeaderKey && m > 0)
+                    .count()
+                    > 0
             {
-                match layout {
-                    k if (k >= &KC::A && k <= &KC::Yen) => {
-                        // Last key is automatically repeated by the usb crate
-                        if *mat_prev == 0 && *mat_cur > 0 {
-                            k.usb_code(&self.mods, &mut key_buffer);
-                        } else if *mat_prev > 0 && *mat_cur == 0 {
-                            KC::None.usb_code(&self.mods, &mut key_buffer);
+                self.leader_key = true;
+
+                for ((&layout, mat_prev), mat_cur) in LAYOUTS[self.current_layout]
+                    .iter()
+                    .zip(self.matrix.prev.iter())
+                    .zip(self.matrix.cur.iter())
+                    .filter(|((&k, _), _)| {
+                        (k >= KC::A && k <= KC::YDiaer) || (k >= KC::HomeAltA && k <= KC::HomeSftR)
+                    })
+                {
+                    if *mat_prev == 0 && *mat_cur > 0 {
+                        self.leader_buffer.push(layout).ok();
+                        let mut temp_buff = [KC::None; 3];
+                        for (i, v) in self.leader_buffer.iter().enumerate() {
+                            temp_buff[i] = *v;
                         }
-                    }
-                    k if (k >= &KC::ACircum && k <= &KC::YDiaer) => {
-                        if *mat_prev == 0 && *mat_cur > 0 {
-                            k.usb_code(&self.mods, &mut key_buffer);
-                        }
-                    }
-                    k if (k >= &KC::HomeAltA && k <= &KC::HomeSftR) => {
-                        // To validate the release, the press event has to be saved in the history
-                        if *mat_prev == 0 && *mat_cur > 0 {
-                            self.homerow_history.insert(index).ok();
-                        } else if *mat_prev > 0
-                            && *mat_prev < HOLD_TIME
-                            && *mat_cur == 0
-                            && self.homerow_history.contains(&index)
+
+                        if let Some(i) = LEADER_KEY_COMBINATIONS
+                            .iter()
+                            .position(|comb| comb.0 == temp_buff)
                         {
-                            k.usb_code(&self.mods, &mut key_buffer);
-                        } else if *mat_prev > 0 && *mat_cur == 0 {
-                            KC::None.usb_code(&self.mods, &mut key_buffer);
+                            LEADER_KEY_COMBINATIONS[i]
+                                .1
+                                .usb_code(&self.mods, &mut key_buffer);
+                        } else if layout != KC::Esc
+                            && LEADER_KEY_COMBINATIONS
+                                .iter()
+                                .filter(|comb| comb.0.starts_with(&self.leader_buffer))
+                                .count()
+                                > 0
+                        {
+                            continue;
                         }
-                    }
 
-                    // Mouse ------------------------------------------------------------
-                    k if (k >= &KC::MouseBtLeft && k <= &KC::MouseBtRight) => {
-                        if *mat_cur > 0 {
-                            mouse_report.buttons |= match k {
-                                KC::MouseBtLeft => 0x1,
-                                KC::MouseBtMiddle => 0x4,
-                                _ => 0x2,
-                            }
-                        } else {
-                            mouse_report.buttons &= match k {
-                                KC::MouseBtLeft => 0xFF - 0x1,
-                                KC::MouseBtMiddle => 0xFF - 0x4,
-                                _ => 0xFF - 0x2,
+                        self.leader_key = false;
+                        self.leader_buffer.clear();
+                        break;
+                    }
+                }
+            } else {
+                // Modifiers ------------------------------------------------------------
+                LAYOUTS[self.current_layout]
+                    .iter()
+                    .zip(self.matrix.cur.iter())
+                    .enumerate()
+                    .filter(|(_, (&la, &mc))| {
+                        mc > 0
+                            && ((la >= KC::Alt && la <= KC::Shift)
+                                || (la >= KC::HomeAltA && la <= KC::HomeSftR))
+                    })
+                    .for_each(|(index, (layout, _))| match layout {
+                        KC::Alt => self.mods.alt = (true, index),
+                        KC::Altgr => self.mods.alt_gr = (true, index),
+                        KC::Ctrl => self.mods.ctrl = (true, index),
+                        KC::Gui => self.mods.gui = (true, index),
+                        KC::Shift => self.mods.shift = (true, index),
+
+                        KC::HomeAltA | KC::HomeAltU => self.mods.alt = (false, index),
+                        KC::HomeCtrlE | KC::HomeCtrlT => self.mods.ctrl = (false, index),
+                        KC::HomeGuiS | KC::HomeGuiI => self.mods.gui = (false, index),
+                        _ => self.mods.shift = (false, index),
+                    });
+
+                self.mods.update_states(&self.matrix.cur);
+
+                // Regular keys ---------------------------------------------------------
+                for (((index, layout), mat_prev), mat_cur) in LAYOUTS[self.current_layout]
+                    .iter()
+                    .enumerate()
+                    .zip(self.matrix.prev.iter())
+                    .zip(self.matrix.cur.iter())
+                    .filter(|(((index, _), _), _)| !self.mods.is_active(*index))
+                {
+                    match layout {
+                        k if (k >= &KC::A && k <= &KC::Yen) => {
+                            // Last key is automatically repeated by the usb crate
+                            if *mat_prev == 0 && *mat_cur > 0 {
+                                k.usb_code(&self.mods, &mut key_buffer);
+                            } else if *mat_prev > 0 && *mat_cur == 0 {
+                                KC::None.usb_code(&self.mods, &mut key_buffer);
                             }
                         }
-                    }
-                    k if (k >= &KC::MouseLeft && k <= &KC::MouseWheelRight) => {
-                        self.mouse_scroll_tempo += 1;
-
-                        if *mat_cur > 0 {
-                            let (speed, (scroll_temp, scroll_speed)) = if let Some((key, _)) =
-                                LAYOUTS[self.current_layout]
-                                    .iter()
-                                    .zip(self.matrix.cur.iter())
-                                    .filter(|(k, m)| {
-                                        **k >= KC::MouseSpeed1 && **k <= KC::MouseSpeed4 && **m > 0
-                                    })
-                                    .last()
+                        k if (k >= &KC::ACircum && k <= &KC::YDiaer) => {
+                            if *mat_prev == 0 && *mat_cur > 0 {
+                                k.usb_code(&self.mods, &mut key_buffer);
+                            }
+                        }
+                        k if (k >= &KC::HomeAltA && k <= &KC::HomeSftR) => {
+                            // To validate the release, the press event has to be saved in the history
+                            if *mat_prev == 0 && *mat_cur > 0 {
+                                self.homerow_history.insert(index).ok();
+                            } else if *mat_prev > 0
+                                && *mat_prev < HOLD_TIME
+                                && *mat_cur == 0
+                                && self.homerow_history.contains(&index)
                             {
-                                match key {
-                                    KC::MouseSpeed1 => (MOUSE_SPEED_1, SCROLL_TEMP_SPEED_1),
-                                    KC::MouseSpeed2 => (MOUSE_SPEED_2, SCROLL_TEMP_SPEED_2),
-                                    KC::MouseSpeed3 => (MOUSE_SPEED_3, SCROLL_TEMP_SPEED_3),
-                                    _ => (MOUSE_SPEED_4, SCROLL_TEMP_SPEED_4),
+                                k.usb_code(&self.mods, &mut key_buffer);
+                            } else if *mat_prev > 0 && *mat_cur == 0 {
+                                KC::None.usb_code(&self.mods, &mut key_buffer);
+                            }
+                        }
+
+                        // Mouse --------------------------------------------------------
+                        k if (k >= &KC::MouseBtLeft && k <= &KC::MouseBtRight) => {
+                            if *mat_cur > 0 {
+                                mouse_report.buttons |= match k {
+                                    KC::MouseBtLeft => 0x1,
+                                    KC::MouseBtMiddle => 0x4,
+                                    _ => 0x2,
                                 }
                             } else {
-                                (MOUSE_SPEED_DEFAULT, SCROLL_TEMP_SPEED_DEFAULT)
-                            };
-
-                            if k <= &KC::MouseRight {
-                                mouse_report = k.usb_mouse_move(mouse_report, speed);
-                            } else {
-                                if self.mouse_scroll_tempo >= scroll_temp {
-                                    self.mouse_scroll_tempo = 0;
-                                    mouse_report = k.usb_mouse_move(mouse_report, scroll_speed);
+                                mouse_report.buttons &= match k {
+                                    KC::MouseBtLeft => 0xFF - 0x1,
+                                    KC::MouseBtMiddle => 0xFF - 0x4,
+                                    _ => 0xFF - 0x2,
                                 }
                             }
                         }
-                    }
+                        k if (k >= &KC::MouseLeft && k <= &KC::MouseWheelRight) => {
+                            self.mouse_scroll_tempo += 1;
 
-                    _ => {}
+                            if *mat_cur > 0 {
+                                let (speed, (scroll_temp, scroll_speed)) = if let Some((key, _)) =
+                                    LAYOUTS[self.current_layout]
+                                        .iter()
+                                        .zip(self.matrix.cur.iter())
+                                        .filter(|(k, m)| {
+                                            **k >= KC::MouseSpeed1
+                                                && **k <= KC::MouseSpeed4
+                                                && **m > 0
+                                        })
+                                        .last()
+                                {
+                                    match key {
+                                        KC::MouseSpeed1 => (MOUSE_SPEED_1, SCROLL_TEMP_SPEED_1),
+                                        KC::MouseSpeed2 => (MOUSE_SPEED_2, SCROLL_TEMP_SPEED_2),
+                                        KC::MouseSpeed3 => (MOUSE_SPEED_3, SCROLL_TEMP_SPEED_3),
+                                        _ => (MOUSE_SPEED_4, SCROLL_TEMP_SPEED_4),
+                                    }
+                                } else {
+                                    (MOUSE_SPEED_DEFAULT, SCROLL_TEMP_SPEED_DEFAULT)
+                                };
+
+                                if k <= &KC::MouseRight {
+                                    mouse_report = k.usb_mouse_move(mouse_report, speed);
+                                } else {
+                                    if self.mouse_scroll_tempo >= scroll_temp {
+                                        self.mouse_scroll_tempo = 0;
+                                        mouse_report = k.usb_mouse_move(mouse_report, scroll_speed);
+                                    }
+                                }
+                            }
+                        }
+
+                        _ => {}
+                    }
                 }
             }
 
@@ -235,12 +293,14 @@ impl Chew {
             });
         }
 
+        // --
         self.led_status = 0;
-        if let Some(last) = self.layouts.last() {
-            match last {
-                Lay::Dead(4, _, _) => self.led_status = LED_LAYOUT_FR,
-                _ => {}
-            }
+        match self.layouts.last().unwrap_or(&Lay::Pressed(0, 0)) {
+            Lay::Dead(4, _, _) => self.led_status = LED_LAYOUT_FR,
+            _ => {}
+        }
+        if self.leader_key {
+            self.led_status = LED_LEADER_KEY;
         }
 
         (key_buffer, mouse_report, self.led_status)

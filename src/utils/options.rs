@@ -1,5 +1,5 @@
 pub const HOLD_TIME: u32 = 150; // From free to held (ms)
-pub const BUFFER_LENGTH: usize = 20;
+pub const BUFFER_LENGTH: usize = 30;
 
 // Milliseconds
 pub const TIMER_UART_LOOP: u32 = 5;

@@ -3,7 +3,7 @@
 
 mod utils;
 use utils::gpios::Gpios;
-use utils::led::{Led, LedColor, LED_LAYOUT_FR};
+use utils::led::{Led, LedColor, LED_LAYOUT_FR, LED_LEADER_KEY};
 use utils::options::TIMER_UART_LOOP;
 use utils::uart::{Uart, UartError, HR_KEYS, HR_LED};
 
@@ -120,6 +120,7 @@ fn main() -> ! {
                     HR_LED => {
                         match mail.values[0] {
                             LED_LAYOUT_FR => led.light_on(LedColor::Aqua),
+                            LED_LEADER_KEY => led.light_on(LedColor::Blue),
                             _ => led.light_off(),
                         }
 

@@ -28,6 +28,12 @@ const DEAD_GRAVE: [Keyboard; 6] = [
 ];
 const EMPTY: [Keyboard; 6] = [Keyboard::NoEventIndicated; 6];
 
+pub const LEADER_KEY_COMBINATIONS: [([KC; 3], KC); 3] = [
+    ([KC::F, KC::L, KC::None], KC::MacroGit),
+    ([KC::M, KC::HomeAltA, KC::None], KC::MacroMail),
+    ([KC::M, KC::HomeGuiS, KC::None], KC::MacroMailShort),
+];
+
 #[derive(Clone)]
 pub enum Lay {
     Pressed(usize, usize),
@@ -37,7 +43,7 @@ pub enum Lay {
 #[rustfmt::skip]
 #[allow(dead_code)]
 #[repr(u16)]
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
 pub enum KC {
     None = 0,
 
@@ -181,7 +187,6 @@ pub enum KC {
     HomeSftN = 20006,
     HomeSftR = 20007,
 
-    // Mouse
     MouseBtLeft = 50000,
     MouseBtMiddle = 50001,
     MouseBtRight = 50002,
@@ -200,6 +205,12 @@ pub enum KC {
 
     Layout(usize) = 60000,
     LayDead(usize) = 60001,
+
+        LeaderKey = 61000,
+
+    MacroGit = 62001,
+    MacroMail = 62002,
+    MacroMailShort = 62003,
 }
 
 #[rustfmt::skip]
@@ -384,6 +395,71 @@ impl KC {
             KC::HomeSftN  => { output[5] = Keyboard::N; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); }
             KC::HomeSftR  => { output[5] = Keyboard::R; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); }
 
+            // --
+            KC::MacroGit => {
+                let no_mods = Modifiers::new();
+                // let mut cap = Modifiers::new();
+                // cap.shift = (true, 0);
+
+                KC::F.usb_code(&no_mods, buffer);
+                KC::L.usb_code(&no_mods, buffer);
+                KC::I.usb_code(&no_mods, buffer);
+                KC::N.usb_code(&no_mods, buffer);
+                KC::G.usb_code(&no_mods, buffer);
+                KC::U.usb_code(&no_mods, buffer);
+                KC::E.usb_code(&no_mods, buffer);
+                KC::N.usb_code(&no_mods, buffer);
+                KC::H.usb_code(&no_mods, buffer);
+                KC::E.usb_code(&no_mods, buffer);
+                KC::L.usb_code(&no_mods, buffer);
+                KC::D.usb_code(&no_mods, buffer);
+            }
+            KC::MacroMail => {
+                let no_mods = Modifiers::new();
+
+                KC::F.usb_code(&no_mods, buffer);
+                KC::L.usb_code(&no_mods, buffer);
+                KC::O.usb_code(&no_mods, buffer);
+                KC::R.usb_code(&no_mods, buffer);
+                KC::E.usb_code(&no_mods, buffer);
+                KC::N.usb_code(&no_mods, buffer);
+                KC::T.usb_code(&no_mods, buffer);
+                KC::At.usb_code(&no_mods, buffer);
+                KC::L.usb_code(&no_mods, buffer);
+                KC::I.usb_code(&no_mods, buffer);
+                KC::N.usb_code(&no_mods, buffer);
+                KC::G.usb_code(&no_mods, buffer);
+                KC::U.usb_code(&no_mods, buffer);
+                KC::E.usb_code(&no_mods, buffer);
+                KC::N.usb_code(&no_mods, buffer);
+                KC::H.usb_code(&no_mods, buffer);
+                KC::E.usb_code(&no_mods, buffer);
+                KC::L.usb_code(&no_mods, buffer);
+                KC::D.usb_code(&no_mods, buffer);
+                KC::Dot.usb_code(&no_mods, buffer);
+                KC::F.usb_code(&no_mods, buffer);
+                KC::R.usb_code(&no_mods, buffer);
+            }
+            KC::MacroMailShort => {
+                let no_mods = Modifiers::new();
+
+                KC::F.usb_code(&no_mods, buffer);
+                KC::At.usb_code(&no_mods, buffer);
+                KC::L.usb_code(&no_mods, buffer);
+                KC::I.usb_code(&no_mods, buffer);
+                KC::N.usb_code(&no_mods, buffer);
+                KC::G.usb_code(&no_mods, buffer);
+                KC::U.usb_code(&no_mods, buffer);
+                KC::E.usb_code(&no_mods, buffer);
+                KC::N.usb_code(&no_mods, buffer);
+                KC::H.usb_code(&no_mods, buffer);
+                KC::E.usb_code(&no_mods, buffer);
+                KC::L.usb_code(&no_mods, buffer);
+                KC::D.usb_code(&no_mods, buffer);
+                KC::Dot.usb_code(&no_mods, buffer);
+                KC::F.usb_code(&no_mods, buffer);
+                KC::R.usb_code(&no_mods, buffer);
+            }
             _ => {}
         }
     }
