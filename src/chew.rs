@@ -18,6 +18,11 @@ use usbd_human_interface_device::{device::mouse::WheelMouseReport, page::Keyboar
 
 const NB_LAYOUTS: usize = LAYOUTS.len();
 
+struct KeyIndex {
+    key: KC,
+    index: usize,
+}
+
 /// This is the core of this keyboard,
 /// The Run function proceeds all the keyboard hacks to fill the key buffer according
 /// to the LAYOUT.
@@ -30,11 +35,15 @@ pub struct Chew {
     mods: Modifiers,
     homerow_history: FnvIndexSet<usize, 8>,
 
+    homerow: Deque<KeyIndex, 10>,
+
     // Allow to drastically slow down the wheel
     mouse_scroll_tempo: u32,
 
     leader_key: bool,
     leader_buffer: Vec<KC, 3>,
+
+    last_index_printed: usize,
 }
 
 impl Chew {
@@ -48,10 +57,14 @@ impl Chew {
             mods: Modifiers::new(),
             homerow_history: FnvIndexSet::new(),
 
+            homerow: Deque::new(),
+
             mouse_scroll_tempo: 0,
 
             leader_key: false,
             leader_buffer: Vec::new(),
+
+            last_index_printed: usize::MAX,
         }
     }
 
@@ -156,27 +169,73 @@ impl Chew {
                     .iter()
                     .zip(self.matrix.cur.iter())
                     .enumerate()
-                    .filter(|(_, (&la, &mc))| {
-                        mc > 0
-                            && ((la >= KC::Alt && la <= KC::Shift)
-                                || (la >= KC::HomeAltA && la <= KC::HomeSftR))
-                    })
+                    .filter(|(_, (&la, &mc))| mc > 0 && (la >= KC::Alt && la <= KC::Shift))
                     .for_each(|(index, (layout, _))| match layout {
                         KC::Alt => self.mods.alt = (true, index),
                         KC::Altgr => self.mods.alt_gr = (true, index),
                         KC::Ctrl => self.mods.ctrl = (true, index),
                         KC::Gui => self.mods.gui = (true, index),
-                        KC::Shift => self.mods.shift = (true, index),
-
-                        KC::HomeAltA | KC::HomeAltU => self.mods.alt = (false, index),
-                        KC::HomeCtrlE | KC::HomeCtrlT => self.mods.ctrl = (false, index),
-                        KC::HomeGuiS | KC::HomeGuiI => self.mods.gui = (false, index),
-                        _ => self.mods.shift = (false, index),
+                        _ => self.mods.shift = (true, index),
                     });
 
+                // TODO still usefull ??
                 self.mods.update_states(&self.matrix.cur);
 
+                // Homerows -------------------------------------------------------------
+
+                // Get and add new active homerow keys --
+                for (((index, &key), _), _) in LAYOUTS[self.current_layout]
+                    .iter()
+                    .enumerate()
+                    .zip(self.matrix.prev.iter())
+                    .zip(self.matrix.cur.iter())
+                    .filter(|(((_, &key), &mat_prev), &mat_cur)| {
+                        (key >= KC::HomeAltA && key <= KC::HomeSftR)
+                            && (mat_prev == 0)
+                            && mat_cur > 0
+                    })
+                {
+                    self.homerow.push_back(KeyIndex { key, index }).ok();
+                }
+
+                // Manage active homerows --
+                if let Some(key_index) = self.homerow.front() {
+                    // TODO specific case with two homerow in the same time ?
+                    // First hold --
+                    // Set all homerows as held and print the regular keys
+                    if self.matrix.cur[key_index.index] > HOLD_TIME {
+                        while let Some(ki) = self.homerow.pop_front() {
+                            if ki.key >= KC::HomeAltA && ki.key <= KC::HomeSftR {
+                                match ki.key {
+                                    KC::HomeAltA | KC::HomeAltU => self.mods.alt = (true, ki.index),
+                                    KC::HomeCtrlE | KC::HomeCtrlT => {
+                                        self.mods.ctrl = (true, ki.index)
+                                    }
+                                    KC::HomeGuiS | KC::HomeGuiI => self.mods.gui = (true, ki.index),
+                                    KC::HomeSftN | KC::HomeSftR => {
+                                        self.mods.shift = (true, ki.index)
+                                    }
+                                    _ => {}
+                                }
+                            } else {
+                                ki.key.usb_code(&self.mods, &mut key_buffer);
+                                self.last_index_printed = ki.index;
+                            }
+                        }
+                    // First released bebore being held --
+                    // Print all of them with homerow pressed status
+                    } else if self.matrix.prev[key_index.index] < HOLD_TIME
+                        && self.matrix.cur[key_index.index] == 0
+                    {
+                        while let Some(ki) = self.homerow.pop_front() {
+                            ki.key.usb_code(&self.mods, &mut key_buffer);
+                            self.last_index_printed = ki.index;
+                        }
+                    }
+                }
+
                 // Regular keys ---------------------------------------------------------
+                // Filter mods prevents error with layers
                 for (((index, layout), mat_prev), mat_cur) in LAYOUTS[self.current_layout]
                     .iter()
                     .enumerate()
@@ -186,30 +245,22 @@ impl Chew {
                 {
                     match layout {
                         k if (k >= &KC::A && k <= &KC::Yen) => {
-                            // Last key is automatically repeated by the usb crate
                             if *mat_prev == 0 && *mat_cur > 0 {
-                                k.usb_code(&self.mods, &mut key_buffer);
-                            } else if *mat_prev > 0 && *mat_cur == 0 {
-                                KC::None.usb_code(&self.mods, &mut key_buffer);
+                                if self.homerow.is_empty() {
+                                    k.usb_code(&self.mods, &mut key_buffer);
+                                    self.last_index_printed = index;
+                                } else {
+                                    self.homerow.push_back(KeyIndex { key: *k, index }).ok();
+                                }
                             }
                         }
                         k if (k >= &KC::ACircum && k <= &KC::YDiaer) => {
                             if *mat_prev == 0 && *mat_cur > 0 {
-                                k.usb_code(&self.mods, &mut key_buffer);
-                            }
-                        }
-                        k if (k >= &KC::HomeAltA && k <= &KC::HomeSftR) => {
-                            // To validate the release, the press event has to be saved in the history
-                            if *mat_prev == 0 && *mat_cur > 0 {
-                                self.homerow_history.insert(index).ok();
-                            } else if *mat_prev > 0
-                                && *mat_prev < HOLD_TIME
-                                && *mat_cur == 0
-                                && self.homerow_history.contains(&index)
-                            {
-                                k.usb_code(&self.mods, &mut key_buffer);
-                            } else if *mat_prev > 0 && *mat_cur == 0 {
-                                KC::None.usb_code(&self.mods, &mut key_buffer);
+                                if self.homerow.is_empty() {
+                                    k.usb_code(&self.mods, &mut key_buffer);
+                                } else {
+                                    self.homerow.push_back(KeyIndex { key: *k, index }).ok();
+                                }
                             }
                         }
 
@@ -267,6 +318,15 @@ impl Chew {
 
                         _ => {}
                     }
+                }
+
+                // Close repeat if needed -----------------------------------------------
+                // Last key is automatically repeated by the usb crate
+                if self.last_index_printed != usize::MAX
+                    && self.matrix.cur[self.last_index_printed] == 0
+                {
+                    KC::None.usb_code(&self.mods, &mut key_buffer);
+                    self.last_index_printed = usize::MAX;
                 }
             }
 
