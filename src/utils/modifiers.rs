@@ -1,7 +1,4 @@
-use super::options::HOLD_TIME;
-
-/// Due to layers and homerow mods, modifiers have to be manage with their matrix
-/// status directly.
+/// Due to layers modifiers have to be manage with their matrix status directly.
 /// This struct keeps the state and the matrix index for each modifier.
 pub struct Modifiers {
     pub alt: (bool, usize),
@@ -11,15 +8,14 @@ pub struct Modifiers {
     pub shift: (bool, usize),
 }
 
-#[rustfmt::skip]
 impl Modifiers {
     pub fn new() -> Modifiers {
         Modifiers {
-            alt: (false, usize::MAX),
-            alt_gr: (false, usize::MAX),
-            ctrl: (false, usize::MAX),
-            gui: (false, usize::MAX),
-            shift: (false, usize::MAX),
+            alt: (false, 0),
+            alt_gr: (false, 0),
+            ctrl: (false, 0),
+            gui: (false, 0),
+            shift: (false, 0),
         }
     }
 
@@ -31,15 +27,15 @@ impl Modifiers {
             || (self.shift.0 && self.shift.1 == index)
     }
 
-    pub fn update_states(&mut self, matrix: &[u32; 34])
-    {
-        self.alt    = up(self.alt, matrix);
-        self.alt_gr = up(self.alt_gr, matrix);
-        self.ctrl   = up(self.ctrl, matrix);
-        self.gui    = up(self.gui, matrix);
-        self.shift  = up(self.shift, matrix);
+    pub fn deactivate_released(&mut self, matrix: &[u32; 34]) {
+        self.alt.0 = self.alt.0 && matrix[self.alt.1] > 0;
+        self.alt_gr.0 = self.alt_gr.0 && matrix[self.alt_gr.1] > 0;
+        self.ctrl.0 = self.ctrl.0 && matrix[self.ctrl.1] > 0;
+        self.gui.0 = self.gui.0 && matrix[self.gui.1] > 0;
+        self.shift.0 = self.shift.0 && matrix[self.shift.1] > 0;
     }
 
+    #[rustfmt::skip]
     pub fn nb_on(&self) -> usize {
         let mut nb = 0;
         if self.alt.0 { nb += 1 }
@@ -49,16 +45,4 @@ impl Modifiers {
         if self.shift.0 { nb += 1 }
         nb
     }
-}
-
-fn up(mut md: (bool, usize), matrix: &[u32; 34]) -> (bool, usize) {
-    if md.1 < usize::MAX {
-        if matrix[md.1] == 0 {
-            md.0 = false;
-            md.1 = usize::MAX;
-        } else if matrix[md.1] >= HOLD_TIME {
-            md.0 = true;
-        }
-    }
-    md
 }

@@ -35,15 +35,13 @@ pub struct Chew {
     mods: Modifiers,
     homerow_history: FnvIndexSet<usize, 8>,
 
-    homerow: Deque<KeyIndex, 10>,
+    homerow: Deque<KeyIndex, 5>,
 
     // Allow to drastically slow down the wheel
     mouse_scroll_tempo: u32,
 
     leader_key: bool,
     leader_buffer: Vec<KC, 3>,
-
-    last_index_printed: usize,
 }
 
 impl Chew {
@@ -63,8 +61,6 @@ impl Chew {
 
             leader_key: false,
             leader_buffer: Vec::new(),
-
-            last_index_printed: usize::MAX,
         }
     }
 
@@ -178,12 +174,10 @@ impl Chew {
                         _ => self.mods.shift = (true, index),
                     });
 
-                // TODO still usefull ??
-                self.mods.update_states(&self.matrix.cur);
+                self.mods.deactivate_released(&self.matrix.cur);
 
                 // Homerows -------------------------------------------------------------
-
-                // Get and add new active homerow keys --
+                // Get and add new active ones --
                 for (((index, &key), _), _) in LAYOUTS[self.current_layout]
                     .iter()
                     .enumerate()
@@ -199,27 +193,39 @@ impl Chew {
                 }
 
                 // Manage active homerows --
+                // The first entry is always a homerow key
                 if let Some(key_index) = self.homerow.front() {
-                    // TODO specific case with two homerow in the same time ?
                     // First hold --
                     // Set all homerows as held and print the regular keys
                     if self.matrix.cur[key_index.index] > HOLD_TIME {
-                        while let Some(ki) = self.homerow.pop_front() {
+                        'hr: while let Some(ki) = self.homerow.pop_front() {
                             if ki.key >= KC::HomeAltA && ki.key <= KC::HomeSftR {
-                                match ki.key {
-                                    KC::HomeAltA | KC::HomeAltU => self.mods.alt = (true, ki.index),
-                                    KC::HomeCtrlE | KC::HomeCtrlT => {
-                                        self.mods.ctrl = (true, ki.index)
+                                if self.matrix.cur[ki.index] >= HOLD_TIME {
+                                    match ki.key {
+                                        KC::HomeAltA | KC::HomeAltU => {
+                                            self.mods.alt = (true, ki.index)
+                                        }
+                                        KC::HomeCtrlE | KC::HomeCtrlT => {
+                                            self.mods.ctrl = (true, ki.index)
+                                        }
+                                        KC::HomeGuiS | KC::HomeGuiI => {
+                                            self.mods.gui = (true, ki.index)
+                                        }
+                                        KC::HomeSftN | KC::HomeSftR => {
+                                            self.mods.shift = (true, ki.index)
+                                        }
+                                        _ => {}
                                     }
-                                    KC::HomeGuiS | KC::HomeGuiI => self.mods.gui = (true, ki.index),
-                                    KC::HomeSftN | KC::HomeSftR => {
-                                        self.mods.shift = (true, ki.index)
-                                    }
-                                    _ => {}
+                                } else if self.matrix.cur[ki.index] == 0 {
+                                    ki.key.usb_code(&self.mods, &mut key_buffer);
+                                } else {
+                                    // Specific case with two homerow pressed consecutively
+                                    // If the second is in an 'in-between' state, stop here and break.
+                                    self.homerow.push_front(ki).ok();
+                                    break 'hr;
                                 }
                             } else {
                                 ki.key.usb_code(&self.mods, &mut key_buffer);
-                                self.last_index_printed = ki.index;
                             }
                         }
                     // First released bebore being held --
@@ -229,13 +235,12 @@ impl Chew {
                     {
                         while let Some(ki) = self.homerow.pop_front() {
                             ki.key.usb_code(&self.mods, &mut key_buffer);
-                            self.last_index_printed = ki.index;
                         }
                     }
                 }
 
                 // Regular keys ---------------------------------------------------------
-                // Filter mods prevents error with layers
+                // Filtering mods prevents error with layers
                 for (((index, layout), mat_prev), mat_cur) in LAYOUTS[self.current_layout]
                     .iter()
                     .enumerate()
@@ -248,7 +253,6 @@ impl Chew {
                             if *mat_prev == 0 && *mat_cur > 0 {
                                 if self.homerow.is_empty() {
                                     k.usb_code(&self.mods, &mut key_buffer);
-                                    self.last_index_printed = index;
                                 } else {
                                     self.homerow.push_back(KeyIndex { key: *k, index }).ok();
                                 }
@@ -320,13 +324,16 @@ impl Chew {
                     }
                 }
 
-                // Close repeat if needed -----------------------------------------------
-                // Last key is automatically repeated by the usb crate
-                if self.last_index_printed != usize::MAX
-                    && self.matrix.cur[self.last_index_printed] == 0
+                // Because the last key is automatically repeated by the usb crate ------
+                // Add a stop if needed
+                if LAYOUTS[self.current_layout]
+                    .iter()
+                    .zip(self.matrix.cur.iter())
+                    .filter(|(&key, &mat)| key >= KC::A && key <= KC::Question && mat > 0)
+                    .count()
+                    == 0
                 {
                     KC::None.usb_code(&self.mods, &mut key_buffer);
-                    self.last_index_printed = usize::MAX;
                 }
             }
 
