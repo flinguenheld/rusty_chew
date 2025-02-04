@@ -2,6 +2,21 @@ use crate::utils::{modifiers::Modifiers, options::BUFFER_LENGTH};
 use heapless::Deque;
 use usbd_human_interface_device::{device::mouse::WheelMouseReport, page::Keyboard};
 
+// LEADER KEY ---------------------------------------------------------------------------
+pub const LEADER_KEY_COMBINATIONS: [([KC; 3], KC); 3] = [
+    ([KC::F, KC::L, KC::None], KC::MacroGit),
+    ([KC::M, KC::HomeAltA, KC::None], KC::MacroMail),
+    ([KC::M, KC::HomeGuiS, KC::None], KC::MacroMailShort),
+];
+
+// COMBOS -------------------------------------------------------------------------------
+pub const COMBOS: [([KC; 2], KC); 2] = [
+    ([KC::Layout(1), KC::Layout(2)], KC::Layout(3)),
+    ([KC::P, KC::O], KC::At),
+];
+
+// --------------------------------------------------------------------------------------
+const EMPTY: [Keyboard; 6] = [Keyboard::NoEventIndicated; 6];
 const DEAD_CIRCUMFLEX: [Keyboard; 6] = [
     Keyboard::RightAlt,
     Keyboard::Keyboard6,
@@ -26,19 +41,7 @@ const DEAD_GRAVE: [Keyboard; 6] = [
     Keyboard::NoEventIndicated,
     Keyboard::NoEventIndicated,
 ];
-const EMPTY: [Keyboard; 6] = [Keyboard::NoEventIndicated; 6];
-
-pub const LEADER_KEY_COMBINATIONS: [([KC; 3], KC); 3] = [
-    ([KC::F, KC::L, KC::None], KC::MacroGit),
-    ([KC::M, KC::HomeAltA, KC::None], KC::MacroMail),
-    ([KC::M, KC::HomeGuiS, KC::None], KC::MacroMailShort),
-];
-
-#[derive(Clone)]
-pub enum Lay {
-    Pressed(usize, usize),
-    Dead(usize, usize, bool),
-}
+// --------------------------------------------------------------------------------------
 
 #[rustfmt::skip]
 #[allow(dead_code)]

@@ -268,7 +268,6 @@ fn main() -> ! {
                             last_printed_key = to_print;
                         }
                         Err(e) => {
-                            led.light_on(LedColor::Orange);
                             core::panic!("Failed to write keyboard report: {:?}", e)
                         }
                     }

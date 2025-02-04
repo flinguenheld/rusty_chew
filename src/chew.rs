@@ -1,22 +1,26 @@
 use crate::{
-    keys::{Lay, KC, LEADER_KEY_COMBINATIONS},
+    keys::{COMBOS, KC, LEADER_KEY_COMBINATIONS},
     layouts::LAYOUTS,
     utils::{
         led::{LED_LAYOUT_FR, LED_LEADER_KEY},
         matrix::Matrix,
-        modifiers::{self, Modifiers},
+        modifiers::Modifiers,
         options::{
-            BUFFER_LENGTH, HOLD_TIME, MOUSE_SPEED_1, MOUSE_SPEED_2, MOUSE_SPEED_3, MOUSE_SPEED_4,
-            MOUSE_SPEED_DEFAULT, SCROLL_TEMP_SPEED_1, SCROLL_TEMP_SPEED_2, SCROLL_TEMP_SPEED_3,
-            SCROLL_TEMP_SPEED_4, SCROLL_TEMP_SPEED_DEFAULT,
+            BUFFER_LENGTH, COMBO_TIME, HOLD_TIME, MOUSE_SPEED_1, MOUSE_SPEED_2, MOUSE_SPEED_3,
+            MOUSE_SPEED_4, MOUSE_SPEED_DEFAULT, SCROLL_TEMP_SPEED_1, SCROLL_TEMP_SPEED_2,
+            SCROLL_TEMP_SPEED_3, SCROLL_TEMP_SPEED_4, SCROLL_TEMP_SPEED_DEFAULT,
         },
     },
 };
 
-use heapless::{Deque, FnvIndexSet, Vec};
+use heapless::{Deque, Vec};
 use usbd_human_interface_device::{device::mouse::WheelMouseReport, page::Keyboard};
 
-const NB_LAYOUTS: usize = LAYOUTS.len();
+struct Layout {
+    number: usize,
+    matrix_index: usize,
+    dead: bool,
+}
 
 struct KeyIndex {
     key: KC,
@@ -27,13 +31,11 @@ struct KeyIndex {
 /// The Run function proceeds all the keyboard hacks to fill the key buffer according
 /// to the LAYOUT.
 pub struct Chew {
-    layouts: Vec<Lay, NB_LAYOUTS>,
-    current_layout: usize,
+    layout: Layout,
     led_status: u8,
 
     matrix: Matrix,
     mods: Modifiers,
-    homerow_history: FnvIndexSet<usize, 8>,
 
     homerow: Deque<KeyIndex, 5>,
 
@@ -47,13 +49,15 @@ pub struct Chew {
 impl Chew {
     pub fn new(ticks: u32) -> Self {
         Chew {
-            layouts: Vec::new(),
-            current_layout: 0,
+            layout: Layout {
+                number: 0,
+                matrix_index: 0,
+                dead: false,
+            },
             led_status: 0,
 
             matrix: Matrix::new(ticks),
             mods: Modifiers::new(),
-            homerow_history: FnvIndexSet::new(),
 
             homerow: Deque::new(),
 
@@ -75,45 +79,68 @@ impl Chew {
         mut mouse_report: WheelMouseReport,
     ) -> (Deque<[Keyboard; 6], BUFFER_LENGTH>, WheelMouseReport, u8) {
         if self.matrix.prev != self.matrix.cur {
-            // Layouts ------------------------------------------------------------------
-            match self.layouts.last().unwrap_or(&Lay::Pressed(0, 0)) {
-                Lay::Dead(_, _, _) => {}
-                _ => {
-                    for ((index, layout), (mat_prev, mat_cur)) in LAYOUTS[self.current_layout]
-                        .iter()
-                        .enumerate()
-                        .zip(self.matrix.prev.iter().zip(self.matrix.cur.iter()))
-                    {
-                        match layout {
-                            KC::Layout(number) => {
-                                if *mat_cur > 0 {
-                                    self.layouts.push(Lay::Pressed(*number, index)).ok();
-                                    // break;
-                                }
-                            }
-                            KC::LayDead(number) => {
-                                if *mat_prev == 0 && *mat_cur > 0 {
-                                    self.layouts.push(Lay::Dead(*number, index, false)).ok();
+            // Combos -------------------------------------------------------------------
+            // let active_keys: Vec<KC, 34> = LAYOUTS[self.layout.index]
+            //     .iter()
+            //     .zip(self.matrix.cur.iter())
+            //     .filter(|(_, &mat)| mat > 0 && mat <= COMBO_TIME)
+            //     .map(|(key, _)| *key)
+            //     .collect();
 
-                                    // Mandatorily jump to avoid its own key pressed
+            // for (combo, key) in COMBOS.iter() {
+            //     if active_keys.contains(&combo[0]) && active_keys.contains(&combo[1]) {
+            //         if *key >= KC::A && *key <= KC::YDiaer {
+            //             key.usb_code(&self.mods, &mut key_buffer);
+            //             return (key_buffer, mouse_report, self.led_status);
+            //         } else if *key >= KC::Layout(0) && *key <= KC::LayDead(0) {
+            //             KC::F.usb_code(&self.mods, &mut key_buffer);
+            //             return (key_buffer, mouse_report, self.led_status);
+            //         }
+            //     }
+            // }
+
+            // Layouts ------------------------------------------------------------------
+            if !self.layout.dead {
+                if self.matrix.cur[self.layout.matrix_index] == 0 {
+                    self.layout.number = 0;
+                }
+
+                for ((index, layout), (mat_prev, mat_cur)) in LAYOUTS[self.layout.number]
+                    .iter()
+                    .enumerate()
+                    .zip(self.matrix.prev.iter().zip(self.matrix.cur.iter()))
+                {
+                    match layout {
+                        KC::Layout(number) => {
+                            if *mat_cur > 0 {
+                                self.layout.number = *number;
+                                self.layout.matrix_index = index;
+                                self.layout.dead = false;
+                            }
+                        }
+                        KC::LayDead(number) => {
+                            if *mat_cur > 0 {
+                                self.layout.number = *number;
+                                self.layout.matrix_index = index;
+
+                                if *mat_prev == 0 {
+                                    // Set and return to avoid its own key pressed
+                                    self.layout.dead = true;
                                     return (key_buffer, mouse_report, self.led_status);
+                                } else {
+                                    self.layout.dead = false;
                                 }
                             }
-                            _ => {}
                         }
+                        _ => {}
                     }
                 }
             }
 
-            self.current_layout = match self.layouts.last().unwrap_or(&Lay::Pressed(0, 0)) {
-                Lay::Pressed(number, _) => *number,
-                Lay::Dead(number, _, _) => *number,
-            };
-
             // Leader key ---------------------------------------------------------------
             // Once activated, leave it with ESC or a wrong combination
             if self.leader_key
-                || LAYOUTS[self.current_layout]
+                || LAYOUTS[self.layout.number]
                     .iter()
                     .zip(self.matrix.cur.iter())
                     .filter(|(&k, &m)| k == KC::LeaderKey && m > 0)
@@ -122,7 +149,7 @@ impl Chew {
             {
                 self.leader_key = true;
 
-                for ((&layout, mat_prev), mat_cur) in LAYOUTS[self.current_layout]
+                for ((&layout, mat_prev), mat_cur) in LAYOUTS[self.layout.number]
                     .iter()
                     .zip(self.matrix.prev.iter())
                     .zip(self.matrix.cur.iter())
@@ -161,7 +188,7 @@ impl Chew {
                 }
             } else {
                 // Modifiers ------------------------------------------------------------
-                LAYOUTS[self.current_layout]
+                LAYOUTS[self.layout.number]
                     .iter()
                     .zip(self.matrix.cur.iter())
                     .enumerate()
@@ -178,7 +205,7 @@ impl Chew {
 
                 // Homerows -------------------------------------------------------------
                 // Get and add new active ones --
-                for (((index, &key), _), _) in LAYOUTS[self.current_layout]
+                for (((index, &key), _), _) in LAYOUTS[self.layout.number]
                     .iter()
                     .enumerate()
                     .zip(self.matrix.prev.iter())
@@ -241,7 +268,7 @@ impl Chew {
 
                 // Regular keys ---------------------------------------------------------
                 // Filtering mods prevents error with layers
-                for (((index, layout), mat_prev), mat_cur) in LAYOUTS[self.current_layout]
+                for (((index, layout), mat_prev), mat_cur) in LAYOUTS[self.layout.number]
                     .iter()
                     .enumerate()
                     .zip(self.matrix.prev.iter())
@@ -251,6 +278,8 @@ impl Chew {
                     match layout {
                         k if (k >= &KC::A && k <= &KC::Yen) => {
                             if *mat_prev == 0 && *mat_cur > 0 {
+                                self.layout.dead = false;
+
                                 if self.homerow.is_empty() {
                                     k.usb_code(&self.mods, &mut key_buffer);
                                 } else {
@@ -260,6 +289,8 @@ impl Chew {
                         }
                         k if (k >= &KC::ACircum && k <= &KC::YDiaer) => {
                             if *mat_prev == 0 && *mat_cur > 0 {
+                                self.layout.dead = false;
+
                                 if self.homerow.is_empty() {
                                     k.usb_code(&self.mods, &mut key_buffer);
                                 } else {
@@ -289,7 +320,7 @@ impl Chew {
 
                             if *mat_cur > 0 {
                                 let (speed, (scroll_temp, scroll_speed)) = if let Some((key, _)) =
-                                    LAYOUTS[self.current_layout]
+                                    LAYOUTS[self.layout.number]
                                         .iter()
                                         .zip(self.matrix.cur.iter())
                                         .filter(|(k, m)| {
@@ -326,7 +357,7 @@ impl Chew {
 
                 // Because the last key is automatically repeated by the usb crate ------
                 // Add a stop if needed
-                if LAYOUTS[self.current_layout]
+                if LAYOUTS[self.layout.number]
                     .iter()
                     .zip(self.matrix.cur.iter())
                     .filter(|(&key, &mat)| key >= KC::A && key <= KC::Question && mat > 0)
@@ -336,35 +367,12 @@ impl Chew {
                     KC::None.usb_code(&self.mods, &mut key_buffer);
                 }
             }
-
-            // --
-            self.homerow_history
-                .retain(|&index| !(self.matrix.prev[index] > 0 && self.matrix.cur[index] == 0));
-            self.layouts.retain_mut(|l| match l {
-                Lay::Pressed(_, index) => self.matrix.cur[*index] > 0,
-                Lay::Dead(_, index, done) => {
-                    if !*done {
-                        if self.matrix.prev[*index] == 0 && self.matrix.cur[*index] > 0 {
-                            *done = true;
-                        } else if self.matrix.cur[*index] == 0 {
-                            *done = self.matrix.cur.iter().filter(|c| **c > 0).count()
-                                > self.mods.nb_on()
-                        } else if self.matrix.cur[*index] > HOLD_TIME {
-                            *done = self.matrix.cur.iter().filter(|c| **c > 0).count()
-                                > self.mods.nb_on() + 1
-                        }
-                    }
-
-                    !(*done && self.matrix.cur[*index] < HOLD_TIME)
-                }
-            });
         }
 
         // --
         self.led_status = 0;
-        match self.layouts.last().unwrap_or(&Lay::Pressed(0, 0)) {
-            Lay::Dead(4, _, _) => self.led_status = LED_LAYOUT_FR,
-            _ => {}
+        if self.layout.number == 4 {
+            self.led_status = LED_LAYOUT_FR;
         }
         if self.leader_key {
             self.led_status = LED_LEADER_KEY;
