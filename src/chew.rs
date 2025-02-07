@@ -1,20 +1,20 @@
 use crate::{
-    keys::{COMBOS, KC, LEADER_KEY_COMBINATIONS},
+    keys::{Buffer, COMBOS, KC, LEADER_KEY_COMBINATIONS},
     layouts::LAYOUTS,
     utils::{
         led::{LED_LAYOUT_FR, LED_LEADER_KEY},
         matrix::Matrix,
         modifiers::Modifiers,
         options::{
-            BUFFER_LENGTH, COMBO_TIME, HOLD_TIME, MOUSE_SPEED_1, MOUSE_SPEED_2, MOUSE_SPEED_3,
-            MOUSE_SPEED_4, MOUSE_SPEED_DEFAULT, SCROLL_TEMP_SPEED_1, SCROLL_TEMP_SPEED_2,
-            SCROLL_TEMP_SPEED_3, SCROLL_TEMP_SPEED_4, SCROLL_TEMP_SPEED_DEFAULT,
+            COMBO_TIME, HOLD_TIME, MOUSE_SPEED_1, MOUSE_SPEED_2, MOUSE_SPEED_3, MOUSE_SPEED_4,
+            MOUSE_SPEED_DEFAULT, SCROLL_TEMP_SPEED_1, SCROLL_TEMP_SPEED_2, SCROLL_TEMP_SPEED_3,
+            SCROLL_TEMP_SPEED_4, SCROLL_TEMP_SPEED_DEFAULT,
         },
     },
 };
 
 use heapless::{Deque, Vec};
-use usbd_human_interface_device::{device::mouse::WheelMouseReport, page::Keyboard};
+use usbd_human_interface_device::device::mouse::WheelMouseReport;
 
 struct Layout {
     number: usize,
@@ -75,29 +75,29 @@ impl Chew {
 
     pub fn run(
         &mut self,
-        mut key_buffer: Deque<[Keyboard; 6], BUFFER_LENGTH>,
+        mut key_buffer: Buffer,
         mut mouse_report: WheelMouseReport,
-    ) -> (Deque<[Keyboard; 6], BUFFER_LENGTH>, WheelMouseReport, u8) {
+    ) -> (Buffer, WheelMouseReport, u8) {
         if self.matrix.prev != self.matrix.cur {
             // Combos -------------------------------------------------------------------
-            // let active_keys: Vec<KC, 34> = LAYOUTS[self.layout.index]
-            //     .iter()
-            //     .zip(self.matrix.cur.iter())
-            //     .filter(|(_, &mat)| mat > 0 && mat <= COMBO_TIME)
-            //     .map(|(key, _)| *key)
-            //     .collect();
+            let active_keys: Vec<KC, 34> = LAYOUTS[self.layout.number]
+                .iter()
+                .zip(self.matrix.cur.iter())
+                .filter(|(_, &mat)| mat > 0 && mat <= COMBO_TIME)
+                .map(|(key, _)| *key)
+                .collect();
 
-            // for (combo, key) in COMBOS.iter() {
-            //     if active_keys.contains(&combo[0]) && active_keys.contains(&combo[1]) {
-            //         if *key >= KC::A && *key <= KC::YDiaer {
-            //             key.usb_code(&self.mods, &mut key_buffer);
-            //             return (key_buffer, mouse_report, self.led_status);
-            //         } else if *key >= KC::Layout(0) && *key <= KC::LayDead(0) {
-            //             KC::F.usb_code(&self.mods, &mut key_buffer);
-            //             return (key_buffer, mouse_report, self.led_status);
-            //         }
-            //     }
-            // }
+            for (combo, key) in COMBOS.iter() {
+                if active_keys.contains(&combo[0]) && active_keys.contains(&combo[1]) {
+                    if *key >= KC::A && *key <= KC::YDiaer {
+                        key_buffer = key.usb_code(key_buffer, &self.mods);
+                        return (key_buffer, mouse_report, self.led_status);
+                    } else if *key >= KC::Layout(0) && *key <= KC::LayDead(0) {
+                        // KC::F.usb_code(&self.mods, &mut key_buffer);
+                        return (key_buffer, mouse_report, self.led_status);
+                    }
+                }
+            }
 
             // Layouts ------------------------------------------------------------------
             if !self.layout.dead {
@@ -168,9 +168,9 @@ impl Chew {
                             .iter()
                             .position(|comb| comb.0 == temp_buff)
                         {
-                            LEADER_KEY_COMBINATIONS[i]
+                            key_buffer = LEADER_KEY_COMBINATIONS[i]
                                 .1
-                                .usb_code(&self.mods, &mut key_buffer);
+                                .usb_code(key_buffer, &self.mods);
                         } else if layout != KC::Esc
                             && LEADER_KEY_COMBINATIONS
                                 .iter()
@@ -244,7 +244,7 @@ impl Chew {
                                         _ => {}
                                     }
                                 } else if self.matrix.cur[ki.index] == 0 {
-                                    ki.key.usb_code(&self.mods, &mut key_buffer);
+                                    key_buffer = ki.key.usb_code(key_buffer, &self.mods);
                                 } else {
                                     // Specific case with two homerow pressed consecutively
                                     // If the second is in an 'in-between' state, stop here and break.
@@ -252,7 +252,7 @@ impl Chew {
                                     break 'hr;
                                 }
                             } else {
-                                ki.key.usb_code(&self.mods, &mut key_buffer);
+                                key_buffer = ki.key.usb_code(key_buffer, &self.mods);
                             }
                         }
                     // First released bebore being held --
@@ -261,10 +261,37 @@ impl Chew {
                         && self.matrix.cur[key_index.index] == 0
                     {
                         while let Some(ki) = self.homerow.pop_front() {
-                            ki.key.usb_code(&self.mods, &mut key_buffer);
+                            key_buffer = ki.key.usb_code(key_buffer, &self.mods);
                         }
                     }
                 }
+                // CLEAN IT  ---------------------------------------------------------
+                // CLEAN IT  ---------------------------------------------------------
+
+                // To allow held repetition, do it only if there no other active key
+                if !LAYOUTS[self.layout.number]
+                    .iter()
+                    .zip(self.matrix.cur.iter())
+                    .any(|(&k, &m)| m > 0 && k >= KC::A && k <= KC::YDiaer)
+                {
+                    if self.mods.alt.0 {
+                        key_buffer = KC::Alt.usb_code(key_buffer, &self.mods);
+                    }
+                    if self.mods.alt_gr.0 {
+                        key_buffer = KC::Altgr.usb_code(key_buffer, &self.mods);
+                    }
+                    if self.mods.ctrl.0 {
+                        key_buffer = KC::Ctrl.usb_code(key_buffer, &self.mods);
+                    }
+                    if self.mods.gui.0 {
+                        key_buffer = KC::Gui.usb_code(key_buffer, &self.mods);
+                    }
+                    if self.mods.shift.0 {
+                        key_buffer = KC::Shift.usb_code(key_buffer, &self.mods);
+                    }
+                }
+                // CLEAN IT  ---------------------------------------------------------
+                // CLEAN IT  ---------------------------------------------------------
 
                 // Regular keys ---------------------------------------------------------
                 // Filtering mods prevents error with layers
@@ -277,22 +304,22 @@ impl Chew {
                 {
                     match layout {
                         k if (k >= &KC::A && k <= &KC::Yen) => {
-                            if *mat_prev == 0 && *mat_cur > 0 {
+                            if *mat_prev < COMBO_TIME && *mat_cur >= COMBO_TIME {
                                 self.layout.dead = false;
 
                                 if self.homerow.is_empty() {
-                                    k.usb_code(&self.mods, &mut key_buffer);
+                                    key_buffer = k.usb_code(key_buffer, &self.mods);
                                 } else {
                                     self.homerow.push_back(KeyIndex { key: *k, index }).ok();
                                 }
                             }
                         }
                         k if (k >= &KC::ACircum && k <= &KC::YDiaer) => {
-                            if *mat_prev == 0 && *mat_cur > 0 {
+                            if *mat_prev < COMBO_TIME && *mat_cur >= COMBO_TIME {
                                 self.layout.dead = false;
 
                                 if self.homerow.is_empty() {
-                                    k.usb_code(&self.mods, &mut key_buffer);
+                                    key_buffer = k.usb_code(key_buffer, &self.mods);
                                 } else {
                                     self.homerow.push_back(KeyIndex { key: *k, index }).ok();
                                 }
@@ -342,11 +369,9 @@ impl Chew {
 
                                 if k <= &KC::MouseRight {
                                     mouse_report = k.usb_mouse_move(mouse_report, speed);
-                                } else {
-                                    if self.mouse_scroll_tempo >= scroll_temp {
-                                        self.mouse_scroll_tempo = 0;
-                                        mouse_report = k.usb_mouse_move(mouse_report, scroll_speed);
-                                    }
+                                } else if self.mouse_scroll_tempo >= scroll_temp {
+                                    self.mouse_scroll_tempo = 0;
+                                    mouse_report = k.usb_mouse_move(mouse_report, scroll_speed);
                                 }
                             }
                         }
@@ -364,7 +389,7 @@ impl Chew {
                     .count()
                     == 0
                 {
-                    KC::None.usb_code(&self.mods, &mut key_buffer);
+                    key_buffer = KC::None.usb_code(key_buffer, &self.mods);
                 }
             }
         }

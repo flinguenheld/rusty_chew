@@ -1,3 +1,6 @@
+use heapless::Vec;
+use usbd_human_interface_device::page::Keyboard;
+
 /// Due to layers modifiers have to be manage with their matrix status directly.
 /// This struct keeps the state and the matrix index for each modifier.
 pub struct Modifiers {
@@ -25,6 +28,19 @@ impl Modifiers {
             || (self.ctrl.0 && self.ctrl.1 == index)
             || (self.gui.0 && self.gui.1 == index)
             || (self.shift.0 && self.shift.1 == index)
+    }
+
+    #[rustfmt::skip]
+    pub fn active(&self) -> Vec<Keyboard, 5> {
+        let mut output = Vec::new();
+
+        if self.alt.0    { output.push(Keyboard::LeftAlt).ok(); }
+        if self.alt_gr.0 { output.push(Keyboard::RightAlt).ok(); }
+        if self.ctrl.0   { output.push(Keyboard::LeftControl).ok(); }
+        if self.gui.0    { output.push(Keyboard::LeftGUI).ok(); }
+        if self.shift.0  { output.push(Keyboard::LeftShift).ok(); }
+
+        output
     }
 
     pub fn deactivate_released(&mut self, matrix: &[u32; 34]) {

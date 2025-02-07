@@ -7,17 +7,18 @@ mod layouts;
 mod utils;
 
 use chew::Chew;
+use keys::Buffer;
 use usbd_serial::SerialPort;
 use utils::gpios::Gpios;
 use utils::led::{Led, LedColor, LED_LAYOUT_FR, LED_LEADER_KEY};
-use utils::options::{BUFFER_LENGTH, TIMER_UART_LOOP, TIMER_USB_LOOP};
+use utils::options::{BUFFER_KEY_LENGTH, TIMER_UART_LOOP, TIMER_USB_LOOP};
 use utils::serial::*;
 use utils::uart::{Uart, UartError, HR_KEYS, HR_LED};
 
 // use core::fmt::Write;
 // use core::panic;
 
-use heapless::Deque;
+use heapless::Vec;
 
 use waveshare_rp2040_zero as bsp;
 
@@ -170,11 +171,12 @@ fn main() -> ! {
     let mut ticks: u32 = 0;
     let mut chew = Chew::new(ticks);
 
-    let mut key_buffer: Deque<[Keyboard; 6], BUFFER_LENGTH> = Deque::new();
-    let mut last_printed_key: [Keyboard; 6] = [Keyboard::NoEventIndicated; 6];
+    let mut key_buffer = Buffer::new();
+    let mut last_printed_key: Vec<Keyboard, BUFFER_KEY_LENGTH> = Vec::new();
+    let mut key_buffer_tempo = 0;
 
-    let mut last_mouse_buttons = 0;
     let mut mouse_report = WheelMouseReport::default();
+    let mut last_mouse_buttons = 0;
 
     let mut led_status;
 
@@ -249,7 +251,7 @@ fn main() -> ! {
                         uart.send(HR_KEYS, &[], &mut delay).ok();
                         serial.write("Send a new request -----\r\n".as_bytes()).ok();
                     }
-                    err => {
+                    _err => {
                         // serial.write(err.to_serial().as_bytes()).ok();
                     }
                 },
@@ -257,14 +259,16 @@ fn main() -> ! {
         }
 
         // USB --------------------------------------------------------------------------
-        if usb_count_down.wait().is_ok() {
-            if let Some(to_print) = key_buffer.pop_front() {
+        if usb_count_down.wait().is_ok() && key_buffer_tempo <= ticks {
+            if let Some((to_print, tempo)) = key_buffer.keys.pop_front() {
                 if to_print != last_printed_key {
                     let keyboard = rusty_chew.device::<NKROBootKeyboard<'_, _>, _>();
-                    match keyboard.write_report(to_print) {
+                    match keyboard.write_report(to_print.clone()) {
                         Err(UsbHidError::WouldBlock) => {}
                         Err(UsbHidError::Duplicate) => {}
                         Ok(_) => {
+                            // TODO add an infinite sum
+                            key_buffer_tempo = ticks + tempo;
                             last_printed_key = to_print;
                         }
                         Err(e) => {

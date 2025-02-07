@@ -1,5 +1,8 @@
-use crate::utils::{modifiers::Modifiers, options::BUFFER_LENGTH};
-use heapless::Deque;
+#![cfg_attr(rustfmt, rustfmt_skip)]
+use crate::utils::{ modifiers::Modifiers,
+           options::{BUFFER_KEY_LENGTH, BUFFER_LENGTH, TEMPO_DEAD_KEY, TEMPO_MACRO},
+};
+use heapless::{Deque, Vec};
 use usbd_human_interface_device::{device::mouse::WheelMouseReport, page::Keyboard};
 
 // LEADER KEY ---------------------------------------------------------------------------
@@ -16,31 +19,47 @@ pub const COMBOS: [([KC; 2], KC); 2] = [
 ];
 
 // --------------------------------------------------------------------------------------
-const EMPTY: [Keyboard; 6] = [Keyboard::NoEventIndicated; 6];
-const DEAD_CIRCUMFLEX: [Keyboard; 6] = [
-    Keyboard::RightAlt,
-    Keyboard::Keyboard6,
-    Keyboard::NoEventIndicated,
-    Keyboard::NoEventIndicated,
-    Keyboard::NoEventIndicated,
-    Keyboard::NoEventIndicated,
-];
-const DEAD_DIAERIS: [Keyboard; 6] = [
-    Keyboard::LeftShift,
-    Keyboard::RightAlt,
-    Keyboard::Apostrophe,
-    Keyboard::NoEventIndicated,
-    Keyboard::NoEventIndicated,
-    Keyboard::NoEventIndicated,
-];
-const DEAD_GRAVE: [Keyboard; 6] = [
-    Keyboard::RightAlt,
-    Keyboard::Grave,
-    Keyboard::NoEventIndicated,
-    Keyboard::NoEventIndicated,
-    Keyboard::NoEventIndicated,
-    Keyboard::NoEventIndicated,
-];
+const DEAD_CIRCUMFLEX: [Keyboard; 2] = [Keyboard::RightAlt,  Keyboard::Keyboard6];
+const DEAD_DIAERIS:    [Keyboard; 3] = [Keyboard::LeftShift, Keyboard::RightAlt, Keyboard::Apostrophe, ];
+const DEAD_GRAVE:      [Keyboard; 2] = [Keyboard::RightAlt,  Keyboard::Grave];
+
+// --------------------------------------------------------------------------------------
+// Help KC conversion along.
+// This buffer is fill here to be then empty by the writing report.
+// Each entry is a vec of Keyboard pages followed by a tempo (a break can be mandatory e.q with dead keys).
+pub struct Buffer {
+    pub keys: Deque<(Vec<Keyboard, BUFFER_KEY_LENGTH>, u32), BUFFER_LENGTH>,
+}
+
+impl Buffer {
+    pub fn new() -> Self {
+        Buffer { keys: Deque::new() }
+    }
+
+    // Add a new entry in the Deque with active mods (without excluded), the keys and set the tempo.
+    fn add(mut self, keys: &[Keyboard], mods: &Modifiers, excluded_mods: &[Keyboard], tempo: u32) -> Self {
+        let mut new = (Vec::new(), tempo);
+        new.0.extend(mods.active()
+                         .iter()
+                         .filter(|m| !excluded_mods.contains(m))
+                         .copied());
+        new.0.extend(keys.iter().copied());
+        self.keys.push_back(new).ok();
+        self
+    }
+
+    fn add_simple(self, keys: &[Keyboard], mods: &Modifiers) -> Self {
+        self.add(keys, mods, &[], 0)
+    }
+
+    fn add_no_mods(mut self, keys: &[Keyboard], tempo: u32) -> Self {
+        let mut new = (Vec::new(), tempo);
+        new.0.extend(keys.iter().copied());
+        self.keys.push_back(new).ok();
+        self
+    }
+}
+
 // --------------------------------------------------------------------------------------
 
 #[rustfmt::skip]
@@ -190,6 +209,10 @@ pub enum KC {
     HomeSftN = 20006,
     HomeSftR = 20007,
 
+        DeadCircumflex = 30000,
+        DeadDiaeris = 30001,
+        DeadGrave = 30002,
+    
     MouseBtLeft = 50000,
     MouseBtMiddle = 50001,
     MouseBtRight = 50002,
@@ -216,254 +239,231 @@ pub enum KC {
     MacroMailShort = 62003,
 }
 
-#[rustfmt::skip]
 impl KC {
-
     // Mouse ----------------------------------------------------------------------------
-    pub fn usb_mouse_move(&self, mut report: WheelMouseReport, speed: i8) -> WheelMouseReport 
-    {
+    pub fn usb_mouse_move(&self, mut report: WheelMouseReport, speed: i8) -> WheelMouseReport {
         match *self {
             KC::MouseLeft  => report.x = i8::saturating_add(report.x, -speed),
-            KC::MouseDown  => report.y = i8::saturating_add(report.y,  speed),
+            KC::MouseDown  => report.y = i8::saturating_add(report.y, speed),
             KC::MouseUp    => report.y = i8::saturating_add(report.y, -speed),
-            KC::MouseRight => report.x = i8::saturating_add(report.x,  speed),
+            KC::MouseRight => report.x = i8::saturating_add(report.x, speed),
 
-            KC::MouseWheelLeft  => report.horizontal_wheel = i8::saturating_add(report.horizontal_wheel,  speed),
-            KC::MouseWheelDown  => report.vertical_wheel   = i8::saturating_add(report.vertical_wheel,   -speed),
-            KC::MouseWheelUp    => report.vertical_wheel   = i8::saturating_add(report.vertical_wheel,    speed),
+            KC::MouseWheelLeft  => report.horizontal_wheel = i8::saturating_add(report.horizontal_wheel, speed),
+            KC::MouseWheelDown  => report.vertical_wheel   = i8::saturating_add(report.vertical_wheel, -speed),
+            KC::MouseWheelUp    => report.vertical_wheel   = i8::saturating_add(report.vertical_wheel, speed),
             KC::MouseWheelRight => report.horizontal_wheel = i8::saturating_add(report.horizontal_wheel, -speed),
-            _=>{}
+            _ => {}
         }
         report
     }
 
     // Keyboard -------------------------------------------------------------------------
-    fn new_combination(&self, modifiers: &Modifiers) -> [Keyboard; 6] {
-        let mut output = EMPTY;
-
-        // Exclude numbers and symbols from shift
-        if (modifiers.shift.0 || *self == KC::Shift) && (*self < KC::Num0 || *self > KC::Yen) { output[0] = Keyboard::LeftShift; }
-        if modifiers.alt.0    || *self == KC::Alt {                                             output[1] = Keyboard::LeftAlt; }
-        if modifiers.alt_gr.0 || *self == KC::Altgr {                                           output[2] = Keyboard::RightAlt; }
-        if modifiers.ctrl.0   || *self == KC::Ctrl {                                            output[3] = Keyboard::LeftControl; }
-        if modifiers.gui.0    || *self == KC::Gui {                                             output[4] = Keyboard::LeftGUI; }
-
-        output
-    }
-
     /// Convert a Chew keycode into an array of Keyboard page.
-    /// It allows the usb write report to print each key with its modifiers.
-    #[rustfmt::skip]
-    pub fn usb_code(&self, modifiers: &Modifiers, buffer: &mut Deque<[Keyboard; 6], BUFFER_LENGTH>) {
-
-        let mut output = self.new_combination(modifiers);
-
+    pub fn usb_code(&self, buffer: Buffer, mods: &Modifiers) -> Buffer {
         match *self {
-            KC::None => { buffer.push_back([Keyboard::NoEventIndicated; 6]).ok(); },
+            KC::None => buffer.add_simple(&[Keyboard::NoEventIndicated], mods),
 
-            KC::A => { output[5] = Keyboard::A; buffer.push_back(output).ok(); },
-            KC::B => { output[5] = Keyboard::B; buffer.push_back(output).ok(); },
-            KC::C => { output[5] = Keyboard::C; buffer.push_back(output).ok(); },
-            KC::D => { output[5] = Keyboard::D; buffer.push_back(output).ok(); },
-            KC::E => { output[5] = Keyboard::E; buffer.push_back(output).ok(); },
-            KC::F => { output[5] = Keyboard::F; buffer.push_back(output).ok(); },
-            KC::G => { output[5] = Keyboard::G; buffer.push_back(output).ok(); },
-            KC::H => { output[5] = Keyboard::H; buffer.push_back(output).ok(); },
-            KC::I => { output[5] = Keyboard::I; buffer.push_back(output).ok(); },
-            KC::J => { output[5] = Keyboard::J; buffer.push_back(output).ok(); },
-            KC::K => { output[5] = Keyboard::K; buffer.push_back(output).ok(); },
-            KC::L => { output[5] = Keyboard::L; buffer.push_back(output).ok(); },
-            KC::M => { output[5] = Keyboard::M; buffer.push_back(output).ok(); },
-            KC::N => { output[5] = Keyboard::N; buffer.push_back(output).ok(); },
-            KC::O => { output[5] = Keyboard::O; buffer.push_back(output).ok(); },
-            KC::P => { output[5] = Keyboard::P; buffer.push_back(output).ok(); },
-            KC::Q => { output[5] = Keyboard::Q; buffer.push_back(output).ok(); },
-            KC::R => { output[5] = Keyboard::R; buffer.push_back(output).ok(); },
-            KC::S => { output[5] = Keyboard::S; buffer.push_back(output).ok(); },
-            KC::T => { output[5] = Keyboard::T; buffer.push_back(output).ok(); },
-            KC::U => { output[5] = Keyboard::U; buffer.push_back(output).ok(); },
-            KC::V => { output[5] = Keyboard::V; buffer.push_back(output).ok(); },
-            KC::W => { output[5] = Keyboard::W; buffer.push_back(output).ok(); },
-            KC::X => { output[5] = Keyboard::X; buffer.push_back(output).ok(); },
-            KC::Y => { output[5] = Keyboard::Y; buffer.push_back(output).ok(); },
-            KC::Z => { output[5] = Keyboard::Z; buffer.push_back(output).ok(); },
+            KC::A => buffer.add_simple(&[Keyboard::A], mods),
+            KC::B => buffer.add_simple(&[Keyboard::B], mods),
+            KC::C => buffer.add_simple(&[Keyboard::C], mods),
+            KC::D => buffer.add_simple(&[Keyboard::D], mods),
+            KC::E => buffer.add_simple(&[Keyboard::E], mods),
+            KC::F => buffer.add_simple(&[Keyboard::F], mods),
+            KC::G => buffer.add_simple(&[Keyboard::G], mods),
+            KC::H => buffer.add_simple(&[Keyboard::H], mods),
+            KC::I => buffer.add_simple(&[Keyboard::I], mods),
+            KC::J => buffer.add_simple(&[Keyboard::J], mods),
+            KC::K => buffer.add_simple(&[Keyboard::K], mods),
+            KC::L => buffer.add_simple(&[Keyboard::L], mods),
+            KC::M => buffer.add_simple(&[Keyboard::M], mods),
+            KC::N => buffer.add_simple(&[Keyboard::N], mods),
+            KC::O => buffer.add_simple(&[Keyboard::O], mods),
+            KC::P => buffer.add_simple(&[Keyboard::P], mods),
+            KC::Q => buffer.add_simple(&[Keyboard::Q], mods),
+            KC::R => buffer.add_simple(&[Keyboard::R], mods),
+            KC::S => buffer.add_simple(&[Keyboard::S], mods),
+            KC::T => buffer.add_simple(&[Keyboard::T], mods),
+            KC::U => buffer.add_simple(&[Keyboard::U], mods),
+            KC::V => buffer.add_simple(&[Keyboard::V], mods),
+            KC::W => buffer.add_simple(&[Keyboard::W], mods),
+            KC::X => buffer.add_simple(&[Keyboard::X], mods),
+            KC::Y => buffer.add_simple(&[Keyboard::Y], mods),
+            KC::Z => buffer.add_simple(&[Keyboard::Z], mods),
 
-            KC::CCedilla   => { output[2] = Keyboard::RightAlt; output[5] = Keyboard::Comma;      buffer.push_back(output).ok(); },
-            KC::EAcute     => { output[2] = Keyboard::RightAlt; output[5] = Keyboard::E;          buffer.push_back(output).ok(); },
-            KC::AE         => { output[2] = Keyboard::RightAlt; output[5] = Keyboard::Z;          buffer.push_back(output).ok(); },
-            KC::OE         => { output[2] = Keyboard::RightAlt; output[5] = Keyboard::K;          buffer.push_back(output).ok(); },
+            KC::CCedilla => buffer.add(&[Keyboard::RightAlt, Keyboard::Comma], mods, &[Keyboard::RightAlt], 0),
+            KC::EAcute   => buffer.add(&[Keyboard::RightAlt, Keyboard::E],     mods, &[Keyboard::RightAlt], 0),
+            KC::AE       => buffer.add(&[Keyboard::RightAlt, Keyboard::Z],     mods, &[Keyboard::RightAlt], 0),
+            KC::OE       => buffer.add(&[Keyboard::RightAlt, Keyboard::K],     mods, &[Keyboard::RightAlt], 0),
 
-            KC::Enter     => {                                  output[5] = Keyboard::ReturnEnter;     buffer.push_back(output).ok(); },
-            KC::Space     => {                                  output[5] = Keyboard::Space;           buffer.push_back(output).ok(); },
-            KC::Esc       => {                                  output[5] = Keyboard::Escape;          buffer.push_back(output).ok(); },
-            KC::Del       => {                                  output[5] = Keyboard::DeleteBackspace; buffer.push_back(output).ok(); },
-            KC::BackSpace => {                                  output[5] = Keyboard::DeleteForward;   buffer.push_back(output).ok(); },
-            KC::Tab       => {                                  output[5] = Keyboard::Tab;             buffer.push_back(output).ok(); },
-            KC::STab      => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Tab;             buffer.push_back(output).ok(); },
-            KC::Home      => {                                  output[5] = Keyboard::Home;            buffer.push_back(output).ok(); },
-            KC::End       => {                                  output[5] = Keyboard::End;             buffer.push_back(output).ok(); },
-            KC::PageUp    => {                                  output[5] = Keyboard::PageUp;          buffer.push_back(output).ok(); },
-            KC::PageDown  => {                                  output[5] = Keyboard::PageDown;        buffer.push_back(output).ok(); },
+            KC::Enter     => buffer.add_simple(&[Keyboard::ReturnEnter],       mods),
+            KC::Space     => buffer.add_simple(&[Keyboard::Space],             mods),
+            KC::Esc       => buffer.add_simple(&[Keyboard::Escape],            mods),
+            KC::Del       => buffer.add_simple(&[Keyboard::DeleteBackspace],   mods),
+            KC::BackSpace => buffer.add_simple(&[Keyboard::DeleteForward],     mods),
+            KC::Tab       => buffer.add_simple(&[Keyboard::Tab],               mods),
+            KC::STab      => buffer.add(&[Keyboard::LeftShift, Keyboard::Tab], mods, &[Keyboard::LeftShift], 0),
+            KC::Home      => buffer.add_simple(&[Keyboard::Home],              mods),
+            KC::End       => buffer.add_simple(&[Keyboard::End],               mods),
+            KC::PageUp    => buffer.add_simple(&[Keyboard::PageUp],            mods),
+            KC::PageDown  => buffer.add_simple(&[Keyboard::PageDown],          mods),
 
-            KC::Left  => { output[5] = Keyboard::LeftArrow;  buffer.push_back(output).ok(); },
-            KC::Down  => { output[5] = Keyboard::DownArrow;  buffer.push_back(output).ok(); },
-            KC::Up    => { output[5] = Keyboard::UpArrow;    buffer.push_back(output).ok(); },
-            KC::Right => { output[5] = Keyboard::RightArrow; buffer.push_back(output).ok(); },
+            KC::Left      => buffer.add_simple(&[Keyboard::LeftArrow],         mods),
+            KC::Down      => buffer.add_simple(&[Keyboard::DownArrow],         mods),
+            KC::Up        => buffer.add_simple(&[Keyboard::UpArrow],           mods),
+            KC::Right     => buffer.add_simple(&[Keyboard::RightArrow],        mods),
 
-            KC::ACircum => { buffer.push_back(DEAD_CIRCUMFLEX).ok(); output[5] = Keyboard::A; buffer.push_back(EMPTY).ok(); buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
-            KC::ADiaer  => { buffer.push_back(DEAD_DIAERIS).ok();    output[5] = Keyboard::A; buffer.push_back(EMPTY).ok(); buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
-            KC::AGrave  => { buffer.push_back(DEAD_GRAVE).ok();      output[5] = Keyboard::A; buffer.push_back(EMPTY).ok(); buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+            KC::ACircum => buffer.add_no_mods(&DEAD_CIRCUMFLEX, TEMPO_DEAD_KEY).add_simple(&[Keyboard::A], mods),
+            KC::ADiaer  => buffer.add_no_mods(&DEAD_DIAERIS, TEMPO_DEAD_KEY).add_simple(&[Keyboard::A],    mods),
+            KC::AGrave  => buffer.add_no_mods(&DEAD_GRAVE, TEMPO_DEAD_KEY).add_simple(&[Keyboard::A],      mods),
 
-            KC::ECircum => { buffer.push_back(DEAD_CIRCUMFLEX).ok(); output[5] = Keyboard::E; buffer.push_back(EMPTY).ok(); buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
-            KC::EDiaer  => { buffer.push_back(DEAD_DIAERIS).ok();    output[5] = Keyboard::E; buffer.push_back(EMPTY).ok(); buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
-            KC::EGrave  => { buffer.push_back(DEAD_GRAVE).ok();      output[5] = Keyboard::E; buffer.push_back(EMPTY).ok(); buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+            KC::ECircum => buffer.add_no_mods(&DEAD_CIRCUMFLEX, TEMPO_DEAD_KEY).add_simple(&[Keyboard::E], mods),
+            KC::EDiaer  => buffer.add_no_mods(&DEAD_DIAERIS, TEMPO_DEAD_KEY).add_simple(&[Keyboard::E],    mods),
+            KC::EGrave  => buffer.add_no_mods(&DEAD_GRAVE, TEMPO_DEAD_KEY).add_simple(&[Keyboard::E],      mods),
 
-            KC::ICircum => { buffer.push_back(DEAD_CIRCUMFLEX).ok(); output[5] = Keyboard::I; buffer.push_back(EMPTY).ok(); buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
-            KC::IDiaer  => { buffer.push_back(DEAD_DIAERIS).ok();    output[5] = Keyboard::I; buffer.push_back(EMPTY).ok(); buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
-            KC::IGrave  => { buffer.push_back(DEAD_GRAVE).ok();      output[5] = Keyboard::I; buffer.push_back(EMPTY).ok(); buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+            KC::ICircum => buffer.add_no_mods(&DEAD_CIRCUMFLEX, TEMPO_DEAD_KEY).add_simple(&[Keyboard::I], mods),
+            KC::IDiaer  => buffer.add_no_mods(&DEAD_DIAERIS, TEMPO_DEAD_KEY).add_simple(&[Keyboard::I],    mods),
+            KC::IGrave  => buffer.add_no_mods(&DEAD_GRAVE, TEMPO_DEAD_KEY).add_simple(&[Keyboard::I],      mods),
 
-            KC::OCircum => { buffer.push_back(DEAD_CIRCUMFLEX).ok(); output[5] = Keyboard::O; buffer.push_back(EMPTY).ok(); buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
-            KC::ODiaer  => { buffer.push_back(DEAD_DIAERIS).ok();    output[5] = Keyboard::O; buffer.push_back(EMPTY).ok(); buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
-            KC::OGrave  => { buffer.push_back(DEAD_GRAVE).ok();      output[5] = Keyboard::O; buffer.push_back(EMPTY).ok(); buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+            KC::OCircum => buffer.add_no_mods(&DEAD_CIRCUMFLEX, TEMPO_DEAD_KEY).add_simple(&[Keyboard::O], mods),
+            KC::ODiaer  => buffer.add_no_mods(&DEAD_DIAERIS, TEMPO_DEAD_KEY).add_simple(&[Keyboard::O],    mods),
+            KC::OGrave  => buffer.add_no_mods(&DEAD_GRAVE, TEMPO_DEAD_KEY).add_simple(&[Keyboard::O],      mods),
 
-            KC::UCircum => { buffer.push_back(DEAD_CIRCUMFLEX).ok(); output[5] = Keyboard::U; buffer.push_back(EMPTY).ok(); buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
-            KC::UDiaer  => { buffer.push_back(DEAD_DIAERIS).ok();    output[5] = Keyboard::U; buffer.push_back(EMPTY).ok(); buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
-            KC::UGrave  => { buffer.push_back(DEAD_GRAVE).ok();      output[5] = Keyboard::U; buffer.push_back(EMPTY).ok(); buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+            KC::UCircum => buffer.add_no_mods(&DEAD_CIRCUMFLEX, TEMPO_DEAD_KEY).add_simple(&[Keyboard::U], mods),
+            KC::UDiaer  => buffer.add_no_mods(&DEAD_DIAERIS, TEMPO_DEAD_KEY).add_simple(&[Keyboard::U],    mods),
+            KC::UGrave  => buffer.add_no_mods(&DEAD_GRAVE, TEMPO_DEAD_KEY).add_simple(&[Keyboard::U],      mods),
 
-            KC::YCircum => { buffer.push_back(DEAD_CIRCUMFLEX).ok(); output[5] = Keyboard::Y; buffer.push_back(EMPTY).ok(); buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
-            KC::YDiaer  => { buffer.push_back(DEAD_DIAERIS).ok();    output[5] = Keyboard::Y; buffer.push_back(EMPTY).ok(); buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
-            KC::YGrave  => { buffer.push_back(DEAD_GRAVE).ok();      output[5] = Keyboard::Y; buffer.push_back(EMPTY).ok(); buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); },
+            KC::YCircum => buffer.add_no_mods(&DEAD_CIRCUMFLEX, TEMPO_DEAD_KEY).add_simple(&[Keyboard::Y], mods),
+            KC::YDiaer  => buffer.add_no_mods(&DEAD_DIAERIS, TEMPO_DEAD_KEY).add_simple(&[Keyboard::Y],    mods),
+            KC::YGrave  => buffer.add_no_mods(&DEAD_GRAVE, TEMPO_DEAD_KEY).add_simple(&[Keyboard::Y],      mods),
 
-            KC::Num0 => { output[5] = Keyboard::Keyboard0; buffer.push_back(output).ok(); }
-            KC::Num1 => { output[5] = Keyboard::Keyboard1; buffer.push_back(output).ok(); }
-            KC::Num2 => { output[5] = Keyboard::Keyboard2; buffer.push_back(output).ok(); }
-            KC::Num3 => { output[5] = Keyboard::Keyboard3; buffer.push_back(output).ok(); }
-            KC::Num4 => { output[5] = Keyboard::Keyboard4; buffer.push_back(output).ok(); }
-            KC::Num5 => { output[5] = Keyboard::Keyboard5; buffer.push_back(output).ok(); }
-            KC::Num6 => { output[5] = Keyboard::Keyboard6; buffer.push_back(output).ok(); }
-            KC::Num7 => { output[5] = Keyboard::Keyboard7; buffer.push_back(output).ok(); }
-            KC::Num8 => { output[5] = Keyboard::Keyboard8; buffer.push_back(output).ok(); }
-            KC::Num9 => { output[5] = Keyboard::Keyboard9; buffer.push_back(output).ok(); }
+            KC::Num0 => buffer.add(&[Keyboard::Keyboard0], mods, &[Keyboard::LeftShift], 0),
+            KC::Num1 => buffer.add(&[Keyboard::Keyboard1], mods, &[Keyboard::LeftShift], 0),
+            KC::Num2 => buffer.add(&[Keyboard::Keyboard2], mods, &[Keyboard::LeftShift], 0),
+            KC::Num3 => buffer.add(&[Keyboard::Keyboard3], mods, &[Keyboard::LeftShift], 0),
+            KC::Num4 => buffer.add(&[Keyboard::Keyboard4], mods, &[Keyboard::LeftShift], 0),
+            KC::Num5 => buffer.add(&[Keyboard::Keyboard5], mods, &[Keyboard::LeftShift], 0),
+            KC::Num6 => buffer.add(&[Keyboard::Keyboard6], mods, &[Keyboard::LeftShift], 0),
+            KC::Num7 => buffer.add(&[Keyboard::Keyboard7], mods, &[Keyboard::LeftShift], 0),
+            KC::Num8 => buffer.add(&[Keyboard::Keyboard8], mods, &[Keyboard::LeftShift], 0),
+            KC::Num9 => buffer.add(&[Keyboard::Keyboard9], mods, &[Keyboard::LeftShift], 0),
 
-            KC::Minus          => { output[5] = Keyboard::Minus;          buffer.push_back(output).ok(); }
-            KC::Equal          => { output[5] = Keyboard::Equal;          buffer.push_back(output).ok(); }
-            KC::LeftBracket    => { output[5] = Keyboard::LeftBrace;      buffer.push_back(output).ok(); }
-            KC::RightBracket   => { output[5] = Keyboard::RightBrace;     buffer.push_back(output).ok(); }
-            KC::Backslash      => { output[5] = Keyboard::Backslash;      buffer.push_back(output).ok(); }
-            KC::NonusHash      => { output[5] = Keyboard::NonUSHash;      buffer.push_back(output).ok(); }
-            KC::SemiColon      => { output[5] = Keyboard::Semicolon;      buffer.push_back(output).ok(); }
-            KC::Quote          => { output[5] = Keyboard::Apostrophe;     buffer.push_back(output).ok(); }
-            KC::Grave          => { output[5] = Keyboard::Grave;          buffer.push_back(output).ok(); }
-            KC::Comma          => { output[5] = Keyboard::Comma;          buffer.push_back(output).ok(); }
-            KC::Dot            => { output[5] = Keyboard::Dot;            buffer.push_back(output).ok(); }
-            KC::Slash          => { output[5] = Keyboard::ForwardSlash;   buffer.push_back(output).ok(); }
-            KC::NonusBackslash => { output[5] = Keyboard::NonUSBackslash; buffer.push_back(output).ok(); }
+            KC::Minus          => buffer.add_simple(&[Keyboard::Minus],          mods),
+            KC::Equal          => buffer.add_simple(&[Keyboard::Equal],          mods),
+            KC::LeftBracket    => buffer.add_simple(&[Keyboard::LeftBrace],      mods),
+            KC::RightBracket   => buffer.add_simple(&[Keyboard::RightBrace],     mods),
+            KC::Backslash      => buffer.add_simple(&[Keyboard::Backslash],      mods),
+            KC::NonusHash      => buffer.add_simple(&[Keyboard::NonUSHash],      mods),
+            KC::SemiColon      => buffer.add_simple(&[Keyboard::Semicolon],      mods),
+            KC::Quote          => buffer.add_simple(&[Keyboard::Apostrophe],     mods),
+            KC::Grave          => buffer.add_simple(&[Keyboard::Grave],          mods),
+            KC::Comma          => buffer.add_simple(&[Keyboard::Comma],          mods),
+            KC::Dot            => buffer.add_simple(&[Keyboard::Dot],            mods),
+            KC::Slash          => buffer.add_simple(&[Keyboard::ForwardSlash],   mods),
+            KC::NonusBackslash => buffer.add_simple(&[Keyboard::NonUSBackslash], mods),
 
-            KC::Tilde       => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Grave;        buffer.push_back(output).ok(); }
-            KC::Exclaim     => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Keyboard1;    buffer.push_back(output).ok(); }
-            KC::At          => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Keyboard2;    buffer.push_back(output).ok(); }
-            KC::Hash        => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Keyboard3;    buffer.push_back(output).ok(); }
-            KC::Dollar      => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Keyboard4;    buffer.push_back(output).ok(); }
-            KC::Percentage  => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Keyboard5;    buffer.push_back(output).ok(); }
-            KC::Circumflex  => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Keyboard6;    buffer.push_back(output).ok(); }
-            KC::Ampersand   => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Keyboard7;    buffer.push_back(output).ok(); }
-            KC::Asterix     => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Keyboard8;    buffer.push_back(output).ok(); }
-            KC::LeftParent  => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Keyboard9;    buffer.push_back(output).ok(); }
-            KC::RightParent => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Keyboard0;    buffer.push_back(output).ok(); }
-            KC::Underscore  => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Minus;        buffer.push_back(output).ok(); }
-            KC::Plus        => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Equal;        buffer.push_back(output).ok(); }
-            KC::LeftCurly   => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::LeftBrace;    buffer.push_back(output).ok(); }
-            KC::RightCurly  => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::RightBrace;   buffer.push_back(output).ok(); }
-            KC::Pipe        => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Backslash;    buffer.push_back(output).ok(); }
-            KC::Colon       => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Semicolon;    buffer.push_back(output).ok(); }
-            KC::DoubleQuote => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Apostrophe;   buffer.push_back(output).ok(); }
-            KC::LowerThan   => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Comma;        buffer.push_back(output).ok(); }
-            KC::GreaterThan => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::Dot;          buffer.push_back(output).ok(); }
-            KC::Question    => { output[0] = Keyboard::LeftShift; output[5] = Keyboard::ForwardSlash; buffer.push_back(output).ok(); }
+            KC::Tilde       => buffer.add(&[Keyboard::LeftShift, Keyboard::Grave],        mods, &[Keyboard::LeftShift], 0),
+            KC::Exclaim     => buffer.add(&[Keyboard::LeftShift, Keyboard::Keyboard1],    mods, &[Keyboard::LeftShift], 0),
+            KC::At          => buffer.add(&[Keyboard::LeftShift, Keyboard::Keyboard2],    mods, &[Keyboard::LeftShift], 0),
+            KC::Hash        => buffer.add(&[Keyboard::LeftShift, Keyboard::Keyboard3],    mods, &[Keyboard::LeftShift], 0),
+            KC::Dollar      => buffer.add(&[Keyboard::LeftShift, Keyboard::Keyboard4],    mods, &[Keyboard::LeftShift], 0),
+            KC::Percentage  => buffer.add(&[Keyboard::LeftShift, Keyboard::Keyboard5],    mods, &[Keyboard::LeftShift], 0),
+            KC::Circumflex  => buffer.add(&[Keyboard::LeftShift, Keyboard::Keyboard6],    mods, &[Keyboard::LeftShift], 0),
+            KC::Ampersand   => buffer.add(&[Keyboard::LeftShift, Keyboard::Keyboard7],    mods, &[Keyboard::LeftShift], 0),
+            KC::Asterix     => buffer.add(&[Keyboard::LeftShift, Keyboard::Keyboard8],    mods, &[Keyboard::LeftShift], 0),
+            KC::LeftParent  => buffer.add(&[Keyboard::LeftShift, Keyboard::Keyboard9],    mods, &[Keyboard::LeftShift], 0),
+            KC::RightParent => buffer.add(&[Keyboard::LeftShift, Keyboard::Keyboard0],    mods, &[Keyboard::LeftShift], 0),
+            KC::Underscore  => buffer.add(&[Keyboard::LeftShift, Keyboard::Minus],        mods, &[Keyboard::LeftShift], 0),
+            KC::Plus        => buffer.add(&[Keyboard::LeftShift, Keyboard::Equal],        mods, &[Keyboard::LeftShift], 0),
+            KC::LeftCurly   => buffer.add(&[Keyboard::LeftShift, Keyboard::LeftBrace],    mods, &[Keyboard::LeftShift], 0),
+            KC::RightCurly  => buffer.add(&[Keyboard::LeftShift, Keyboard::RightBrace],   mods, &[Keyboard::LeftShift], 0),
+            KC::Pipe        => buffer.add(&[Keyboard::LeftShift, Keyboard::Backslash],    mods, &[Keyboard::LeftShift], 0),
+            KC::Colon       => buffer.add(&[Keyboard::LeftShift, Keyboard::Semicolon],    mods, &[Keyboard::LeftShift], 0),
+            KC::DoubleQuote => buffer.add(&[Keyboard::LeftShift, Keyboard::Apostrophe],   mods, &[Keyboard::LeftShift], 0),
+            KC::LowerThan   => buffer.add(&[Keyboard::LeftShift, Keyboard::Comma],        mods, &[Keyboard::LeftShift], 0),
+            KC::GreaterThan => buffer.add(&[Keyboard::LeftShift, Keyboard::Dot],          mods, &[Keyboard::LeftShift], 0),
+            KC::Question    => buffer.add(&[Keyboard::LeftShift, Keyboard::ForwardSlash], mods, &[Keyboard::LeftShift], 0),
 
-            KC::GuillemetL => { output[2] = Keyboard::RightAlt;  output[5] = Keyboard::LeftBrace;                                   buffer.push_back(output).ok(); },
-            KC::GuillemetD => { output[2] = Keyboard::RightAlt;  output[5] = Keyboard::RightBrace;                                  buffer.push_back(output).ok(); },
-            KC::Diameter   => { output[2] = Keyboard::RightAlt;  output[5] = Keyboard::L;                                           buffer.push_back(output).ok(); },
-            KC::Degre      => { output[0] = Keyboard::LeftShift; output[2] = Keyboard::RightAlt;   output[5] = Keyboard::Semicolon; buffer.push_back(output).ok(); },
-            KC::Euro       => { output[2] = Keyboard::RightAlt;  output[5] = Keyboard::Keyboard5;                                   buffer.push_back(output).ok(); },
-            KC::Pound      => { output[0] = Keyboard::LeftShift; output[2] = Keyboard::RightAlt;   output[5] = Keyboard::Keyboard4; buffer.push_back(output).ok(); },
-            KC::Yen        => { output[2] = Keyboard::RightAlt;  output[5] = Keyboard::Minus;                                       buffer.push_back(output).ok(); },
+            KC::GuillemetL  => buffer.add(&[Keyboard::RightAlt,  Keyboard::LeftBrace],    mods, &[Keyboard::RightAlt],  0),
+            KC::GuillemetD  => buffer.add(&[Keyboard::RightAlt,  Keyboard::RightBrace],   mods, &[Keyboard::RightAlt],  0),
+            KC::Diameter    => buffer.add(&[Keyboard::RightAlt,  Keyboard::L],            mods, &[Keyboard::RightAlt],  0),
+            KC::Degre       => buffer.add(&[Keyboard::LeftShift, Keyboard::RightAlt],     mods, &[Keyboard::LeftShift], 0),
+            KC::Euro        => buffer.add(&[Keyboard::RightAlt,  Keyboard::Keyboard5],    mods, &[Keyboard::RightAlt],  0),
+            KC::Pound       => buffer.add(&[Keyboard::LeftShift, Keyboard::RightAlt],     mods, &[Keyboard::LeftShift], 0),
+            KC::Yen         => buffer.add(&[Keyboard::RightAlt,  Keyboard::Minus],        mods, &[Keyboard::RightAlt],  0),
 
-            KC::HomeAltA  => { output[5] = Keyboard::A; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); }
-            KC::HomeAltU  => { output[5] = Keyboard::U; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); }
-            KC::HomeGuiS  => { output[5] = Keyboard::S; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); }
-            KC::HomeGuiI  => { output[5] = Keyboard::I; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); }
-            KC::HomeCtrlE => { output[5] = Keyboard::E; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); }
-            KC::HomeCtrlT => { output[5] = Keyboard::T; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); }
-            KC::HomeSftN  => { output[5] = Keyboard::N; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); }
-            KC::HomeSftR  => { output[5] = Keyboard::R; buffer.push_back(output).ok(); buffer.push_back(EMPTY).ok(); }
+            KC::Alt       => buffer.add_no_mods(&[Keyboard::LeftAlt],     0),
+            KC::Altgr     => buffer.add_no_mods(&[Keyboard::RightAlt],    0),
+            KC::Ctrl      => buffer.add_no_mods(&[Keyboard::LeftControl], 0),
+            KC::Gui       => buffer.add_no_mods(&[Keyboard::LeftGUI],     0),
+            KC::Shift     => buffer.add_no_mods(&[Keyboard::LeftShift],   0),
 
-            // --
+            KC::HomeAltA  => buffer.add_simple(&[Keyboard::A], mods),
+            KC::HomeAltU  => buffer.add_simple(&[Keyboard::U], mods),
+            KC::HomeGuiS  => buffer.add_simple(&[Keyboard::S], mods),
+            KC::HomeGuiI  => buffer.add_simple(&[Keyboard::I], mods),
+            KC::HomeCtrlE => buffer.add_simple(&[Keyboard::E], mods),
+            KC::HomeCtrlT => buffer.add_simple(&[Keyboard::T], mods),
+            KC::HomeSftN  => buffer.add_simple(&[Keyboard::N], mods),
+            KC::HomeSftR  => buffer.add_simple(&[Keyboard::R], mods),
+
+            // // --
             KC::MacroGit => {
-                let no_mods = Modifiers::new();
-                // let mut cap = Modifiers::new();
-                // cap.shift = (true, 0);
-
-                KC::F.usb_code(&no_mods, buffer);
-                KC::L.usb_code(&no_mods, buffer);
-                KC::I.usb_code(&no_mods, buffer);
-                KC::N.usb_code(&no_mods, buffer);
-                KC::G.usb_code(&no_mods, buffer);
-                KC::U.usb_code(&no_mods, buffer);
-                KC::E.usb_code(&no_mods, buffer);
-                KC::N.usb_code(&no_mods, buffer);
-                KC::H.usb_code(&no_mods, buffer);
-                KC::E.usb_code(&no_mods, buffer);
-                KC::L.usb_code(&no_mods, buffer);
-                KC::D.usb_code(&no_mods, buffer);
+                buffer.add_no_mods(&[Keyboard::F], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::L], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::I], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::N], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::G], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::U], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::E], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::N], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::H], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::E], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::L], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::D], TEMPO_MACRO)
             }
             KC::MacroMail => {
-                let no_mods = Modifiers::new();
-
-                KC::F.usb_code(&no_mods, buffer);
-                KC::L.usb_code(&no_mods, buffer);
-                KC::O.usb_code(&no_mods, buffer);
-                KC::R.usb_code(&no_mods, buffer);
-                KC::E.usb_code(&no_mods, buffer);
-                KC::N.usb_code(&no_mods, buffer);
-                KC::T.usb_code(&no_mods, buffer);
-                KC::At.usb_code(&no_mods, buffer);
-                KC::L.usb_code(&no_mods, buffer);
-                KC::I.usb_code(&no_mods, buffer);
-                KC::N.usb_code(&no_mods, buffer);
-                KC::G.usb_code(&no_mods, buffer);
-                KC::U.usb_code(&no_mods, buffer);
-                KC::E.usb_code(&no_mods, buffer);
-                KC::N.usb_code(&no_mods, buffer);
-                KC::H.usb_code(&no_mods, buffer);
-                KC::E.usb_code(&no_mods, buffer);
-                KC::L.usb_code(&no_mods, buffer);
-                KC::D.usb_code(&no_mods, buffer);
-                KC::Dot.usb_code(&no_mods, buffer);
-                KC::F.usb_code(&no_mods, buffer);
-                KC::R.usb_code(&no_mods, buffer);
+                buffer.add_no_mods(&[Keyboard::F], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::L], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::O], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::R], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::E], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::N], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::T], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::LeftShift, Keyboard::Keyboard2], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::L], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::I], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::N], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::G], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::U], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::E], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::N], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::H], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::E], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::L], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::D], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::Dot], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::F], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::R], TEMPO_MACRO)
             }
             KC::MacroMailShort => {
-                let no_mods = Modifiers::new();
-
-                KC::F.usb_code(&no_mods, buffer);
-                KC::At.usb_code(&no_mods, buffer);
-                KC::L.usb_code(&no_mods, buffer);
-                KC::I.usb_code(&no_mods, buffer);
-                KC::N.usb_code(&no_mods, buffer);
-                KC::G.usb_code(&no_mods, buffer);
-                KC::U.usb_code(&no_mods, buffer);
-                KC::E.usb_code(&no_mods, buffer);
-                KC::N.usb_code(&no_mods, buffer);
-                KC::H.usb_code(&no_mods, buffer);
-                KC::E.usb_code(&no_mods, buffer);
-                KC::L.usb_code(&no_mods, buffer);
-                KC::D.usb_code(&no_mods, buffer);
-                KC::Dot.usb_code(&no_mods, buffer);
-                KC::F.usb_code(&no_mods, buffer);
-                KC::R.usb_code(&no_mods, buffer);
+                buffer.add_no_mods(&[Keyboard::F], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::LeftShift, Keyboard::Keyboard2], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::L], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::I], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::N], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::G], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::U], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::E], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::N], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::H], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::E], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::L], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::D], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::Dot], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::F], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::R], TEMPO_MACRO)
             }
-            _ => {}
+            _ => buffer,
         }
     }
 }
