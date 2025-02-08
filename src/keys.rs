@@ -1,6 +1,6 @@
 #![cfg_attr(rustfmt, rustfmt_skip)]
 use crate::utils::{ modifiers::Modifiers,
-           options::{BUFFER_KEY_LENGTH, BUFFER_LENGTH, TEMPO_DEAD_KEY, TEMPO_MACRO},
+           options::{BUFFER_CASE_LENGTH, BUFFER_LENGTH, TEMPO_DEAD_KEY, TEMPO_MACRO},
 };
 use heapless::{Deque, Vec};
 use usbd_human_interface_device::{device::mouse::WheelMouseReport, page::Keyboard};
@@ -27,8 +27,16 @@ const DEAD_GRAVE:      [Keyboard; 2] = [Keyboard::RightAlt,  Keyboard::Grave];
 // Help KC conversion along.
 // This buffer is fill here to be then empty by the writing report.
 // Each entry is a vec of Keyboard pages followed by a tempo (a break can be mandatory e.q with dead keys).
+
+#[derive(PartialEq, Default)]
+pub struct BuffCase {
+    pub key_code: Vec<Keyboard, BUFFER_CASE_LENGTH>,
+    pub matrix_indexes: Vec<usize, BUFFER_CASE_LENGTH>,
+    pub tempo: u32,
+}
+
 pub struct Buffer {
-    pub keys: Deque<(Vec<Keyboard, BUFFER_KEY_LENGTH>, u32), BUFFER_LENGTH>,
+    pub keys: Deque<BuffCase, BUFFER_LENGTH>,
 }
 
 impl Buffer {
@@ -37,26 +45,31 @@ impl Buffer {
     }
 
     // Add a new entry in the Deque with active mods (without excluded), the keys and set the tempo.
-    fn add(mut self, keys: &[Keyboard], mods: &Modifiers, excluded_mods: &[Keyboard], tempo: u32) -> Self {
-        let mut new = (Vec::new(), tempo);
-        new.0.extend(mods.active()
+    fn add(mut self, keys: &[Keyboard], indexes: &[usize], mods: &Modifiers, excluded_mods: &[Keyboard], tempo: u32) -> Self {
+        let mut key_code = Vec::new();
+        key_code.extend(mods.active()
                          .iter()
                          .filter(|m| !excluded_mods.contains(m))
                          .copied());
-        new.0.extend(keys.iter().copied());
-        self.keys.push_back(new).ok();
+        key_code.extend(keys.iter().copied());
+
+        let mut matrix_indexes = Vec::new();
+        matrix_indexes.extend(indexes.iter().copied());
+
+        self.keys.push_back(BuffCase {key_code, matrix_indexes, tempo}).ok();
         self
     }
 
-    fn add_simple(self, keys: &[Keyboard], mods: &Modifiers) -> Self {
-        self.add(keys, mods, &[], 0)
+    fn add_simple(self, keys: &[Keyboard], indexes: &[usize], mods: &Modifiers) -> Self {
+        self.add(keys, indexes, mods, &[], 0)
     }
 
-    fn add_no_mods(mut self, keys: &[Keyboard], tempo: u32) -> Self {
-        let mut new = (Vec::new(), tempo);
-        new.0.extend(keys.iter().copied());
-        self.keys.push_back(new).ok();
-        self
+    fn add_no_mods(self, keys: &[Keyboard], indexes: &[usize], tempo: u32) -> Self {
+        self.add(keys, indexes, &Modifiers::new(), &[], tempo)
+    }
+
+    pub fn close(self) -> Self {
+        self.add_no_mods(&[Keyboard::NoEventIndicated], &[], 0)
     }
 }
 
@@ -259,209 +272,209 @@ impl KC {
 
     // Keyboard -------------------------------------------------------------------------
     /// Convert a Chew keycode into an array of Keyboard page.
-    pub fn usb_code(&self, buffer: Buffer, mods: &Modifiers) -> Buffer {
+    pub fn usb_code(&self, buffer: Buffer, indexes: &[usize], mods: &Modifiers) -> Buffer {
         match *self {
-            KC::None => buffer.add_simple(&[Keyboard::NoEventIndicated], mods),
+            KC::None => buffer.add_simple(&[Keyboard::NoEventIndicated], &[], mods),
 
-            KC::A => buffer.add_simple(&[Keyboard::A], mods),
-            KC::B => buffer.add_simple(&[Keyboard::B], mods),
-            KC::C => buffer.add_simple(&[Keyboard::C], mods),
-            KC::D => buffer.add_simple(&[Keyboard::D], mods),
-            KC::E => buffer.add_simple(&[Keyboard::E], mods),
-            KC::F => buffer.add_simple(&[Keyboard::F], mods),
-            KC::G => buffer.add_simple(&[Keyboard::G], mods),
-            KC::H => buffer.add_simple(&[Keyboard::H], mods),
-            KC::I => buffer.add_simple(&[Keyboard::I], mods),
-            KC::J => buffer.add_simple(&[Keyboard::J], mods),
-            KC::K => buffer.add_simple(&[Keyboard::K], mods),
-            KC::L => buffer.add_simple(&[Keyboard::L], mods),
-            KC::M => buffer.add_simple(&[Keyboard::M], mods),
-            KC::N => buffer.add_simple(&[Keyboard::N], mods),
-            KC::O => buffer.add_simple(&[Keyboard::O], mods),
-            KC::P => buffer.add_simple(&[Keyboard::P], mods),
-            KC::Q => buffer.add_simple(&[Keyboard::Q], mods),
-            KC::R => buffer.add_simple(&[Keyboard::R], mods),
-            KC::S => buffer.add_simple(&[Keyboard::S], mods),
-            KC::T => buffer.add_simple(&[Keyboard::T], mods),
-            KC::U => buffer.add_simple(&[Keyboard::U], mods),
-            KC::V => buffer.add_simple(&[Keyboard::V], mods),
-            KC::W => buffer.add_simple(&[Keyboard::W], mods),
-            KC::X => buffer.add_simple(&[Keyboard::X], mods),
-            KC::Y => buffer.add_simple(&[Keyboard::Y], mods),
-            KC::Z => buffer.add_simple(&[Keyboard::Z], mods),
+            KC::A => buffer.add_simple(&[Keyboard::A], indexes, mods),
+            KC::B => buffer.add_simple(&[Keyboard::B], indexes, mods),
+            KC::C => buffer.add_simple(&[Keyboard::C], indexes, mods),
+            KC::D => buffer.add_simple(&[Keyboard::D], indexes, mods),
+            KC::E => buffer.add_simple(&[Keyboard::E], indexes, mods),
+            KC::F => buffer.add_simple(&[Keyboard::F], indexes, mods),
+            KC::G => buffer.add_simple(&[Keyboard::G], indexes, mods),
+            KC::H => buffer.add_simple(&[Keyboard::H], indexes, mods),
+            KC::I => buffer.add_simple(&[Keyboard::I], indexes, mods),
+            KC::J => buffer.add_simple(&[Keyboard::J], indexes, mods),
+            KC::K => buffer.add_simple(&[Keyboard::K], indexes, mods),
+            KC::L => buffer.add_simple(&[Keyboard::L], indexes, mods),
+            KC::M => buffer.add_simple(&[Keyboard::M], indexes, mods),
+            KC::N => buffer.add_simple(&[Keyboard::N], indexes, mods),
+            KC::O => buffer.add_simple(&[Keyboard::O], indexes, mods),
+            KC::P => buffer.add_simple(&[Keyboard::P], indexes, mods),
+            KC::Q => buffer.add_simple(&[Keyboard::Q], indexes, mods),
+            KC::R => buffer.add_simple(&[Keyboard::R], indexes, mods),
+            KC::S => buffer.add_simple(&[Keyboard::S], indexes, mods),
+            KC::T => buffer.add_simple(&[Keyboard::T], indexes, mods),
+            KC::U => buffer.add_simple(&[Keyboard::U], indexes, mods),
+            KC::V => buffer.add_simple(&[Keyboard::V], indexes, mods),
+            KC::W => buffer.add_simple(&[Keyboard::W], indexes, mods),
+            KC::X => buffer.add_simple(&[Keyboard::X], indexes, mods),
+            KC::Y => buffer.add_simple(&[Keyboard::Y], indexes, mods),
+            KC::Z => buffer.add_simple(&[Keyboard::Z], indexes, mods),
 
-            KC::CCedilla => buffer.add(&[Keyboard::RightAlt, Keyboard::Comma], mods, &[Keyboard::RightAlt], 0),
-            KC::EAcute   => buffer.add(&[Keyboard::RightAlt, Keyboard::E],     mods, &[Keyboard::RightAlt], 0),
-            KC::AE       => buffer.add(&[Keyboard::RightAlt, Keyboard::Z],     mods, &[Keyboard::RightAlt], 0),
-            KC::OE       => buffer.add(&[Keyboard::RightAlt, Keyboard::K],     mods, &[Keyboard::RightAlt], 0),
+            KC::CCedilla => buffer.add(&[Keyboard::RightAlt, Keyboard::Comma], indexes, mods, &[Keyboard::RightAlt], 0),
+            KC::EAcute   => buffer.add(&[Keyboard::RightAlt, Keyboard::E],     indexes, mods, &[Keyboard::RightAlt], 0),
+            KC::AE       => buffer.add(&[Keyboard::RightAlt, Keyboard::Z],     indexes, mods, &[Keyboard::RightAlt], 0),
+            KC::OE       => buffer.add(&[Keyboard::RightAlt, Keyboard::K],     indexes, mods, &[Keyboard::RightAlt], 0),
 
-            KC::Enter     => buffer.add_simple(&[Keyboard::ReturnEnter],       mods),
-            KC::Space     => buffer.add_simple(&[Keyboard::Space],             mods),
-            KC::Esc       => buffer.add_simple(&[Keyboard::Escape],            mods),
-            KC::Del       => buffer.add_simple(&[Keyboard::DeleteBackspace],   mods),
-            KC::BackSpace => buffer.add_simple(&[Keyboard::DeleteForward],     mods),
-            KC::Tab       => buffer.add_simple(&[Keyboard::Tab],               mods),
-            KC::STab      => buffer.add(&[Keyboard::LeftShift, Keyboard::Tab], mods, &[Keyboard::LeftShift], 0),
-            KC::Home      => buffer.add_simple(&[Keyboard::Home],              mods),
-            KC::End       => buffer.add_simple(&[Keyboard::End],               mods),
-            KC::PageUp    => buffer.add_simple(&[Keyboard::PageUp],            mods),
-            KC::PageDown  => buffer.add_simple(&[Keyboard::PageDown],          mods),
+            KC::Enter     => buffer.add_simple(&[Keyboard::ReturnEnter],       indexes, mods),
+            KC::Space     => buffer.add_simple(&[Keyboard::Space],             indexes, mods),
+            KC::Esc       => buffer.add_simple(&[Keyboard::Escape],            indexes, mods),
+            KC::Del       => buffer.add_simple(&[Keyboard::DeleteBackspace],   indexes, mods),
+            KC::BackSpace => buffer.add_simple(&[Keyboard::DeleteForward],     indexes, mods),
+            KC::Tab       => buffer.add_simple(&[Keyboard::Tab],               indexes, mods),
+            KC::STab      => buffer.add(&[Keyboard::LeftShift, Keyboard::Tab], indexes, mods, &[Keyboard::LeftShift], 0),
+            KC::Home      => buffer.add_simple(&[Keyboard::Home],              indexes, mods),
+            KC::End       => buffer.add_simple(&[Keyboard::End],               indexes, mods),
+            KC::PageUp    => buffer.add_simple(&[Keyboard::PageUp],            indexes, mods),
+            KC::PageDown  => buffer.add_simple(&[Keyboard::PageDown],          indexes, mods),
 
-            KC::Left      => buffer.add_simple(&[Keyboard::LeftArrow],         mods),
-            KC::Down      => buffer.add_simple(&[Keyboard::DownArrow],         mods),
-            KC::Up        => buffer.add_simple(&[Keyboard::UpArrow],           mods),
-            KC::Right     => buffer.add_simple(&[Keyboard::RightArrow],        mods),
+            KC::Left      => buffer.add_simple(&[Keyboard::LeftArrow],         indexes, mods),
+            KC::Down      => buffer.add_simple(&[Keyboard::DownArrow],         indexes, mods),
+            KC::Up        => buffer.add_simple(&[Keyboard::UpArrow],           indexes, mods),
+            KC::Right     => buffer.add_simple(&[Keyboard::RightArrow],        indexes, mods),
 
-            KC::ACircum => buffer.add_no_mods(&DEAD_CIRCUMFLEX, TEMPO_DEAD_KEY).add_simple(&[Keyboard::A], mods),
-            KC::ADiaer  => buffer.add_no_mods(&DEAD_DIAERIS, TEMPO_DEAD_KEY).add_simple(&[Keyboard::A],    mods),
-            KC::AGrave  => buffer.add_no_mods(&DEAD_GRAVE, TEMPO_DEAD_KEY).add_simple(&[Keyboard::A],      mods),
+            KC::ACircum => buffer.add_no_mods(&DEAD_CIRCUMFLEX, &[], TEMPO_DEAD_KEY).add_simple(&[Keyboard::A], indexes, mods),
+            KC::ADiaer  => buffer.add_no_mods(&DEAD_DIAERIS,    &[], TEMPO_DEAD_KEY).add_simple(&[Keyboard::A], indexes, mods),
+            KC::AGrave  => buffer.add_no_mods(&DEAD_GRAVE,      &[], TEMPO_DEAD_KEY).add_simple(&[Keyboard::A], indexes, mods),
 
-            KC::ECircum => buffer.add_no_mods(&DEAD_CIRCUMFLEX, TEMPO_DEAD_KEY).add_simple(&[Keyboard::E], mods),
-            KC::EDiaer  => buffer.add_no_mods(&DEAD_DIAERIS, TEMPO_DEAD_KEY).add_simple(&[Keyboard::E],    mods),
-            KC::EGrave  => buffer.add_no_mods(&DEAD_GRAVE, TEMPO_DEAD_KEY).add_simple(&[Keyboard::E],      mods),
+            KC::ECircum => buffer.add_no_mods(&DEAD_CIRCUMFLEX, &[], TEMPO_DEAD_KEY).add_simple(&[Keyboard::E], indexes, mods),
+            KC::EDiaer  => buffer.add_no_mods(&DEAD_DIAERIS,    &[], TEMPO_DEAD_KEY).add_simple(&[Keyboard::E], indexes, mods),
+            KC::EGrave  => buffer.add_no_mods(&DEAD_GRAVE,      &[], TEMPO_DEAD_KEY).add_simple(&[Keyboard::E], indexes, mods),
 
-            KC::ICircum => buffer.add_no_mods(&DEAD_CIRCUMFLEX, TEMPO_DEAD_KEY).add_simple(&[Keyboard::I], mods),
-            KC::IDiaer  => buffer.add_no_mods(&DEAD_DIAERIS, TEMPO_DEAD_KEY).add_simple(&[Keyboard::I],    mods),
-            KC::IGrave  => buffer.add_no_mods(&DEAD_GRAVE, TEMPO_DEAD_KEY).add_simple(&[Keyboard::I],      mods),
+            KC::ICircum => buffer.add_no_mods(&DEAD_CIRCUMFLEX, &[], TEMPO_DEAD_KEY).add_simple(&[Keyboard::I], indexes, mods),
+            KC::IDiaer  => buffer.add_no_mods(&DEAD_DIAERIS,    &[], TEMPO_DEAD_KEY).add_simple(&[Keyboard::I], indexes, mods),
+            KC::IGrave  => buffer.add_no_mods(&DEAD_GRAVE,      &[], TEMPO_DEAD_KEY).add_simple(&[Keyboard::I], indexes, mods),
 
-            KC::OCircum => buffer.add_no_mods(&DEAD_CIRCUMFLEX, TEMPO_DEAD_KEY).add_simple(&[Keyboard::O], mods),
-            KC::ODiaer  => buffer.add_no_mods(&DEAD_DIAERIS, TEMPO_DEAD_KEY).add_simple(&[Keyboard::O],    mods),
-            KC::OGrave  => buffer.add_no_mods(&DEAD_GRAVE, TEMPO_DEAD_KEY).add_simple(&[Keyboard::O],      mods),
+            KC::OCircum => buffer.add_no_mods(&DEAD_CIRCUMFLEX, &[], TEMPO_DEAD_KEY).add_simple(&[Keyboard::O], indexes, mods),
+            KC::ODiaer  => buffer.add_no_mods(&DEAD_DIAERIS,    &[], TEMPO_DEAD_KEY).add_simple(&[Keyboard::O], indexes, mods),
+            KC::OGrave  => buffer.add_no_mods(&DEAD_GRAVE,      &[], TEMPO_DEAD_KEY).add_simple(&[Keyboard::O], indexes, mods),
 
-            KC::UCircum => buffer.add_no_mods(&DEAD_CIRCUMFLEX, TEMPO_DEAD_KEY).add_simple(&[Keyboard::U], mods),
-            KC::UDiaer  => buffer.add_no_mods(&DEAD_DIAERIS, TEMPO_DEAD_KEY).add_simple(&[Keyboard::U],    mods),
-            KC::UGrave  => buffer.add_no_mods(&DEAD_GRAVE, TEMPO_DEAD_KEY).add_simple(&[Keyboard::U],      mods),
+            KC::UCircum => buffer.add_no_mods(&DEAD_CIRCUMFLEX, &[], TEMPO_DEAD_KEY).add_simple(&[Keyboard::U], indexes, mods),
+            KC::UDiaer  => buffer.add_no_mods(&DEAD_DIAERIS,    &[], TEMPO_DEAD_KEY).add_simple(&[Keyboard::U], indexes, mods),
+            KC::UGrave  => buffer.add_no_mods(&DEAD_GRAVE,      &[], TEMPO_DEAD_KEY).add_simple(&[Keyboard::U], indexes, mods),
 
-            KC::YCircum => buffer.add_no_mods(&DEAD_CIRCUMFLEX, TEMPO_DEAD_KEY).add_simple(&[Keyboard::Y], mods),
-            KC::YDiaer  => buffer.add_no_mods(&DEAD_DIAERIS, TEMPO_DEAD_KEY).add_simple(&[Keyboard::Y],    mods),
-            KC::YGrave  => buffer.add_no_mods(&DEAD_GRAVE, TEMPO_DEAD_KEY).add_simple(&[Keyboard::Y],      mods),
+            KC::YCircum => buffer.add_no_mods(&DEAD_CIRCUMFLEX, &[], TEMPO_DEAD_KEY).add_simple(&[Keyboard::Y], indexes, mods),
+            KC::YDiaer  => buffer.add_no_mods(&DEAD_DIAERIS,    &[], TEMPO_DEAD_KEY).add_simple(&[Keyboard::Y], indexes, mods),
+            KC::YGrave  => buffer.add_no_mods(&DEAD_GRAVE,      &[], TEMPO_DEAD_KEY).add_simple(&[Keyboard::Y], indexes, mods),
 
-            KC::Num0 => buffer.add(&[Keyboard::Keyboard0], mods, &[Keyboard::LeftShift], 0),
-            KC::Num1 => buffer.add(&[Keyboard::Keyboard1], mods, &[Keyboard::LeftShift], 0),
-            KC::Num2 => buffer.add(&[Keyboard::Keyboard2], mods, &[Keyboard::LeftShift], 0),
-            KC::Num3 => buffer.add(&[Keyboard::Keyboard3], mods, &[Keyboard::LeftShift], 0),
-            KC::Num4 => buffer.add(&[Keyboard::Keyboard4], mods, &[Keyboard::LeftShift], 0),
-            KC::Num5 => buffer.add(&[Keyboard::Keyboard5], mods, &[Keyboard::LeftShift], 0),
-            KC::Num6 => buffer.add(&[Keyboard::Keyboard6], mods, &[Keyboard::LeftShift], 0),
-            KC::Num7 => buffer.add(&[Keyboard::Keyboard7], mods, &[Keyboard::LeftShift], 0),
-            KC::Num8 => buffer.add(&[Keyboard::Keyboard8], mods, &[Keyboard::LeftShift], 0),
-            KC::Num9 => buffer.add(&[Keyboard::Keyboard9], mods, &[Keyboard::LeftShift], 0),
+            KC::Num0 => buffer.add(&[Keyboard::Keyboard0], indexes, mods, &[Keyboard::LeftShift], 0),
+            KC::Num1 => buffer.add(&[Keyboard::Keyboard1], indexes, mods, &[Keyboard::LeftShift], 0),
+            KC::Num2 => buffer.add(&[Keyboard::Keyboard2], indexes, mods, &[Keyboard::LeftShift], 0),
+            KC::Num3 => buffer.add(&[Keyboard::Keyboard3], indexes, mods, &[Keyboard::LeftShift], 0),
+            KC::Num4 => buffer.add(&[Keyboard::Keyboard4], indexes, mods, &[Keyboard::LeftShift], 0),
+            KC::Num5 => buffer.add(&[Keyboard::Keyboard5], indexes, mods, &[Keyboard::LeftShift], 0),
+            KC::Num6 => buffer.add(&[Keyboard::Keyboard6], indexes, mods, &[Keyboard::LeftShift], 0),
+            KC::Num7 => buffer.add(&[Keyboard::Keyboard7], indexes, mods, &[Keyboard::LeftShift], 0),
+            KC::Num8 => buffer.add(&[Keyboard::Keyboard8], indexes, mods, &[Keyboard::LeftShift], 0),
+            KC::Num9 => buffer.add(&[Keyboard::Keyboard9], indexes, mods, &[Keyboard::LeftShift], 0),
 
-            KC::Minus          => buffer.add_simple(&[Keyboard::Minus],          mods),
-            KC::Equal          => buffer.add_simple(&[Keyboard::Equal],          mods),
-            KC::LeftBracket    => buffer.add_simple(&[Keyboard::LeftBrace],      mods),
-            KC::RightBracket   => buffer.add_simple(&[Keyboard::RightBrace],     mods),
-            KC::Backslash      => buffer.add_simple(&[Keyboard::Backslash],      mods),
-            KC::NonusHash      => buffer.add_simple(&[Keyboard::NonUSHash],      mods),
-            KC::SemiColon      => buffer.add_simple(&[Keyboard::Semicolon],      mods),
-            KC::Quote          => buffer.add_simple(&[Keyboard::Apostrophe],     mods),
-            KC::Grave          => buffer.add_simple(&[Keyboard::Grave],          mods),
-            KC::Comma          => buffer.add_simple(&[Keyboard::Comma],          mods),
-            KC::Dot            => buffer.add_simple(&[Keyboard::Dot],            mods),
-            KC::Slash          => buffer.add_simple(&[Keyboard::ForwardSlash],   mods),
-            KC::NonusBackslash => buffer.add_simple(&[Keyboard::NonUSBackslash], mods),
+            KC::Minus          => buffer.add_simple(&[Keyboard::Minus],          indexes, mods),
+            KC::Equal          => buffer.add_simple(&[Keyboard::Equal],          indexes, mods),
+            KC::LeftBracket    => buffer.add_simple(&[Keyboard::LeftBrace],      indexes, mods),
+            KC::RightBracket   => buffer.add_simple(&[Keyboard::RightBrace],     indexes, mods),
+            KC::Backslash      => buffer.add_simple(&[Keyboard::Backslash],      indexes, mods),
+            KC::NonusHash      => buffer.add_simple(&[Keyboard::NonUSHash],      indexes, mods),
+            KC::SemiColon      => buffer.add_simple(&[Keyboard::Semicolon],      indexes, mods),
+            KC::Quote          => buffer.add_simple(&[Keyboard::Apostrophe],     indexes, mods),
+            KC::Grave          => buffer.add_simple(&[Keyboard::Grave],          indexes, mods),
+            KC::Comma          => buffer.add_simple(&[Keyboard::Comma],          indexes, mods),
+            KC::Dot            => buffer.add_simple(&[Keyboard::Dot],            indexes, mods),
+            KC::Slash          => buffer.add_simple(&[Keyboard::ForwardSlash],   indexes, mods),
+            KC::NonusBackslash => buffer.add_simple(&[Keyboard::NonUSBackslash], indexes, mods),
 
-            KC::Tilde       => buffer.add(&[Keyboard::LeftShift, Keyboard::Grave],        mods, &[Keyboard::LeftShift], 0),
-            KC::Exclaim     => buffer.add(&[Keyboard::LeftShift, Keyboard::Keyboard1],    mods, &[Keyboard::LeftShift], 0),
-            KC::At          => buffer.add(&[Keyboard::LeftShift, Keyboard::Keyboard2],    mods, &[Keyboard::LeftShift], 0),
-            KC::Hash        => buffer.add(&[Keyboard::LeftShift, Keyboard::Keyboard3],    mods, &[Keyboard::LeftShift], 0),
-            KC::Dollar      => buffer.add(&[Keyboard::LeftShift, Keyboard::Keyboard4],    mods, &[Keyboard::LeftShift], 0),
-            KC::Percentage  => buffer.add(&[Keyboard::LeftShift, Keyboard::Keyboard5],    mods, &[Keyboard::LeftShift], 0),
-            KC::Circumflex  => buffer.add(&[Keyboard::LeftShift, Keyboard::Keyboard6],    mods, &[Keyboard::LeftShift], 0),
-            KC::Ampersand   => buffer.add(&[Keyboard::LeftShift, Keyboard::Keyboard7],    mods, &[Keyboard::LeftShift], 0),
-            KC::Asterix     => buffer.add(&[Keyboard::LeftShift, Keyboard::Keyboard8],    mods, &[Keyboard::LeftShift], 0),
-            KC::LeftParent  => buffer.add(&[Keyboard::LeftShift, Keyboard::Keyboard9],    mods, &[Keyboard::LeftShift], 0),
-            KC::RightParent => buffer.add(&[Keyboard::LeftShift, Keyboard::Keyboard0],    mods, &[Keyboard::LeftShift], 0),
-            KC::Underscore  => buffer.add(&[Keyboard::LeftShift, Keyboard::Minus],        mods, &[Keyboard::LeftShift], 0),
-            KC::Plus        => buffer.add(&[Keyboard::LeftShift, Keyboard::Equal],        mods, &[Keyboard::LeftShift], 0),
-            KC::LeftCurly   => buffer.add(&[Keyboard::LeftShift, Keyboard::LeftBrace],    mods, &[Keyboard::LeftShift], 0),
-            KC::RightCurly  => buffer.add(&[Keyboard::LeftShift, Keyboard::RightBrace],   mods, &[Keyboard::LeftShift], 0),
-            KC::Pipe        => buffer.add(&[Keyboard::LeftShift, Keyboard::Backslash],    mods, &[Keyboard::LeftShift], 0),
-            KC::Colon       => buffer.add(&[Keyboard::LeftShift, Keyboard::Semicolon],    mods, &[Keyboard::LeftShift], 0),
-            KC::DoubleQuote => buffer.add(&[Keyboard::LeftShift, Keyboard::Apostrophe],   mods, &[Keyboard::LeftShift], 0),
-            KC::LowerThan   => buffer.add(&[Keyboard::LeftShift, Keyboard::Comma],        mods, &[Keyboard::LeftShift], 0),
-            KC::GreaterThan => buffer.add(&[Keyboard::LeftShift, Keyboard::Dot],          mods, &[Keyboard::LeftShift], 0),
-            KC::Question    => buffer.add(&[Keyboard::LeftShift, Keyboard::ForwardSlash], mods, &[Keyboard::LeftShift], 0),
+            KC::Tilde       => buffer.add(&[Keyboard::LeftShift, Keyboard::Grave],        indexes, mods, &[Keyboard::LeftShift], 0),
+            KC::Exclaim     => buffer.add(&[Keyboard::LeftShift, Keyboard::Keyboard1],    indexes, mods, &[Keyboard::LeftShift], 0),
+            KC::At          => buffer.add(&[Keyboard::LeftShift, Keyboard::Keyboard2],    indexes, mods, &[Keyboard::LeftShift], 0),
+            KC::Hash        => buffer.add(&[Keyboard::LeftShift, Keyboard::Keyboard3],    indexes, mods, &[Keyboard::LeftShift], 0),
+            KC::Dollar      => buffer.add(&[Keyboard::LeftShift, Keyboard::Keyboard4],    indexes, mods, &[Keyboard::LeftShift], 0),
+            KC::Percentage  => buffer.add(&[Keyboard::LeftShift, Keyboard::Keyboard5],    indexes, mods, &[Keyboard::LeftShift], 0),
+            KC::Circumflex  => buffer.add(&[Keyboard::LeftShift, Keyboard::Keyboard6],    indexes, mods, &[Keyboard::LeftShift], 0),
+            KC::Ampersand   => buffer.add(&[Keyboard::LeftShift, Keyboard::Keyboard7],    indexes, mods, &[Keyboard::LeftShift], 0),
+            KC::Asterix     => buffer.add(&[Keyboard::LeftShift, Keyboard::Keyboard8],    indexes, mods, &[Keyboard::LeftShift], 0),
+            KC::LeftParent  => buffer.add(&[Keyboard::LeftShift, Keyboard::Keyboard9],    indexes, mods, &[Keyboard::LeftShift], 0),
+            KC::RightParent => buffer.add(&[Keyboard::LeftShift, Keyboard::Keyboard0],    indexes, mods, &[Keyboard::LeftShift], 0),
+            KC::Underscore  => buffer.add(&[Keyboard::LeftShift, Keyboard::Minus],        indexes, mods, &[Keyboard::LeftShift], 0),
+            KC::Plus        => buffer.add(&[Keyboard::LeftShift, Keyboard::Equal],        indexes, mods, &[Keyboard::LeftShift], 0),
+            KC::LeftCurly   => buffer.add(&[Keyboard::LeftShift, Keyboard::LeftBrace],    indexes, mods, &[Keyboard::LeftShift], 0),
+            KC::RightCurly  => buffer.add(&[Keyboard::LeftShift, Keyboard::RightBrace],   indexes, mods, &[Keyboard::LeftShift], 0),
+            KC::Pipe        => buffer.add(&[Keyboard::LeftShift, Keyboard::Backslash],    indexes, mods, &[Keyboard::LeftShift], 0),
+            KC::Colon       => buffer.add(&[Keyboard::LeftShift, Keyboard::Semicolon],    indexes, mods, &[Keyboard::LeftShift], 0),
+            KC::DoubleQuote => buffer.add(&[Keyboard::LeftShift, Keyboard::Apostrophe],   indexes, mods, &[Keyboard::LeftShift], 0),
+            KC::LowerThan   => buffer.add(&[Keyboard::LeftShift, Keyboard::Comma],        indexes, mods, &[Keyboard::LeftShift], 0),
+            KC::GreaterThan => buffer.add(&[Keyboard::LeftShift, Keyboard::Dot],          indexes, mods, &[Keyboard::LeftShift], 0),
+            KC::Question    => buffer.add(&[Keyboard::LeftShift, Keyboard::ForwardSlash], indexes, mods, &[Keyboard::LeftShift], 0),
 
-            KC::GuillemetL  => buffer.add(&[Keyboard::RightAlt,  Keyboard::LeftBrace],    mods, &[Keyboard::RightAlt],  0),
-            KC::GuillemetD  => buffer.add(&[Keyboard::RightAlt,  Keyboard::RightBrace],   mods, &[Keyboard::RightAlt],  0),
-            KC::Diameter    => buffer.add(&[Keyboard::RightAlt,  Keyboard::L],            mods, &[Keyboard::RightAlt],  0),
-            KC::Degre       => buffer.add(&[Keyboard::LeftShift, Keyboard::RightAlt],     mods, &[Keyboard::LeftShift], 0),
-            KC::Euro        => buffer.add(&[Keyboard::RightAlt,  Keyboard::Keyboard5],    mods, &[Keyboard::RightAlt],  0),
-            KC::Pound       => buffer.add(&[Keyboard::LeftShift, Keyboard::RightAlt],     mods, &[Keyboard::LeftShift], 0),
-            KC::Yen         => buffer.add(&[Keyboard::RightAlt,  Keyboard::Minus],        mods, &[Keyboard::RightAlt],  0),
+            KC::GuillemetL  => buffer.add(&[Keyboard::RightAlt,  Keyboard::LeftBrace],    indexes, mods, &[Keyboard::RightAlt],  0),
+            KC::GuillemetD  => buffer.add(&[Keyboard::RightAlt,  Keyboard::RightBrace],   indexes, mods, &[Keyboard::RightAlt],  0),
+            KC::Diameter    => buffer.add(&[Keyboard::RightAlt,  Keyboard::L],            indexes, mods, &[Keyboard::RightAlt],  0),
+            KC::Degre       => buffer.add(&[Keyboard::LeftShift, Keyboard::RightAlt],     indexes, mods, &[Keyboard::LeftShift], 0),
+            KC::Euro        => buffer.add(&[Keyboard::RightAlt,  Keyboard::Keyboard5],    indexes, mods, &[Keyboard::RightAlt],  0),
+            KC::Pound       => buffer.add(&[Keyboard::LeftShift, Keyboard::RightAlt],     indexes, mods, &[Keyboard::LeftShift], 0),
+            KC::Yen         => buffer.add(&[Keyboard::RightAlt,  Keyboard::Minus],        indexes, mods, &[Keyboard::RightAlt],  0),
 
-            KC::Alt       => buffer.add_no_mods(&[Keyboard::LeftAlt],     0),
-            KC::Altgr     => buffer.add_no_mods(&[Keyboard::RightAlt],    0),
-            KC::Ctrl      => buffer.add_no_mods(&[Keyboard::LeftControl], 0),
-            KC::Gui       => buffer.add_no_mods(&[Keyboard::LeftGUI],     0),
-            KC::Shift     => buffer.add_no_mods(&[Keyboard::LeftShift],   0),
+            KC::Alt       => buffer.add_no_mods(&[Keyboard::LeftAlt],     &[], 0),
+            KC::Altgr     => buffer.add_no_mods(&[Keyboard::RightAlt],    &[], 0),
+            KC::Ctrl      => buffer.add_no_mods(&[Keyboard::LeftControl], &[], 0),
+            KC::Gui       => buffer.add_no_mods(&[Keyboard::LeftGUI],     &[], 0),
+            KC::Shift     => buffer.add_no_mods(&[Keyboard::LeftShift],   &[], 0),
 
-            KC::HomeAltA  => buffer.add_simple(&[Keyboard::A], mods),
-            KC::HomeAltU  => buffer.add_simple(&[Keyboard::U], mods),
-            KC::HomeGuiS  => buffer.add_simple(&[Keyboard::S], mods),
-            KC::HomeGuiI  => buffer.add_simple(&[Keyboard::I], mods),
-            KC::HomeCtrlE => buffer.add_simple(&[Keyboard::E], mods),
-            KC::HomeCtrlT => buffer.add_simple(&[Keyboard::T], mods),
-            KC::HomeSftN  => buffer.add_simple(&[Keyboard::N], mods),
-            KC::HomeSftR  => buffer.add_simple(&[Keyboard::R], mods),
+            KC::HomeAltA  => buffer.add_simple(&[Keyboard::A], indexes, mods),
+            KC::HomeAltU  => buffer.add_simple(&[Keyboard::U], indexes, mods),
+            KC::HomeGuiS  => buffer.add_simple(&[Keyboard::S], indexes, mods),
+            KC::HomeGuiI  => buffer.add_simple(&[Keyboard::I], indexes, mods),
+            KC::HomeCtrlE => buffer.add_simple(&[Keyboard::E], indexes, mods),
+            KC::HomeCtrlT => buffer.add_simple(&[Keyboard::T], indexes, mods),
+            KC::HomeSftN  => buffer.add_simple(&[Keyboard::N], indexes, mods),
+            KC::HomeSftR  => buffer.add_simple(&[Keyboard::R], indexes, mods),
 
             // // --
             KC::MacroGit => {
-                buffer.add_no_mods(&[Keyboard::F], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::L], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::I], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::N], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::G], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::U], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::E], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::N], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::H], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::E], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::L], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::D], TEMPO_MACRO)
+                buffer.add_no_mods(&[Keyboard::F],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::L],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::I],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::N],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::G],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::U],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::E],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::N],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::H],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::E],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::L],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::D],                              &[], TEMPO_MACRO)
             }
             KC::MacroMail => {
-                buffer.add_no_mods(&[Keyboard::F], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::L], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::O], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::R], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::E], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::N], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::T], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::LeftShift, Keyboard::Keyboard2], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::L], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::I], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::N], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::G], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::U], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::E], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::N], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::H], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::E], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::L], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::D], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::Dot], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::F], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::R], TEMPO_MACRO)
+                buffer.add_no_mods(&[Keyboard::F],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::L],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::O],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::R],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::E],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::N],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::T],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::LeftShift, Keyboard::Keyboard2], &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::L],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::I],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::N],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::G],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::U],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::E],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::N],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::H],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::E],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::L],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::D],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::Dot],                            &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::F],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::R],                              &[], TEMPO_MACRO)
             }
             KC::MacroMailShort => {
-                buffer.add_no_mods(&[Keyboard::F], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::LeftShift, Keyboard::Keyboard2], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::L], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::I], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::N], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::G], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::U], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::E], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::N], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::H], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::E], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::L], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::D], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::Dot], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::F], TEMPO_MACRO)
-                      .add_no_mods(&[Keyboard::R], TEMPO_MACRO)
+                buffer.add_no_mods(&[Keyboard::F],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::LeftShift, Keyboard::Keyboard2], &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::L],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::I],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::N],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::G],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::U],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::E],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::N],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::H],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::E],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::L],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::D],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::Dot],                            &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::F],                              &[], TEMPO_MACRO)
+                      .add_no_mods(&[Keyboard::R],                              &[], TEMPO_MACRO)
             }
             _ => buffer,
         }

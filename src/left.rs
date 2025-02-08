@@ -7,11 +7,11 @@ mod layouts;
 mod utils;
 
 use chew::Chew;
-use keys::Buffer;
+use keys::{BuffCase, Buffer, KC};
 use usbd_serial::SerialPort;
 use utils::gpios::Gpios;
 use utils::led::{Led, LedColor, LED_LAYOUT_FR, LED_LEADER_KEY};
-use utils::options::{BUFFER_KEY_LENGTH, TIMER_UART_LOOP, TIMER_USB_LOOP};
+use utils::options::{BUFFER_CASE_LENGTH, TIMER_UART_LOOP, TIMER_USB_LOOP};
 use utils::serial::*;
 use utils::uart::{Uart, UartError, HR_KEYS, HR_LED};
 
@@ -172,7 +172,8 @@ fn main() -> ! {
     let mut chew = Chew::new(ticks);
 
     let mut key_buffer = Buffer::new();
-    let mut last_printed_key: Vec<Keyboard, BUFFER_KEY_LENGTH> = Vec::new();
+    // let mut last_printed_key: Vec<Keyboard, BUFFER_CASE_LENGTH> = Vec::new();
+    let mut last_printed_key: BuffCase = BuffCase::default();
     let mut key_buffer_tempo = 0;
 
     let mut mouse_report = WheelMouseReport::default();
@@ -193,7 +194,8 @@ fn main() -> ! {
                             ticks,
                         );
 
-                        (key_buffer, mouse_report, led_status) = chew.run(key_buffer, mouse_report);
+                        (key_buffer, mouse_report, led_status) =
+                            chew.run(key_buffer, mouse_report, ticks);
 
                         // Mouse report directly done here ------------------------------
                         // Keyboard has its own timer two allow combinations
@@ -260,22 +262,27 @@ fn main() -> ! {
 
         // USB --------------------------------------------------------------------------
         if usb_count_down.wait().is_ok() && key_buffer_tempo <= ticks {
-            if let Some((to_print, tempo)) = key_buffer.keys.pop_front() {
-                if to_print != last_printed_key {
+            // if let Some((to_print, tempo)) = key_buffer.keys.pop_front() {
+            if let Some(buffer_case) = key_buffer.keys.pop_front() {
+                if buffer_case != last_printed_key {
                     let keyboard = rusty_chew.device::<NKROBootKeyboard<'_, _>, _>();
-                    match keyboard.write_report(to_print.clone()) {
+                    match keyboard.write_report(buffer_case.key_code.clone()) {
                         Err(UsbHidError::WouldBlock) => {}
                         Err(UsbHidError::Duplicate) => {}
                         Ok(_) => {
                             // TODO add an infinite sum
-                            key_buffer_tempo = ticks + tempo;
-                            last_printed_key = to_print;
+                            key_buffer_tempo = ticks + buffer_case.tempo;
+                            last_printed_key = buffer_case;
                         }
                         Err(e) => {
                             core::panic!("Failed to write keyboard report: {:?}", e)
                         }
                     }
                 }
+
+            // Is the last key held ?
+            } else if !chew.is_last_key_active(&last_printed_key.matrix_indexes) {
+                key_buffer = key_buffer.close();
             }
         }
 
