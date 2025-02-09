@@ -14,7 +14,7 @@ pub const LEADER_KEY_COMBINATIONS: [([KC; 3], KC); 3] = [
 
 // COMBOS -------------------------------------------------------------------------------
 pub const COMBOS: [([KC; 2], KC); 2] = [
-    ([KC::Layout(1), KC::Layout(2)], KC::Layout(3)),
+    ([KC::Layout(1), KC::Layout(2)], KC::Layout(4)),
     ([KC::P, KC::O], KC::At),
 ];
 

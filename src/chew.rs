@@ -45,7 +45,7 @@ pub struct Chew {
     leader_key: bool,
     leader_buffer: Vec<KC, 3>,
 
-    to_skip: Vec<(KC, u32), 10>,
+    to_skip: Vec<(usize, u32), 10>,
 }
 
 impl Chew {
@@ -108,23 +108,27 @@ impl Chew {
                         .find_map(|(i, k)| if *k == combo[1] { Some(*i) } else { None });
 
                 if index_0.is_some() && index_1.is_some() {
-                    if *key >= KC::A && *key <= KC::YDiaer {
-                        self.to_skip
-                            .push((combo[0], ticks.wrapping_add(COMBO_TIME)))
-                            .ok();
-                        self.to_skip
-                            .push((combo[1], ticks.wrapping_add(COMBO_TIME)))
-                            .ok();
+                    self.to_skip
+                        .push((index_0.unwrap(), ticks.wrapping_add(COMBO_TIME)))
+                        .ok();
+                    self.to_skip
+                        .push((index_1.unwrap(), ticks.wrapping_add(COMBO_TIME)))
+                        .ok();
 
-                        key_buffer = key.usb_code(
-                            key_buffer,
-                            &[index_0.unwrap(), index_1.unwrap()],
-                            &self.mods,
-                        );
-                        return (key_buffer, mouse_report, self.led_status);
-                    } else if *key >= KC::Layout(0) && *key <= KC::LayDead(0) {
-                        // KC::F.usb_code(&self.mods, &mut key_buffer);
-                        return (key_buffer, mouse_report, self.led_status);
+                    match *key {
+                        k if k >= KC::A && k <= KC::YDiaer => {
+                            key_buffer = k.usb_code(
+                                key_buffer,
+                                &[index_0.unwrap(), index_1.unwrap()],
+                                &self.mods,
+                            );
+                            // return (key_buffer, mouse_report, self.led_status);
+                        }
+
+                        KC::Layout(number) => {
+                            self.layout.number = number;
+                        }
+                        _ => {}
                     }
                 }
             }
@@ -150,17 +154,14 @@ impl Chew {
                         }
                         KC::LayDead(number) => {
                             if *mat_cur > 0 {
-                                self.to_skip
-                                    .push((*layout, ticks.wrapping_add(PRESSED_TIME)))
-                                    .ok();
-
                                 self.layout.number = *number;
                                 self.layout.matrix_index = index;
 
                                 if *mat_prev == 0 {
-                                    // Set and return to avoid its own key pressed
                                     self.layout.dead = true;
-                                    return (key_buffer, mouse_report, self.led_status);
+                                    self.to_skip
+                                        .push((index, ticks.wrapping_add(PRESSED_TIME)))
+                                        .ok();
                                 } else {
                                     self.layout.dead = false;
                                 }
@@ -183,17 +184,17 @@ impl Chew {
             {
                 self.leader_key = true;
 
-                for ((&layout, mat_prev), mat_cur) in LAYOUTS[self.layout.number]
+                for ((index, &layout), (mat_prev, mat_cur)) in LAYOUTS[self.layout.number]
                     .iter()
-                    .zip(self.matrix.prev.iter())
-                    .zip(self.matrix.cur.iter())
-                    .filter(|((&k, _), _)| {
+                    .enumerate()
+                    .zip(self.matrix.prev.iter().zip(self.matrix.cur.iter()))
+                    .filter(|((_, &k), (_, _))| {
                         (k >= KC::A && k <= KC::YDiaer) || (k >= KC::HomeAltA && k <= KC::HomeSftR)
                     })
                 {
                     if *mat_prev == 0 && *mat_cur > 0 {
                         self.to_skip
-                            .push((layout, ticks.wrapping_add(PRESSED_TIME)))
+                            .push((index, ticks.wrapping_add(PRESSED_TIME)))
                             .ok();
 
                         self.leader_buffer.push(layout).ok();
@@ -336,13 +337,13 @@ impl Chew {
 
                 // Regular keys ---------------------------------------------------------
                 // Filtering mods prevents error with layers
-                for (((index, layout), mat_prev), mat_cur) in LAYOUTS[self.layout.number]
+                for ((index, layout), (mat_prev, mat_cur)) in LAYOUTS[self.layout.number]
                     .iter()
                     .enumerate()
-                    .zip(self.matrix.prev.iter())
-                    .zip(self.matrix.cur.iter())
-                    .filter(|(((index, &key), _), _)| {
-                        !self.to_skip.iter().any(|(k, _)| *k == key) && !self.mods.is_active(*index)
+                    .zip(self.matrix.prev.iter().zip(self.matrix.cur.iter()))
+                    .filter(|((index, _), (_, _))| {
+                        !self.to_skip.iter().any(|(i, _)| i == index)
+                            && !self.mods.is_active(*index)
                     })
                 {
                     match layout {
@@ -423,10 +424,6 @@ impl Chew {
                     }
                 }
             }
-
-            // if self.matrix.cur.iter().all(|m| *m == 0) {
-            //     key_buffer = KC::None.usb_code(key_buffer, &self.mods);
-            // }
         }
 
         self.to_skip.retain(|(_, t)| *t > ticks);
