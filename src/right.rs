@@ -136,7 +136,7 @@ fn main() -> ! {
                     // led.light_on(LedColor::Blue);
                 }
                 Err(UartError::NothingToReadMax) => {
-                    led.light_on(LedColor::Yellow);
+                    led.light_on(LedColor::Red);
                 }
                 Err(UartError::NotComplete) => {
                     // led.light_on(LedColor::Yellow);

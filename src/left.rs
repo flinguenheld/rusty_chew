@@ -7,10 +7,12 @@ mod layouts;
 mod utils;
 
 use chew::Chew;
+use embedded_io::Write;
 use keys::{BuffCase, Buffer, KC};
 use usbd_serial::SerialPort;
 use utils::gpios::Gpios;
 use utils::led::{Led, LedColor, LED_LAYOUT_FR, LED_LEADER_KEY};
+use utils::matrix::Matrix;
 use utils::options::{BUFFER_CASE_LENGTH, TIMER_UART_LOOP, TIMER_USB_LOOP};
 use utils::serial::*;
 use utils::uart::{Uart, UartError, HR_KEYS, HR_LED};
@@ -194,6 +196,13 @@ fn main() -> ! {
                             ticks,
                         );
 
+                        // for aaa in chew.pressed_keys.iter() {
+                        //     serial.write(num_to_str(aaa.index as u32).as_bytes()).ok();
+                        //     serial.write(": ".as_bytes()).ok();
+                        //     serial.write(num_to_str(aaa.ticks as u32).as_bytes()).ok();
+                        //     serial.write("\r\n".as_bytes()).ok();
+                        // }
+
                         (key_buffer, mouse_report, led_status) =
                             chew.run(key_buffer, mouse_report, ticks);
 
@@ -262,27 +271,30 @@ fn main() -> ! {
 
         // USB --------------------------------------------------------------------------
         if usb_count_down.wait().is_ok() && key_buffer_tempo <= ticks {
-            // if let Some((to_print, tempo)) = key_buffer.keys.pop_front() {
-            if let Some(buffer_case) = key_buffer.keys.pop_front() {
-                if buffer_case != last_printed_key {
+            if let Some(popped_key) = key_buffer.keys.pop_front() {
+                if popped_key != last_printed_key {
                     let keyboard = rusty_chew.device::<NKROBootKeyboard<'_, _>, _>();
-                    match keyboard.write_report(buffer_case.key_code.clone()) {
-                        Err(UsbHidError::WouldBlock) => {}
-                        Err(UsbHidError::Duplicate) => {}
+                    match keyboard.write_report(popped_key.key_code.clone()) {
+                        Err(UsbHidError::WouldBlock) => {
+                            led.light_on(LedColor::Red);
+                            key_buffer.keys.push_front(popped_key).ok();
+                        }
+                        Err(UsbHidError::Duplicate) => {
+                            led.light_on(LedColor::Blue);
+                            // serial.write("Duplicate !\r\n".as_bytes()).ok();
+                        }
                         Ok(_) => {
+                            led.light_off();
+                            serial.write("ok print a key !\r\n".as_bytes()).ok();
                             // TODO add an infinite sum
-                            key_buffer_tempo = ticks + buffer_case.tempo;
-                            last_printed_key = buffer_case;
+                            key_buffer_tempo = ticks + popped_key.tempo;
+                            last_printed_key = popped_key;
                         }
                         Err(e) => {
                             core::panic!("Failed to write keyboard report: {:?}", e)
                         }
                     }
                 }
-
-            // Is the last key held ?
-            } else if !chew.is_last_key_active(&last_printed_key.matrix_indexes) {
-                key_buffer = key_buffer.close();
             }
         }
 

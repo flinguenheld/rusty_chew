@@ -1,5 +1,5 @@
-use core::mem::swap;
-use heapless::Vec;
+use core::mem::{self, swap};
+use heapless::{FnvIndexMap, Vec};
 
 /// The matrix struct allows Chew to be aware of key evolutions.
 /// It consists of two arrays of 34 integers.
@@ -12,36 +12,55 @@ use heapless::Vec;
 /// 20  21  22  23        |        24  25  26  27
 ///         28  29  30    |    31  32  33
 
+// pub struct MCase {
+//     index: usize,
+//     ticks: u32,
+// }
+
 pub struct Matrix {
     pub cur: [u32; 34],
     pub prev: [u32; 34],
 
-    last_ticks: u32,
+    current: Vec<usize, 16>,
+    previous: Vec<usize, 16>,
 }
 
 impl Matrix {
-    pub fn new(ticks: u32) -> Matrix {
+    pub fn new() -> Matrix {
         Matrix {
             cur: [0; 34],
             prev: [0; 34],
-            last_ticks: ticks,
+
+            previous: Vec::new(),
+            current: Vec::new(),
         }
     }
 
-    pub fn update(&mut self, active_indexes: Vec<u8, 16>, ticks: u32) {
-        swap(&mut self.cur, &mut self.prev);
-        let diff = match self.last_ticks <= ticks {
-            true => ticks - self.last_ticks,
-            false => ticks + (u32::MAX - self.last_ticks),
-        };
+    pub fn update_new(&mut self, active_indexes: Vec<u8, 16>) {
+        mem::swap(&mut self.previous, &mut self.current);
+        self.current = active_indexes.iter().map(|&v| v as usize).collect();
+    }
 
-        for index in 0..self.cur.len() {
-            match active_indexes.contains(&(index as u8)) {
-                true => self.cur[index] = self.prev[index] + diff,
-                false => self.cur[index] = 0,
-            }
-        }
+    pub fn freshly_pressed(&self) -> Vec<usize, 16> {
+        self.current
+            .iter()
+            .filter(|index| !self.previous.contains(index))
+            .copied()
+            .collect()
+    }
+    pub fn freshly_released(&self) -> Vec<usize, 16> {
+        self.previous
+            .iter()
+            .filter(|index| !self.current.contains(index))
+            .copied()
+            .collect()
+    }
 
-        self.last_ticks = ticks;
+    pub fn is_active(&self, index: usize) -> bool {
+        self.current.contains(&index)
+    }
+
+    pub fn is_matrix_active(&self) -> bool {
+        self.current != self.previous
     }
 }

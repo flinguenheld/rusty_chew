@@ -1,64 +1,68 @@
+#![cfg_attr(rustfmt, rustfmt_skip)]
+
 use heapless::Vec;
 use usbd_human_interface_device::page::Keyboard;
+use crate::{chew::Key, keys::KC};
 
-/// Due to layers modifiers have to be manage with their matrix status directly.
-/// This struct keeps the state and the matrix index for each modifier.
+/// Due to layers modifiers have to be manage with their matrix index directly.
+/// This struct keeps the matrix index for each modifier.
 pub struct Modifiers {
-    pub alt: (bool, usize),
-    pub alt_gr: (bool, usize),
-    pub ctrl: (bool, usize),
-    pub gui: (bool, usize),
-    pub shift: (bool, usize),
+    pub alt: usize,
+    pub alt_gr: usize,
+    pub ctrl: usize,
+    pub gui: usize,
+    pub shift: usize,
 }
 
 impl Modifiers {
     pub fn new() -> Modifiers {
         Modifiers {
-            alt: (false, 0),
-            alt_gr: (false, 0),
-            ctrl: (false, 0),
-            gui: (false, 0),
-            shift: (false, 0),
+            alt:    usize::MAX,
+            alt_gr: usize::MAX,
+            ctrl:   usize::MAX,
+            gui:    usize::MAX,
+            shift:  usize::MAX,
         }
     }
 
-    pub fn is_active(&self, index: usize) -> bool {
-        (self.alt.0 && self.alt.1 == index)
-            || (self.alt_gr.0 && self.alt_gr.1 == index)
-            || (self.ctrl.0 && self.ctrl.1 == index)
-            || (self.gui.0 && self.gui.1 == index)
-            || (self.shift.0 && self.shift.1 == index)
+    pub fn set(&mut self, key: KC, index: usize){
+        match key {
+            KC::Alt   => self.alt    = index,
+            KC::Altgr => self.alt_gr = index,
+            KC::Ctrl  => self.ctrl   = index,
+            KC::Gui   => self.gui    = index,
+            KC::Shift => self.shift  = index,
+            _=>{}
+        }
     }
 
-    #[rustfmt::skip]
     pub fn active(&self) -> Vec<Keyboard, 5> {
         let mut output = Vec::new();
-
-        if self.alt.0    { output.push(Keyboard::LeftAlt).ok(); }
-        if self.alt_gr.0 { output.push(Keyboard::RightAlt).ok(); }
-        if self.ctrl.0   { output.push(Keyboard::LeftControl).ok(); }
-        if self.gui.0    { output.push(Keyboard::LeftGUI).ok(); }
-        if self.shift.0  { output.push(Keyboard::LeftShift).ok(); }
+        if self.alt    != usize::MAX { output.push(Keyboard::LeftAlt).ok(); }
+        if self.alt_gr != usize::MAX { output.push(Keyboard::RightAlt).ok(); }
+        if self.ctrl   != usize::MAX { output.push(Keyboard::LeftControl).ok(); }
+        if self.gui    != usize::MAX { output.push(Keyboard::LeftGUI).ok(); }
+        if self.shift  != usize::MAX { output.push(Keyboard::LeftShift).ok(); }
 
         output
     }
 
-    pub fn deactivate_released(&mut self, matrix: &[u32; 34]) {
-        self.alt.0 = self.alt.0 && matrix[self.alt.1] > 0;
-        self.alt_gr.0 = self.alt_gr.0 && matrix[self.alt_gr.1] > 0;
-        self.ctrl.0 = self.ctrl.0 && matrix[self.ctrl.1] > 0;
-        self.gui.0 = self.gui.0 && matrix[self.gui.1] > 0;
-        self.shift.0 = self.shift.0 && matrix[self.shift.1] > 0;
-    }
+    pub fn active_kc(&self) -> Vec<(KC, usize), 5> {
+        let mut output = Vec::new();
+        if self.alt    != usize::MAX { output.push((KC::Alt,   self.alt)).ok(); }
+        if self.alt_gr != usize::MAX { output.push((KC::Altgr, self.alt_gr)).ok(); }
+        if self.ctrl   != usize::MAX { output.push((KC::Ctrl,  self.ctrl)).ok(); }
+        if self.gui    != usize::MAX { output.push((KC::Gui,   self.gui)).ok(); }
+        if self.shift  != usize::MAX { output.push((KC::Shift, self.shift)).ok(); }
 
-    #[rustfmt::skip]
-    pub fn nb_on(&self) -> usize {
-        let mut nb = 0;
-        if self.alt.0 { nb += 1 }
-        if self.alt_gr.0 { nb += 1 }
-        if self.ctrl.0 { nb += 1 }
-        if self.gui.0 { nb += 1 }
-        if self.shift.0 { nb += 1 }
-        nb
+        output
+    }    
+
+    pub fn update_state(&mut self, pressed_keys: &Vec<Key, 34>) {
+        self.alt    = pressed_keys.iter().find(|k| k.code == KC::Alt  ).map(|k| k.index).unwrap_or(usize::MAX);
+        self.alt_gr = pressed_keys.iter().find(|k| k.code == KC::Altgr).map(|k| k.index).unwrap_or(usize::MAX);
+        self.ctrl   = pressed_keys.iter().find(|k| k.code == KC::Ctrl ).map(|k| k.index).unwrap_or(usize::MAX);
+        self.gui    = pressed_keys.iter().find(|k| k.code == KC::Gui  ).map(|k| k.index).unwrap_or(usize::MAX);
+        self.shift  = pressed_keys.iter().find(|k| k.code == KC::Shift).map(|k| k.index).unwrap_or(usize::MAX);
     }
 }
