@@ -41,6 +41,10 @@ struct Layout {
     dead: bool,
     dead_done: bool,
 }
+struct Leader {
+    active: bool,
+    buffer: Vec<KC, 3>,
+}
 
 /// This is the core of this keyboard,
 /// The Run function proceeds all the keyboard hacks to fill the key buffer according
@@ -57,8 +61,7 @@ pub struct Chew {
     // Allow to drastically slow down the wheel
     mouse_scroll_tempo: u32,
 
-    leader_key: bool,
-    leader_buffer: Vec<KC, 3>,
+    leader: Leader,
 
     to_skip: Vec<(usize, u32), 10>,
 
@@ -88,8 +91,10 @@ impl Chew {
 
             mouse_scroll_tempo: 0,
 
-            leader_key: false,
-            leader_buffer: Vec::new(),
+            leader: Leader {
+                active: false,
+                buffer: Vec::new(),
+            },
 
             to_skip: Vec::new(),
 
@@ -166,412 +171,355 @@ impl Chew {
         mut mouse_report: WheelMouseReport,
         ticks: u32,
     ) -> (Buffer, WheelMouseReport, u8) {
-        // if !self.pressed_keys.is_empty() || !self.homerow.is_empty() {
-        if true {
-            // if self.matrix.is_matrix_active()
-            //     && (!self.pressed_keys.is_empty() || !self.homerow.is_empty())
-            // {
+        // Set new keys with the current layout -----------------------------------------
+        for key in self
+            .pre_pressed_keys
+            .iter_mut()
+            .filter(|k| k.code == KC::None)
+        {
+            key.code = LAYOUTS[self.layout.number][key.index];
+        }
 
-            // Set new keys with the current layout -----------------------------------------
-            for key in self
+        // Combos -------------------------------------------------------------------
+        for (combo, new_key) in COMBOS.iter() {
+            // Are these keys currently pressed ?
+            if let Some(first) = self
                 .pre_pressed_keys
-                .iter_mut()
-                .filter(|k| k.code == KC::None)
+                .iter()
+                .position(|k| k.code == combo[0])
             {
-                key.code = LAYOUTS[self.layout.number][key.index];
-            }
-
-            // Combos -------------------------------------------------------------------
-            for (combo, new_key) in COMBOS.iter() {
-                // Are these keys currently pressed ?
-                if let Some(first) = self
+                if let Some(second) = self
                     .pre_pressed_keys
-                    .iter()
-                    .position(|k| k.code == combo[0])
+                    .iter_mut()
+                    .position(|k| k.code == combo[1])
                 {
-                    if let Some(second) = self
-                        .pre_pressed_keys
-                        .iter_mut()
-                        .position(|k| k.code == combo[1])
-                    {
-                        // Remove pre-pressed & create the new pressed one
-                        self.pre_pressed_keys[first].code = KC::Done;
-                        self.pre_pressed_keys[second].code = KC::Done;
+                    // Remove pre-pressed & create the new pressed one
+                    self.pre_pressed_keys[first].code = KC::Done;
+                    self.pre_pressed_keys[second].code = KC::Done;
 
-                        self.pressed_keys
-                            .push(Key {
-                                index: self.pre_pressed_keys[first].index,
-                                code: *new_key,
-                                ticks: COMBO_TIME,
-                            })
-                            .ok();
-                    }
+                    self.pressed_keys
+                        .push(Key {
+                            index: self.pre_pressed_keys[first].index,
+                            code: *new_key,
+                            ticks: COMBO_TIME,
+                        })
+                        .ok();
                 }
             }
-            // }
+        }
+        // }
 
-            // Layout -------------------------------------------------------------------
-            if !self.matrix.is_active(self.layout.index)
-                && (!self.layout.dead || (self.layout.dead && self.layout.dead_done))
-            {
-                self.layout.number = 0;
-                self.layout.dead = false;
+        // Layout -------------------------------------------------------------------
+        if !self.matrix.is_active(self.layout.index)
+            && (!self.layout.dead || (self.layout.dead && self.layout.dead_done))
+        {
+            self.layout.number = 0;
+            self.layout.dead = false;
+        }
+
+        for key in self.pressed_keys.iter_mut() {
+            match key.code {
+                KC::Layout(number) => {
+                    // Allow this key to stay in key_pressed without being re-proceeded
+                    key.code = KC::LayoutDone;
+                    self.layout.number = number;
+                    self.layout.index = key.index;
+                    self.layout.dead = false;
+                }
+                KC::LayDead(number) => {
+                    key.code = KC::LayoutDone;
+                    self.layout.number = number;
+                    self.layout.index = key.index;
+                    self.layout.dead = true;
+                    self.layout.dead_done = false;
+                }
+                _ => {}
             }
+        }
 
+        // Leader key ---------------------------------------------------------------
+        // Once activated, leave it with ESC or a wrong combination
+        if let Some(leader) = self
+            .pressed_keys
+            .iter_mut()
+            .find(|k| k.code == KC::LeaderKey)
+        {
+            self.leader.active = true;
+            self.leader.buffer.clear();
+            leader.code = KC::Done;
+        }
+
+        if self.leader.active {
             for key in self.pressed_keys.iter_mut() {
                 match key.code {
-                    KC::Layout(number) => {
-                        // Allow this key to stay in key_pressed without being re-proceeded
-                        key.code = KC::LayoutDone;
-                        self.layout.number = number;
-                        self.layout.index = key.index;
-                        self.layout.dead = false;
+                    KC::Esc => {
+                        self.leader.active = false;
                     }
-                    KC::LayDead(number) => {
-                        key.code = KC::LayoutDone;
-                        self.layout.number = number;
-                        self.layout.index = key.index;
-                        self.layout.dead = true;
-                        self.layout.dead_done = false;
+                    k if (k >= KC::A && k <= KC::OE)
+                        || (k >= KC::Num0 && k <= KC::YDiaer)
+                        || (k >= KC::HomeAltA && k <= KC::HomeSftR) =>
+                    {
+                        self.leader.buffer.push(k).ok();
+                        let temp_buffer: [KC; 3] = [
+                            *self.leader.buffer.get(0).unwrap_or(&KC::None),
+                            *self.leader.buffer.get(1).unwrap_or(&KC::None),
+                            *self.leader.buffer.get(2).unwrap_or(&KC::None),
+                        ];
+
+                        if let Some((_, to_print)) = LEADER_KEY_COMBINATIONS
+                            .iter()
+                            .find(|(comb, _)| *comb == temp_buffer)
+                        {
+                            key_buffer = to_print.usb_code(key_buffer, &self.mods);
+                            self.leader.active = false;
+                        } else if !LEADER_KEY_COMBINATIONS
+                            .iter()
+                            .any(|(comb, _)| comb.starts_with(&self.leader.buffer))
+                        {
+                            self.leader.active = false;
+                        }
                     }
                     _ => {}
                 }
+
+                // Deactivate all keys --
+                key.code = KC::None;
             }
+        }
 
-            // let active_keys: Vec<(usize, KC), 34> = LAYOUTS[self.layout.number]
-            //     .iter()
-            //     .enumerate()
-            //     .zip(self.matrix.cur.iter())
-            //     .filter(|(_, &mat)| mat > 0 && mat <= COMBO_TIME)
-            //     .map(|((index, key), _)| (index, *key))
-            //     .collect();
+        // Modifiers ------------------------------------------------------------
+        // Regulars --
+        self.pressed_keys
+            .iter()
+            .filter(|k| k.code >= KC::Alt && k.code <= KC::Shift)
+            .for_each(|k| self.mods.set(k.code, k.index));
 
-            // for (combo, key) in COMBOS.iter() {
-            //     let index_0 =
-            //         active_keys
-            //             .iter()
-            //             .find_map(|(i, k)| if *k == combo[0] { Some(*i) } else { None });
-            //     let index_1 =
-            //         active_keys
-            //             .iter()
-            //             .find_map(|(i, k)| if *k == combo[1] { Some(*i) } else { None });
+        // Homerows --
+        while let Some(index) = self
+            .pressed_keys
+            .iter()
+            .position(|k| k.code >= KC::HomeAltA && k.code <= KC::HomeSftR)
+        {
+            self.homerow
+                .push_back(self.pressed_keys.swap_remove(index))
+                .ok();
+        }
 
-            //     if index_0.is_some() && index_1.is_some() {
-            //         self.to_skip
-            //             .push((index_0.unwrap(), ticks.wrapping_add(COMBO_TIME)))
-            //             .ok();
-            //         self.to_skip
-            //             .push((index_1.unwrap(), ticks.wrapping_add(COMBO_TIME)))
-            //             .ok();
-
-            //         match *key {
-            //             k if k >= KC::A && k <= KC::YDiaer => {
-            //                 key_buffer = k.usb_code(
-            //                     key_buffer,
-            //                     &[index_0.unwrap(), index_1.unwrap()],
-            //                     &self.mods,
-            //                 );
-            //                 // return (key_buffer, mouse_report, self.led_status);
-            //             }
-
-            //             KC::Layout(number) => {
-            //                 self.layout.number = number;
-            //             }
-            //             _ => {}
-            //         }
-            //     }
-            // }
-
-            // // Leader key ---------------------------------------------------------------
-            // // Once activated, leave it with ESC or a wrong combination
-            // if self.leader_key
-            //     || LAYOUTS[self.layout.number]
-            //         .iter()
-            //         .zip(self.matrix.cur.iter())
-            //         .filter(|(&k, &m)| k == KC::LeaderKey && m > 0)
-            //         .count()
-            //         > 0
-            // {
-            //     self.leader_key = true;
-
-            //     for ((index, &layout), (mat_prev, mat_cur)) in LAYOUTS[self.layout.number]
-            //         .iter()
-            //         .enumerate()
-            //         .zip(self.matrix.prev.iter().zip(self.matrix.cur.iter()))
-            //         .filter(|((_, &k), (_, _))| {
-            //             (k >= KC::A && k <= KC::YDiaer) || (k >= KC::HomeAltA && k <= KC::HomeSftR)
-            //         })
-            //     {
-            //         if *mat_prev == 0 && *mat_cur > 0 {
-            //             self.to_skip
-            //                 .push((index, ticks.wrapping_add(PRESSED_TIME)))
-            //                 .ok();
-
-            //             self.leader_buffer.push(layout).ok();
-            //             let mut temp_buff = [KC::None; 3];
-            //             for (i, v) in self.leader_buffer.iter().enumerate() {
-            //                 temp_buff[i] = *v;
-            //             }
-
-            //             if let Some(i) = LEADER_KEY_COMBINATIONS
-            //                 .iter()
-            //                 .position(|comb| comb.0 == temp_buff)
-            //             {
-            //                 key_buffer =
-            //                     LEADER_KEY_COMBINATIONS[i]
-            //                         .1
-            //                         .usb_code(key_buffer, &[], &self.mods);
-            //             } else if layout != KC::Esc
-            //                 && LEADER_KEY_COMBINATIONS
-            //                     .iter()
-            //                     .filter(|comb| comb.0.starts_with(&self.leader_buffer))
-            //                     .count()
-            //                     > 0
-            //             {
-            //                 continue;
-            //             }
-
-            //             self.leader_key = false;
-            //             self.leader_buffer.clear();
-            //             break;
-            //         }
-            //     }
-            // } else {
-
-            // Modifiers ------------------------------------------------------------
-            // Regulars --
-            self.pressed_keys
-                .iter()
-                .filter(|k| k.code >= KC::Alt && k.code <= KC::Shift)
-                .for_each(|k| self.mods.set(k.code, k.index));
-
-            // Homerows --
-            while let Some(index) = self
-                .pressed_keys
-                .iter()
-                .position(|k| k.code >= KC::HomeAltA && k.code <= KC::HomeSftR)
-            {
-                self.homerow
-                    .push_back(self.pressed_keys.swap_remove(index))
-                    .ok();
-            }
-
-            // Manage active homerows --
-            // The first entry is always a homerow key
-            if let Some(key) = self.homerow.front() {
-                // First hold --
-                // Set all homerows as held and print the regular keys
-                if key.ticks >= HOLD_TIME {
-                    'hr: while let Some(mut popped_key) = self.homerow.pop_front() {
-                        if popped_key.code >= KC::HomeAltA && popped_key.code <= KC::HomeSftR {
-                            if popped_key.ticks >= HOLD_TIME {
-                                match popped_key.code {
-                                    KC::HomeAltA | KC::HomeAltU => {
-                                        self.mods.set(KC::Alt, popped_key.index);
-                                        popped_key.code = KC::Alt;
-                                    }
-                                    KC::HomeCtrlE | KC::HomeCtrlT => {
-                                        self.mods.set(KC::Ctrl, popped_key.index);
-                                        popped_key.code = KC::Ctrl;
-                                    }
-                                    KC::HomeGuiS | KC::HomeGuiI => {
-                                        self.mods.set(KC::Gui, popped_key.index);
-                                        popped_key.code = KC::Gui;
-                                    }
-                                    KC::HomeSftN | KC::HomeSftR => {
-                                        self.mods.set(KC::Shift, popped_key.index);
-                                        popped_key.code = KC::Shift;
-                                    }
-                                    _ => {}
+        // Manage active homerows --
+        // The first entry is always a homerow key
+        if let Some(key) = self.homerow.front() {
+            // First hold --
+            // Set all homerows as held and print the regular keys
+            if key.ticks >= HOLD_TIME {
+                'hr: while let Some(mut popped_key) = self.homerow.pop_front() {
+                    if popped_key.code >= KC::HomeAltA && popped_key.code <= KC::HomeSftR {
+                        if popped_key.ticks >= HOLD_TIME {
+                            match popped_key.code {
+                                KC::HomeAltA | KC::HomeAltU => {
+                                    self.mods.set(KC::Alt, popped_key.index);
+                                    popped_key.code = KC::Alt;
                                 }
-                                // Reintroduce the now-mod key
-                                self.pressed_keys.push(popped_key).ok();
-
-                            // Print home as Regular key if released
-                            } else if !self.matrix.is_active(popped_key.index) {
-                                key_buffer = popped_key.code.usb_code(key_buffer, &self.mods);
-                                // key_buffer = KC::None.usb_code(key_buffer, &self.mods);
-                                self.last_key = Some(popped_key.index);
-                            } else {
-                                // Specific case with two homerow pressed consecutively
-                                // If the second is in an 'in-between' state, stop here to wait.
-                                self.homerow.push_front(popped_key).ok();
-                                break 'hr;
+                                KC::HomeCtrlE | KC::HomeCtrlT => {
+                                    self.mods.set(KC::Ctrl, popped_key.index);
+                                    popped_key.code = KC::Ctrl;
+                                }
+                                KC::HomeGuiS | KC::HomeGuiI => {
+                                    self.mods.set(KC::Gui, popped_key.index);
+                                    popped_key.code = KC::Gui;
+                                }
+                                KC::HomeSftN | KC::HomeSftR => {
+                                    self.mods.set(KC::Shift, popped_key.index);
+                                    popped_key.code = KC::Shift;
+                                }
+                                _ => {}
                             }
-                        } else {
-                            // As regular key
+                            // Reintroduce the now-mod key
+                            self.pressed_keys.push(popped_key).ok();
+
+                        // Print home as Regular key if released
+                        } else if !self.matrix.is_active(popped_key.index) {
                             key_buffer = popped_key.code.usb_code(key_buffer, &self.mods);
                             // key_buffer = KC::None.usb_code(key_buffer, &self.mods);
                             self.last_key = Some(popped_key.index);
+                        } else {
+                            // Specific case with two homerow pressed consecutively
+                            // If the second is in an 'in-between' state, stop here to wait.
+                            self.homerow.push_front(popped_key).ok();
+                            break 'hr;
                         }
-                    }
-                // First released bebore being held --
-                // Print all of them with homerow pressed status
-                // } else if key.ticks < HOLD_TIME && !self.matrix.is_active(key.index) {
-                } else if !self.matrix.is_active(key.index) {
-                    while let Some(popped_key) = self.homerow.pop_front() {
+                    } else {
+                        // As regular key
                         key_buffer = popped_key.code.usb_code(key_buffer, &self.mods);
                         // key_buffer = KC::None.usb_code(key_buffer, &self.mods);
                         self.last_key = Some(popped_key.index);
                     }
                 }
-            }
-
-            // Regular keys ---------------------------------------------------------
-            for key in self
-                .pressed_keys
-                .iter_mut()
-                .filter(|k| k.code > KC::LayoutDone)
-            {
-                match key.code {
-                    k if (k >= KC::A && k <= KC::Yen) => {
-                        if !self.homerow.is_empty() {
-                            self.homerow.push_back(key.clone()).ok();
-                        } else {
-                            key_buffer = k.usb_code(key_buffer, &self.mods);
-                        }
-
-                        self.last_key = Some(key.index);
-                        key.code = KC::Done;
-                        self.layout.dead = false;
-                    }
-
-                    // Mouse --------------------------------------------------------
-                    // k if (k >= KC::MouseBtLeft && k <= KC::MouseBtRight) => {
-                    //     if *mat_cur > 0 {
-                    //         mouse_report.buttons |= match k {
-                    //             KC::MouseBtLeft => 0x1,
-                    //             KC::MouseBtMiddle => 0x4,
-                    //             _ => 0x2,
-                    //         }
-                    //     } else {
-                    //         mouse_report.buttons &= match k {
-                    //             KC::MouseBtLeft => 0xFF - 0x1,
-                    //             KC::MouseBtMiddle => 0xFF - 0x4,
-                    //             _ => 0xFF - 0x2,
-                    //         }
-                    //     }
-                    // }
-                    // k if (k >= &KC::MouseLeft && k <= &KC::MouseWheelRight) => {
-                    //     self.mouse_scroll_tempo += 1;
-
-                    //     if *mat_cur > 0 {
-                    //         let (speed, (scroll_temp, scroll_speed)) = if let Some((key, _)) =
-                    //             LAYOUTS[self.layout.number]
-                    //                 .iter()
-                    //                 .zip(self.matrix.cur.iter())
-                    //                 .filter(|(k, m)| {
-                    //                     **k >= KC::MouseSpeed1 && **k <= KC::MouseSpeed4 && **m > 0
-                    //                 })
-                    //                 .last()
-                    //         {
-                    //             match key {
-                    //                 KC::MouseSpeed1 => (MOUSE_SPEED_1, SCROLL_TEMP_SPEED_1),
-                    //                 KC::MouseSpeed2 => (MOUSE_SPEED_2, SCROLL_TEMP_SPEED_2),
-                    //                 KC::MouseSpeed3 => (MOUSE_SPEED_3, SCROLL_TEMP_SPEED_3),
-                    //                 _ => (MOUSE_SPEED_4, SCROLL_TEMP_SPEED_4),
-                    //             }
-                    //         } else {
-                    //             (MOUSE_SPEED_DEFAULT, SCROLL_TEMP_SPEED_DEFAULT)
-                    //         };
-
-                    //         if k <= &KC::MouseRight {
-                    //             mouse_report = k.usb_mouse_move(mouse_report, speed);
-                    //         } else if self.mouse_scroll_tempo >= scroll_temp {
-                    //             self.mouse_scroll_tempo = 0;
-                    //             mouse_report = k.usb_mouse_move(mouse_report, scroll_speed);
-                    //         }
-                    //     }
-                    // }
-                    _ => {}
+            // First released bebore being held --
+            // Print all of them with homerow pressed status
+            // } else if key.ticks < HOLD_TIME && !self.matrix.is_active(key.index) {
+            } else if !self.matrix.is_active(key.index) {
+                while let Some(popped_key) = self.homerow.pop_front() {
+                    key_buffer = popped_key.code.usb_code(key_buffer, &self.mods);
+                    // key_buffer = KC::None.usb_code(key_buffer, &self.mods);
+                    self.last_key = Some(popped_key.index);
                 }
             }
-
-            // for ((index, layout), (mat_prev, mat_cur)) in LAYOUTS[self.layout.number]
-            //     .iter()
-            //     .enumerate()
-            //     .zip(self.matrix.prev.iter().zip(self.matrix.cur.iter()))
-            //     .filter(|((index, _), (_, _))| {
-            //         !self.to_skip.iter().any(|(i, _)| i == index) && !self.mods.is_active(*index)
-            //     })
-            // {
-            //     match layout {
-            //         k if (k >= &KC::A && k <= &KC::Yen) => {
-            //             if *mat_prev < PRESSED_TIME && *mat_cur >= PRESSED_TIME {
-            //                 self.layout.dead = false;
-
-            //                 if self.homerow.is_empty() {
-            //                     key_buffer = k.usb_code(key_buffer, &[index], &self.mods);
-            //                 } else {
-            //                     self.homerow.push_back(KeyIndex { key: *k, index }).ok();
-            //                 }
-            //             }
-            //         }
-            //         k if (k >= &KC::ACircum && k <= &KC::YDiaer) => {
-            //             if *mat_prev < PRESSED_TIME && *mat_cur >= PRESSED_TIME {
-            //                 self.layout.dead = false;
-
-            //                 if self.homerow.is_empty() {
-            //                     key_buffer = k.usb_code(key_buffer, &[], &self.mods);
-            //                 } else {
-            //                     self.homerow.push_back(KeyIndex { key: *k, index }).ok();
-            //                 }
-            //             }
-            //         }
-
-            //         // Mouse --------------------------------------------------------
-            //         k if (k >= &KC::MouseBtLeft && k <= &KC::MouseBtRight) => {
-            //             if *mat_cur > 0 {
-            //                 mouse_report.buttons |= match k {
-            //                     KC::MouseBtLeft => 0x1,
-            //                     KC::MouseBtMiddle => 0x4,
-            //                     _ => 0x2,
-            //                 }
-            //             } else {
-            //                 mouse_report.buttons &= match k {
-            //                     KC::MouseBtLeft => 0xFF - 0x1,
-            //                     KC::MouseBtMiddle => 0xFF - 0x4,
-            //                     _ => 0xFF - 0x2,
-            //                 }
-            //             }
-            //         }
-            //         k if (k >= &KC::MouseLeft && k <= &KC::MouseWheelRight) => {
-            //             self.mouse_scroll_tempo += 1;
-
-            //             if *mat_cur > 0 {
-            //                 let (speed, (scroll_temp, scroll_speed)) = if let Some((key, _)) =
-            //                     LAYOUTS[self.layout.number]
-            //                         .iter()
-            //                         .zip(self.matrix.cur.iter())
-            //                         .filter(|(k, m)| {
-            //                             **k >= KC::MouseSpeed1 && **k <= KC::MouseSpeed4 && **m > 0
-            //                         })
-            //                         .last()
-            //                 {
-            //                     match key {
-            //                         KC::MouseSpeed1 => (MOUSE_SPEED_1, SCROLL_TEMP_SPEED_1),
-            //                         KC::MouseSpeed2 => (MOUSE_SPEED_2, SCROLL_TEMP_SPEED_2),
-            //                         KC::MouseSpeed3 => (MOUSE_SPEED_3, SCROLL_TEMP_SPEED_3),
-            //                         _ => (MOUSE_SPEED_4, SCROLL_TEMP_SPEED_4),
-            //                     }
-            //                 } else {
-            //                     (MOUSE_SPEED_DEFAULT, SCROLL_TEMP_SPEED_DEFAULT)
-            //                 };
-
-            //                 if k <= &KC::MouseRight {
-            //                     mouse_report = k.usb_mouse_move(mouse_report, speed);
-            //                 } else if self.mouse_scroll_tempo >= scroll_temp {
-            //                     self.mouse_scroll_tempo = 0;
-            //                     mouse_report = k.usb_mouse_move(mouse_report, scroll_speed);
-            //                 }
-            //             }
-            //         }
-
-            //         _ => {}
-            // }
-            // }
-            // }
         }
+
+        // Regular keys ---------------------------------------------------------
+        for key in self
+            .pressed_keys
+            .iter_mut()
+            .filter(|k| k.code > KC::LayoutDone)
+        {
+            match key.code {
+                k if (k >= KC::A && k <= KC::Yen) => {
+                    if !self.homerow.is_empty() {
+                        self.homerow.push_back(key.clone()).ok();
+                    } else {
+                        key_buffer = k.usb_code(key_buffer, &self.mods);
+                    }
+
+                    self.last_key = Some(key.index);
+                    key.code = KC::Done;
+                    self.layout.dead = false;
+                }
+
+                // Mouse --------------------------------------------------------
+                // k if (k >= KC::MouseBtLeft && k <= KC::MouseBtRight) => {
+                //     if *mat_cur > 0 {
+                //         mouse_report.buttons |= match k {
+                //             KC::MouseBtLeft => 0x1,
+                //             KC::MouseBtMiddle => 0x4,
+                //             _ => 0x2,
+                //         }
+                //     } else {
+                //         mouse_report.buttons &= match k {
+                //             KC::MouseBtLeft => 0xFF - 0x1,
+                //             KC::MouseBtMiddle => 0xFF - 0x4,
+                //             _ => 0xFF - 0x2,
+                //         }
+                //     }
+                // }
+                // k if (k >= &KC::MouseLeft && k <= &KC::MouseWheelRight) => {
+                //     self.mouse_scroll_tempo += 1;
+
+                //     if *mat_cur > 0 {
+                //         let (speed, (scroll_temp, scroll_speed)) = if let Some((key, _)) =
+                //             LAYOUTS[self.layout.number]
+                //                 .iter()
+                //                 .zip(self.matrix.cur.iter())
+                //                 .filter(|(k, m)| {
+                //                     **k >= KC::MouseSpeed1 && **k <= KC::MouseSpeed4 && **m > 0
+                //                 })
+                //                 .last()
+                //         {
+                //             match key {
+                //                 KC::MouseSpeed1 => (MOUSE_SPEED_1, SCROLL_TEMP_SPEED_1),
+                //                 KC::MouseSpeed2 => (MOUSE_SPEED_2, SCROLL_TEMP_SPEED_2),
+                //                 KC::MouseSpeed3 => (MOUSE_SPEED_3, SCROLL_TEMP_SPEED_3),
+                //                 _ => (MOUSE_SPEED_4, SCROLL_TEMP_SPEED_4),
+                //             }
+                //         } else {
+                //             (MOUSE_SPEED_DEFAULT, SCROLL_TEMP_SPEED_DEFAULT)
+                //         };
+
+                //         if k <= &KC::MouseRight {
+                //             mouse_report = k.usb_mouse_move(mouse_report, speed);
+                //         } else if self.mouse_scroll_tempo >= scroll_temp {
+                //             self.mouse_scroll_tempo = 0;
+                //             mouse_report = k.usb_mouse_move(mouse_report, scroll_speed);
+                //         }
+                //     }
+                // }
+                _ => {}
+            }
+        }
+
+        // for ((index, layout), (mat_prev, mat_cur)) in LAYOUTS[self.layout.number]
+        //     .iter()
+        //     .enumerate()
+        //     .zip(self.matrix.prev.iter().zip(self.matrix.cur.iter()))
+        //     .filter(|((index, _), (_, _))| {
+        //         !self.to_skip.iter().any(|(i, _)| i == index) && !self.mods.is_active(*index)
+        //     })
+        // {
+        //     match layout {
+        //         k if (k >= &KC::A && k <= &KC::Yen) => {
+        //             if *mat_prev < PRESSED_TIME && *mat_cur >= PRESSED_TIME {
+        //                 self.layout.dead = false;
+
+        //                 if self.homerow.is_empty() {
+        //                     key_buffer = k.usb_code(key_buffer, &[index], &self.mods);
+        //                 } else {
+        //                     self.homerow.push_back(KeyIndex { key: *k, index }).ok();
+        //                 }
+        //             }
+        //         }
+        //         k if (k >= &KC::ACircum && k <= &KC::YDiaer) => {
+        //             if *mat_prev < PRESSED_TIME && *mat_cur >= PRESSED_TIME {
+        //                 self.layout.dead = false;
+
+        //                 if self.homerow.is_empty() {
+        //                     key_buffer = k.usb_code(key_buffer, &[], &self.mods);
+        //                 } else {
+        //                     self.homerow.push_back(KeyIndex { key: *k, index }).ok();
+        //                 }
+        //             }
+        //         }
+
+        //         // Mouse --------------------------------------------------------
+        //         k if (k >= &KC::MouseBtLeft && k <= &KC::MouseBtRight) => {
+        //             if *mat_cur > 0 {
+        //                 mouse_report.buttons |= match k {
+        //                     KC::MouseBtLeft => 0x1,
+        //                     KC::MouseBtMiddle => 0x4,
+        //                     _ => 0x2,
+        //                 }
+        //             } else {
+        //                 mouse_report.buttons &= match k {
+        //                     KC::MouseBtLeft => 0xFF - 0x1,
+        //                     KC::MouseBtMiddle => 0xFF - 0x4,
+        //                     _ => 0xFF - 0x2,
+        //                 }
+        //             }
+        //         }
+        //         k if (k >= &KC::MouseLeft && k <= &KC::MouseWheelRight) => {
+        //             self.mouse_scroll_tempo += 1;
+
+        //             if *mat_cur > 0 {
+        //                 let (speed, (scroll_temp, scroll_speed)) = if let Some((key, _)) =
+        //                     LAYOUTS[self.layout.number]
+        //                         .iter()
+        //                         .zip(self.matrix.cur.iter())
+        //                         .filter(|(k, m)| {
+        //                             **k >= KC::MouseSpeed1 && **k <= KC::MouseSpeed4 && **m > 0
+        //                         })
+        //                         .last()
+        //                 {
+        //                     match key {
+        //                         KC::MouseSpeed1 => (MOUSE_SPEED_1, SCROLL_TEMP_SPEED_1),
+        //                         KC::MouseSpeed2 => (MOUSE_SPEED_2, SCROLL_TEMP_SPEED_2),
+        //                         KC::MouseSpeed3 => (MOUSE_SPEED_3, SCROLL_TEMP_SPEED_3),
+        //                         _ => (MOUSE_SPEED_4, SCROLL_TEMP_SPEED_4),
+        //                     }
+        //                 } else {
+        //                     (MOUSE_SPEED_DEFAULT, SCROLL_TEMP_SPEED_DEFAULT)
+        //                 };
+
+        //                 if k <= &KC::MouseRight {
+        //                     mouse_report = k.usb_mouse_move(mouse_report, speed);
+        //                 } else if self.mouse_scroll_tempo >= scroll_temp {
+        //                     self.mouse_scroll_tempo = 0;
+        //                     mouse_report = k.usb_mouse_move(mouse_report, scroll_speed);
+        //                 }
+        //             }
+        //         }
+
+        //         _ => {}
+        // }
+        // }
+        // }
 
         if self
             .last_key
@@ -598,7 +546,7 @@ impl Chew {
         if self.layout.number == 4 {
             self.led_status = LED_LAYOUT_FR;
         }
-        if self.leader_key {
+        if self.leader.active {
             self.led_status = LED_LEADER_KEY;
         }
 

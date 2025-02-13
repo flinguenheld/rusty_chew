@@ -5,7 +5,6 @@ pub const BUFFER_LENGTH: usize = 50;
 pub const BUFFER_CASE_LENGTH: usize = 10;
 
 pub const TEMPO_DEAD_KEY: u32 = 50;
-pub const TEMPO_MACRO: u32 = 20;
 
 // Milliseconds
 pub const TIMER_UART_LOOP: u32 = 1;
