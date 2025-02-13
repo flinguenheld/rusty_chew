@@ -22,7 +22,6 @@ pub struct Key {
     pub index: usize,
     pub code: KC,
     pub ticks: u32,
-    // pub done: bool,
 }
 impl Key {
     fn default() -> Self {
@@ -30,7 +29,6 @@ impl Key {
             index: 0,
             code: KC::None,
             ticks: 0,
-            // done: false,
         }
     }
 }
@@ -63,14 +61,12 @@ pub struct Chew {
 
     leader: Leader,
 
-    to_skip: Vec<(usize, u32), 10>,
-
     pre_pressed_keys: Vec<Key, 34>,
     pressed_keys: Vec<Key, 34>,
     released_keys: Vec<usize, 34>,
 
-    last_ticks: u32,
     last_key: Option<usize>,
+    last_ticks: u32,
 }
 
 impl Chew {
@@ -86,7 +82,6 @@ impl Chew {
 
             matrix: Matrix::new(),
             mods: Modifiers::new(),
-
             homerow: Deque::new(),
 
             mouse_scroll_tempo: 0,
@@ -96,14 +91,12 @@ impl Chew {
                 buffer: Vec::new(),
             },
 
-            to_skip: Vec::new(),
-
             pre_pressed_keys: Vec::new(),
             pressed_keys: Vec::new(),
             released_keys: Vec::new(),
 
-            last_ticks: ticks,
             last_key: None,
+            last_ticks: ticks,
         }
     }
 
@@ -155,14 +148,6 @@ impl Chew {
         self.mods.update_state(&self.pressed_keys);
 
         self.last_ticks = ticks;
-    }
-
-    pub fn is_last_key_active(&self, indexes: &[usize]) -> bool {
-        // !indexes.is_empty() && indexes.iter().all(|i| self.matrix.cur[*i] > 0)
-        !indexes.is_empty() && indexes.iter().all(|i| self.matrix.is_active(*i))
-    }
-    pub fn nb_active(&self) -> u32 {
-        self.pressed_keys.len() as u32
     }
 
     pub fn run(
@@ -373,14 +358,17 @@ impl Chew {
             .filter(|k| k.code > KC::LayoutDone)
         {
             match key.code {
-                k if (k >= KC::A && k <= KC::Yen) => {
+                k if (k >= KC::A && k <= KC::YDiaer) => {
                     if !self.homerow.is_empty() {
                         self.homerow.push_back(key.clone()).ok();
                     } else {
                         key_buffer = k.usb_code(key_buffer, &self.mods);
                     }
 
-                    self.last_key = Some(key.index);
+                    // No held with macros (They already add the NoEventIndicated)
+                    if k < KC::ACircum {
+                        self.last_key = Some(key.index);
+                    }
                     key.code = KC::Done;
                     self.layout.dead = false;
                 }
