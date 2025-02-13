@@ -1,14 +1,14 @@
 use crate::{
-    keys::{Buffer, COMBOS, KC, LEADER_KEY_COMBINATIONS},
-    layouts::LAYOUTS,
+    keys::{Buffer, KC},
+    layouts::{COMBOS, LAYOUTS, LEADER_KEY_COMBINATIONS},
     utils::{
         led::{LED_LAYOUT_FR, LED_LEADER_KEY},
         matrix::Matrix,
         modifiers::Modifiers,
         options::{
             COMBO_TIME, HOLD_TIME, MOUSE_SPEED_1, MOUSE_SPEED_2, MOUSE_SPEED_3, MOUSE_SPEED_4,
-            MOUSE_SPEED_DEFAULT, PRESSED_TIME, SCROLL_TEMP_SPEED_1, SCROLL_TEMP_SPEED_2,
-            SCROLL_TEMP_SPEED_3, SCROLL_TEMP_SPEED_4, SCROLL_TEMP_SPEED_DEFAULT,
+            MOUSE_SPEED_DEFAULT, SCROLL_TEMP_SPEED_1, SCROLL_TEMP_SPEED_2, SCROLL_TEMP_SPEED_3,
+            SCROLL_TEMP_SPEED_4, SCROLL_TEMP_SPEED_DEFAULT,
         },
     },
 };
@@ -22,7 +22,7 @@ pub struct Key {
     pub index: usize,
     pub code: KC,
     pub ticks: u32,
-    pub done: bool,
+    // pub done: bool,
 }
 impl Key {
     fn default() -> Self {
@@ -30,7 +30,7 @@ impl Key {
             index: 0,
             code: KC::None,
             ticks: 0,
-            done: false,
+            // done: false,
         }
     }
 }
@@ -62,8 +62,9 @@ pub struct Chew {
 
     to_skip: Vec<(usize, u32), 10>,
 
-    pub pressed_keys: Vec<Key, 34>,
-    pub released_keys: Vec<usize, 34>,
+    pre_pressed_keys: Vec<Key, 34>,
+    pressed_keys: Vec<Key, 34>,
+    released_keys: Vec<usize, 34>,
 
     last_ticks: u32,
     last_key: Option<usize>,
@@ -92,6 +93,7 @@ impl Chew {
 
             to_skip: Vec::new(),
 
+            pre_pressed_keys: Vec::new(),
             pressed_keys: Vec::new(),
             released_keys: Vec::new(),
 
@@ -104,11 +106,16 @@ impl Chew {
         self.matrix
             .update_new(left.iter().chain(right.iter()).cloned().collect());
 
+        // Clean --
+        self.pre_pressed_keys
+            .retain(|key| self.matrix.is_active(key.index) && key.code != KC::Done);
         self.pressed_keys
-            .retain(|key| self.matrix.is_active(key.index) && !key.done);
+            .retain(|key| self.matrix.is_active(key.index) && key.code != KC::Done);
 
-        self.pressed_keys
+        // Updates --
+        self.pre_pressed_keys
             .iter_mut()
+            .chain(self.pressed_keys.iter_mut())
             .chain(self.homerow.iter_mut())
             .for_each(|key| {
                 key.ticks += match self.last_ticks <= ticks {
@@ -117,7 +124,7 @@ impl Chew {
                 }
             });
 
-        self.pressed_keys.extend(
+        self.pre_pressed_keys.extend(
             self.matrix
                 .freshly_pressed()
                 .iter()
@@ -128,6 +135,16 @@ impl Chew {
                 })
                 .collect::<Vec<Key, 16>>(),
         );
+
+        // Move pre-pressed keys into pressed keys --
+        for key in self
+            .pre_pressed_keys
+            .iter_mut()
+            .filter(|k| k.ticks > COMBO_TIME)
+        {
+            self.pressed_keys.push(key.clone()).ok();
+            key.code = KC::Done;
+        }
 
         // Update mods status if released --
         self.mods.update_state(&self.pressed_keys);
@@ -154,28 +171,64 @@ impl Chew {
             // if self.matrix.is_matrix_active()
             //     && (!self.pressed_keys.is_empty() || !self.homerow.is_empty())
             // {
+
+            // Set new keys with the current layout -----------------------------------------
+            for key in self
+                .pre_pressed_keys
+                .iter_mut()
+                .filter(|k| k.code == KC::None)
+            {
+                key.code = LAYOUTS[self.layout.number][key.index];
+            }
+
+            // Combos -------------------------------------------------------------------
+            for (combo, new_key) in COMBOS.iter() {
+                // Are these keys currently pressed ?
+                if let Some(first) = self
+                    .pre_pressed_keys
+                    .iter()
+                    .position(|k| k.code == combo[0])
+                {
+                    if let Some(second) = self
+                        .pre_pressed_keys
+                        .iter_mut()
+                        .position(|k| k.code == combo[1])
+                    {
+                        // Remove pre-pressed & create the new pressed one
+                        self.pre_pressed_keys[first].code = KC::Done;
+                        self.pre_pressed_keys[second].code = KC::Done;
+
+                        self.pressed_keys
+                            .push(Key {
+                                index: self.pre_pressed_keys[first].index,
+                                code: *new_key,
+                                ticks: COMBO_TIME,
+                            })
+                            .ok();
+                    }
+                }
+            }
+            // }
+
             // Layout -------------------------------------------------------------------
-            if self
-                .pressed_keys
-                .iter()
-                .all(|k| k.index != self.layout.index)
-                && ((self.layout.dead && self.layout.dead_done)
-                    || (!self.layout.dead && self.layout.number != 0))
+            if !self.matrix.is_active(self.layout.index)
+                && (!self.layout.dead || (self.layout.dead && self.layout.dead_done))
             {
                 self.layout.number = 0;
                 self.layout.dead = false;
             }
 
-            for key in self.pressed_keys.iter_mut().filter(|k| k.code == KC::None) {
-                match LAYOUTS[self.layout.number][key.index] {
+            for key in self.pressed_keys.iter_mut() {
+                match key.code {
                     KC::Layout(number) => {
-                        key.code = LAYOUTS[self.layout.number][key.index];
+                        // Allow this key to stay in key_pressed without being re-proceeded
+                        key.code = KC::LayoutDone;
                         self.layout.number = number;
                         self.layout.index = key.index;
                         self.layout.dead = false;
                     }
                     KC::LayDead(number) => {
-                        key.code = LAYOUTS[self.layout.number][key.index];
+                        key.code = KC::LayoutDone;
                         self.layout.number = number;
                         self.layout.index = key.index;
                         self.layout.dead = true;
@@ -185,12 +238,6 @@ impl Chew {
                 }
             }
 
-            // Set new keys with the new layout -----------------------------------------
-            for key in self.pressed_keys.iter_mut().filter(|k| k.code == KC::None) {
-                key.code = LAYOUTS[self.layout.number][key.index];
-            }
-
-            // Combos -------------------------------------------------------------------
             // let active_keys: Vec<(usize, KC), 34> = LAYOUTS[self.layout.number]
             //     .iter()
             //     .enumerate()
@@ -229,45 +276,6 @@ impl Chew {
 
             //             KC::Layout(number) => {
             //                 self.layout.number = number;
-            //             }
-            //             _ => {}
-            //         }
-            //     }
-            // }
-
-            // Layouts ------------------------------------------------------------------
-            // if !self.layout.dead {
-            //     if self.matrix.cur[self.layout.matrix_index] == 0 {
-            //         self.layout.number = 0;
-            //     }
-
-            //     for ((index, layout), (mat_prev, mat_cur)) in LAYOUTS[self.layout.number]
-            //         .iter()
-            //         .enumerate()
-            //         .zip(self.matrix.prev.iter().zip(self.matrix.cur.iter()))
-            //     {
-            //         match layout {
-            //             KC::Layout(number) => {
-            //                 if *mat_cur > 0 {
-            //                     self.layout.number = *number;
-            //                     self.layout.matrix_index = index;
-            //                     self.layout.dead = false;
-            //                 }
-            //             }
-            //             KC::LayDead(number) => {
-            //                 if *mat_cur > 0 {
-            //                     self.layout.number = *number;
-            //                     self.layout.matrix_index = index;
-
-            //                     if *mat_prev == 0 {
-            //                         self.layout.dead = true;
-            //                         self.to_skip
-            //                             .push((index, ticks.wrapping_add(PRESSED_TIME)))
-            //                             .ok();
-            //                     } else {
-            //                         self.layout.dead = false;
-            //                     }
-            //                 }
             //             }
             //             _ => {}
             //         }
@@ -409,121 +417,12 @@ impl Chew {
                 }
             }
 
-            // CLEAN IT  ---------------------------------------------------------
-            // CLEAN IT  ---------------------------------------------------------
-
-            //     // Modifiers ------------------------------------------------------------
-            //     LAYOUTS[self.layout.number]
-            //         .iter()
-            //         .zip(self.matrix.cur.iter())
-            //         .enumerate()
-            //         .filter(|(_, (&la, &mc))| mc > 0 && (la >= KC::Alt && la <= KC::Shift))
-            //         .for_each(|(index, (layout, _))| match layout {
-            //             KC::Alt => self.mods.alt = (true, index),
-            //             KC::Altgr => self.mods.alt_gr = (true, index),
-            //             KC::Ctrl => self.mods.ctrl = (true, index),
-            //             KC::Gui => self.mods.gui = (true, index),
-            //             _ => self.mods.shift = (true, index),
-            //         });
-
-            //     self.mods.deactivate_released(&self.matrix.cur);
-
-            //     // Homerows -------------------------------------------------------------
-            //     // Get and add new active ones --
-            //     for (((index, &key), _), _) in LAYOUTS[self.layout.number]
-            //         .iter()
-            //         .enumerate()
-            //         .zip(self.matrix.prev.iter())
-            //         .zip(self.matrix.cur.iter())
-            //         .filter(|(((_, &key), &mat_prev), &mat_cur)| {
-            //             (key >= KC::HomeAltA && key <= KC::HomeSftR)
-            //                 && (mat_prev == 0)
-            //                 && mat_cur > 0
-            //         })
-            //     {
-            //         self.homerow.push_back(KeyIndex { key, index }).ok();
-            //     }
-
-            //     // Manage active homerows --
-            //     // The first entry is always a homerow key
-            //     if let Some(key_index) = self.homerow.front() {
-            //         // First hold --
-            //         // Set all homerows as held and print the regular keys
-            //         if self.matrix.cur[key_index.index] > HOLD_TIME {
-            //             'hr: while let Some(ki) = self.homerow.pop_front() {
-            //                 if ki.key >= KC::HomeAltA && ki.key <= KC::HomeSftR {
-            //                     if self.matrix.cur[ki.index] >= HOLD_TIME {
-            //                         match ki.key {
-            //                             KC::HomeAltA | KC::HomeAltU => {
-            //                                 self.mods.alt = (true, ki.index)
-            //                             }
-            //                             KC::HomeCtrlE | KC::HomeCtrlT => {
-            //                                 self.mods.ctrl = (true, ki.index)
-            //                             }
-            //                             KC::HomeGuiS | KC::HomeGuiI => {
-            //                                 self.mods.gui = (true, ki.index)
-            //                             }
-            //                             KC::HomeSftN | KC::HomeSftR => {
-            //                                 self.mods.shift = (true, ki.index)
-            //                             }
-            //                             _ => {}
-            //                         }
-            //                     } else if self.matrix.cur[ki.index] == 0 {
-            //                         key_buffer = ki.key.usb_code(key_buffer, &[], &self.mods);
-            //                     } else {
-            //                         // Specific case with two homerow pressed consecutively
-            //                         // If the second is in an 'in-between' state, stop here and break.
-            //                         self.homerow.push_front(ki).ok();
-            //                         break 'hr;
-            //                     }
-            //                 } else {
-            //                     key_buffer = ki.key.usb_code(key_buffer, &[], &self.mods);
-            //                 }
-            //             }
-            //         // First released bebore being held --
-            //         // Print all of them with homerow pressed status
-            //         } else if self.matrix.prev[key_index.index] < HOLD_TIME
-            //             && self.matrix.cur[key_index.index] == 0
-            //         {
-            //             while let Some(ki) = self.homerow.pop_front() {
-            //                 key_buffer = ki.key.usb_code(key_buffer, &[], &self.mods);
-            //             }
-            //         }
-            //     }
-            //     // CLEAN IT  ---------------------------------------------------------
-            //     // CLEAN IT  ---------------------------------------------------------
-
-            //     // To allow held repetition, do it only if there no other active key
-            //     if !LAYOUTS[self.layout.number]
-            //         .iter()
-            //         .zip(self.matrix.cur.iter())
-            //         .any(|(&k, &m)| m > 0 && k >= KC::A && k <= KC::YDiaer)
-            //     {
-            //         if self.mods.alt.0 {
-            //             key_buffer = KC::Alt.usb_code(key_buffer, &[self.mods.alt.1], &self.mods);
-            //         }
-            //         if self.mods.alt_gr.0 {
-            //             key_buffer =
-            //                 KC::Altgr.usb_code(key_buffer, &[self.mods.alt_gr.1], &self.mods);
-            //         }
-            //         if self.mods.ctrl.0 {
-            //             key_buffer = KC::Ctrl.usb_code(key_buffer, &[self.mods.ctrl.1], &self.mods);
-            //         }
-            //         if self.mods.gui.0 {
-            //             key_buffer = KC::Gui.usb_code(key_buffer, &[self.mods.gui.1], &self.mods);
-            //         }
-            //         if self.mods.shift.0 {
-            //             key_buffer =
-            //                 KC::Shift.usb_code(key_buffer, &[self.mods.shift.1], &self.mods);
-            //         }
-            //     }
-            //     // CLEAN IT  ---------------------------------------------------------
-            //     // CLEAN IT  ---------------------------------------------------------
-
             // Regular keys ---------------------------------------------------------
-            // Filtering mods prevents error with layers
-
-            for key in self.pressed_keys.iter_mut().filter(|k| !k.done) {
+            for key in self
+                .pressed_keys
+                .iter_mut()
+                .filter(|k| k.code > KC::LayoutDone)
+            {
                 match key.code {
                     k if (k >= KC::A && k <= KC::Yen) => {
                         if !self.homerow.is_empty() {
@@ -533,9 +432,57 @@ impl Chew {
                         }
 
                         self.last_key = Some(key.index);
-                        key.done = true;
+                        key.code = KC::Done;
                         self.layout.dead = false;
                     }
+
+                    // Mouse --------------------------------------------------------
+                    // k if (k >= KC::MouseBtLeft && k <= KC::MouseBtRight) => {
+                    //     if *mat_cur > 0 {
+                    //         mouse_report.buttons |= match k {
+                    //             KC::MouseBtLeft => 0x1,
+                    //             KC::MouseBtMiddle => 0x4,
+                    //             _ => 0x2,
+                    //         }
+                    //     } else {
+                    //         mouse_report.buttons &= match k {
+                    //             KC::MouseBtLeft => 0xFF - 0x1,
+                    //             KC::MouseBtMiddle => 0xFF - 0x4,
+                    //             _ => 0xFF - 0x2,
+                    //         }
+                    //     }
+                    // }
+                    // k if (k >= &KC::MouseLeft && k <= &KC::MouseWheelRight) => {
+                    //     self.mouse_scroll_tempo += 1;
+
+                    //     if *mat_cur > 0 {
+                    //         let (speed, (scroll_temp, scroll_speed)) = if let Some((key, _)) =
+                    //             LAYOUTS[self.layout.number]
+                    //                 .iter()
+                    //                 .zip(self.matrix.cur.iter())
+                    //                 .filter(|(k, m)| {
+                    //                     **k >= KC::MouseSpeed1 && **k <= KC::MouseSpeed4 && **m > 0
+                    //                 })
+                    //                 .last()
+                    //         {
+                    //             match key {
+                    //                 KC::MouseSpeed1 => (MOUSE_SPEED_1, SCROLL_TEMP_SPEED_1),
+                    //                 KC::MouseSpeed2 => (MOUSE_SPEED_2, SCROLL_TEMP_SPEED_2),
+                    //                 KC::MouseSpeed3 => (MOUSE_SPEED_3, SCROLL_TEMP_SPEED_3),
+                    //                 _ => (MOUSE_SPEED_4, SCROLL_TEMP_SPEED_4),
+                    //             }
+                    //         } else {
+                    //             (MOUSE_SPEED_DEFAULT, SCROLL_TEMP_SPEED_DEFAULT)
+                    //         };
+
+                    //         if k <= &KC::MouseRight {
+                    //             mouse_report = k.usb_mouse_move(mouse_report, speed);
+                    //         } else if self.mouse_scroll_tempo >= scroll_temp {
+                    //             self.mouse_scroll_tempo = 0;
+                    //             mouse_report = k.usb_mouse_move(mouse_report, scroll_speed);
+                    //         }
+                    //     }
+                    // }
                     _ => {}
                 }
             }

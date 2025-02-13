@@ -1,6 +1,5 @@
 pub const HOLD_TIME: u32 = 170; // From free to held (ms)
-pub const COMBO_TIME: u32 = 50;
-pub const PRESSED_TIME: u32 = 50;
+pub const COMBO_TIME: u32 = 30;
 
 pub const BUFFER_LENGTH: usize = 50;
 pub const BUFFER_CASE_LENGTH: usize = 10;

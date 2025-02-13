@@ -5,19 +5,6 @@ use crate::utils::{ modifiers::Modifiers,
 use heapless::{Deque, Vec};
 use usbd_human_interface_device::{device::mouse::WheelMouseReport, page::Keyboard};
 
-// LEADER KEY ---------------------------------------------------------------------------
-pub const LEADER_KEY_COMBINATIONS: [([KC; 3], KC); 3] = [
-    ([KC::F, KC::L, KC::None], KC::MacroGit),
-    ([KC::M, KC::HomeAltA, KC::None], KC::MacroMail),
-    ([KC::M, KC::HomeGuiS, KC::None], KC::MacroMailShort),
-];
-
-// COMBOS -------------------------------------------------------------------------------
-pub const COMBOS: [([KC; 2], KC); 2] = [
-    ([KC::Layout(1), KC::Layout(2)], KC::Layout(4)),
-    ([KC::P, KC::O], KC::At),
-];
-
 // --------------------------------------------------------------------------------------
 const DEAD_CIRCUMFLEX: [Keyboard; 2] = [Keyboard::RightAlt,  Keyboard::Keyboard6];
 const DEAD_DIAERIS:    [Keyboard; 3] = [Keyboard::LeftShift, Keyboard::RightAlt, Keyboard::Apostrophe, ];
@@ -72,6 +59,8 @@ impl Buffer {
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
 pub enum KC {
     None = 0,
+    Done = 1,
+    LayoutDone = 2,
 
     A = 10,
     B = 11,
