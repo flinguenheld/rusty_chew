@@ -1,7 +1,8 @@
 #![cfg_attr(rustfmt, rustfmt_skip)]
-use crate::{chew::Key, keys::KC};
 use heapless::Vec;
 use usbd_human_interface_device::page::Keyboard;
+
+use super::{chew::Key, keys::KC};
 
 
 /// Due to layers modifiers have to be manage with their matrix index directly.

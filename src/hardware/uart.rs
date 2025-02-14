@@ -1,5 +1,3 @@
-use super::options::{UART_SEND_DELAY, UART_SPEED};
-
 use heapless::{String, Vec};
 use waveshare_rp2040_zero as bsp;
 
@@ -16,6 +14,8 @@ use cortex_m::delay::Delay;
 use fugit::RateExtU32;
 use pio_uart::{PioUartRx, PioUartTx, RxProgram, TxProgram};
 use usbd_human_interface_device::interface::ReportBuffer;
+
+use crate::options::{UART_SEND_DELAY, UART_SPEED};
 
 const MAX_MESSAGE_LENGTH: usize = 9; // Max tested in January 2025
 const MAX_NOT_COMPLETE: u32 = 3;

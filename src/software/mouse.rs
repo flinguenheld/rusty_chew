@@ -1,14 +1,14 @@
-use super::{
-    matrix::Matrix,
+use heapless::Vec;
+use usbd_human_interface_device::device::mouse::WheelMouseReport;
+
+use super::{chew::Key, keys::KC};
+use crate::{
+    hardware::matrix::Matrix,
     options::{
         MOUSE_SPEED_1, MOUSE_SPEED_2, MOUSE_SPEED_3, MOUSE_SPEED_4, MOUSE_SPEED_DEFAULT,
         SCROLL_SPEED_1, SCROLL_SPEED_2, SCROLL_SPEED_3, SCROLL_SPEED_4, SCROLL_SPEED_DEFAULT,
     },
 };
-use crate::{chew::Key, keys::KC};
-
-use heapless::Vec;
-use usbd_human_interface_device::device::mouse::WheelMouseReport;
 
 /// Allows Chew to emulate the mouse.
 /// Speeds are saved by pressing order and have to be maintained to be effective.

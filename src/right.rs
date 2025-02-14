@@ -1,15 +1,17 @@
 #![no_std]
 #![no_main]
 
-mod chew;
-mod keys;
+mod hardware;
 mod layouts;
-mod utils;
+mod options;
+mod software;
 
-use utils::gpios::Gpios;
-use utils::led::{Led, LedColor, LED_LAYOUT_FR, LED_LEADER_KEY};
-use utils::options::TIMER_UART_LOOP;
-use utils::uart::{Uart, UartError, HR_KEYS, HR_LED};
+use hardware::{
+    gpios::Gpios,
+    led::{Led, LedColor, LED_LAYOUT_FR, LED_LEADER_KEY},
+    uart::{Uart, UartError, HR_KEYS, HR_LED},
+};
+use options::TIMER_UART_LOOP;
 
 use waveshare_rp2040_zero as bsp;
 

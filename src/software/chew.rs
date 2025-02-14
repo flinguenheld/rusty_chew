@@ -1,17 +1,19 @@
-use crate::{
-    keys::{Buffer, KC},
-    layouts::{COMBOS, LAYOUTS, LEADER_KEY_COMBINATIONS},
-    utils::{
-        led::{LED_LAYOUT_FR, LED_LEADER_KEY},
-        matrix::Matrix,
-        modifiers::Modifiers,
-        mouse::Mouse,
-        options::{COMBO_TIME, HOLD_TIME},
-    },
-};
-
 use heapless::{Deque, Vec};
 use usbd_human_interface_device::device::mouse::WheelMouseReport;
+
+use super::{
+    keys::{Buffer, KC},
+    modifiers::Modifiers,
+    mouse::Mouse,
+};
+use crate::{
+    hardware::{
+        led::{LED_LAYOUT_FR, LED_LEADER_KEY},
+        matrix::Matrix,
+    },
+    layouts::{COMBOS, LAYOUTS, LEADER_KEY_COMBINATIONS},
+    options::{COMBO_TIME, HOLD_TIME},
+};
 
 // Remove pub --
 #[derive(Clone, Copy)]

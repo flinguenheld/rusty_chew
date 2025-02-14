@@ -1,4 +1,4 @@
-use crate::keys::KC;
+use crate::software::keys::KC;
 
 #[rustfmt::skip]
 pub const LAYOUTS: [[KC; 34]; 5] = [[

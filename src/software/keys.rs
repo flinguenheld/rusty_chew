@@ -1,9 +1,9 @@
 #![cfg_attr(rustfmt, rustfmt_skip)]
-use crate::utils::{ modifiers::Modifiers,
-           options::{BUFFER_CASE_LENGTH, BUFFER_LENGTH, TEMPO_DEAD_KEY},
-};
 use heapless::{Deque, Vec};
 use usbd_human_interface_device::page::Keyboard;
+
+use crate::options::{BUFFER_CASE_LENGTH, BUFFER_LENGTH, TEMPO_DEAD_KEY};
+use super::modifiers::Modifiers;
 
 // --------------------------------------------------------------------------------------
 const DEAD_CIRCUMFLEX: [Keyboard; 2] = [Keyboard::RightAlt,  Keyboard::Keyboard6];
