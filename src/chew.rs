@@ -42,8 +42,7 @@ struct Leader {
 }
 
 /// This is the core of this keyboard,
-/// The Run function proceeds all the keyboard hacks to fill the key buffer according
-/// to the LAYOUT.
+/// The Run function proceeds all the keyboard hacks to fill the key buffer according to the LAYOUT.
 pub struct Chew {
     layout: Layout,
     leader: Leader,
@@ -155,7 +154,7 @@ impl Chew {
             key.code = LAYOUTS[self.layout.number][key.index];
         }
 
-        // Combos -------------------------------------------------------------------
+        // Combos -----------------------------------------------------------------------
         for (combo, new_key) in COMBOS.iter() {
             // Are these keys currently pressed ?
             if let Some(first) = self
@@ -184,7 +183,7 @@ impl Chew {
         }
         // }
 
-        // Layout -------------------------------------------------------------------
+        // Layout -----------------------------------------------------------------------
         if !(self.matrix.is_active(self.layout.index) || self.layout.dead && !self.layout.dead_done)
         {
             self.layout.number = 0;
@@ -211,7 +210,7 @@ impl Chew {
             }
         }
 
-        // Leader key ---------------------------------------------------------------
+        // Leader key -------------------------------------------------------------------
         // Once activated, leave it with ESC or a wrong combination
         if let Some(leader) = self
             .pressed_keys
@@ -261,7 +260,7 @@ impl Chew {
             }
         }
 
-        // Modifiers ------------------------------------------------------------
+        // Modifiers --------------------------------------------------------------------
         // Regulars --
         self.pressed_keys
             .iter()
@@ -340,7 +339,7 @@ impl Chew {
             }
         }
 
-        // Regular keys ---------------------------------------------------------
+        // Regular keys -----------------------------------------------------------------
         for key in self
             .pressed_keys
             .iter_mut()
@@ -362,14 +361,13 @@ impl Chew {
                     self.layout.dead = false;
                 }
 
-                // Mouse --------------------------------------------------------
+                // Mouse ----------------------------------------------------------------
                 k if (k >= KC::MouseBtLeft && k <= KC::MouseBtRight) => {
                     self.mouse.active_button(&mut mouse_report, key);
-                    // key.code = KC::DoneButKeep;
                 }
                 k if (k >= KC::MouseSpeed1 && k <= KC::MouseSpeed4) => {
                     self.mouse.speed(key);
-                    // key.code = KC::Done;
+                    key.code = KC::DoneButKeep;
                 }
                 k if (k >= KC::MouseLeft && k <= KC::MouseRight) => {
                     self.mouse.movement(&mut mouse_report, k);
@@ -382,13 +380,14 @@ impl Chew {
             }
         }
 
+        // Repetition -------------------------------------------------------------------
         if self
             .last_key
             .is_some_and(|index| !self.matrix.is_active(index))
         {
             self.last_key = None;
 
-            // End repetition --
+            // End --
             if self.mods.active().is_empty() {
                 key_buffer = KC::None.usb_code(key_buffer, &self.mods);
             }
