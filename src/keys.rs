@@ -3,7 +3,7 @@ use crate::utils::{ modifiers::Modifiers,
            options::{BUFFER_CASE_LENGTH, BUFFER_LENGTH, TEMPO_DEAD_KEY},
 };
 use heapless::{Deque, Vec};
-use usbd_human_interface_device::{device::mouse::WheelMouseReport, page::Keyboard};
+use usbd_human_interface_device::page::Keyboard;
 
 // --------------------------------------------------------------------------------------
 const DEAD_CIRCUMFLEX: [Keyboard; 2] = [Keyboard::RightAlt,  Keyboard::Keyboard6];
@@ -60,7 +60,7 @@ impl Buffer {
 pub enum KC {
     None = 0,
     Done = 1,
-    LayoutDone = 2,
+    DoneButKeep = 2,
 
     A = 10,
     B = 11,
@@ -233,24 +233,6 @@ pub enum KC {
 }
 
 impl KC {
-    // Mouse ----------------------------------------------------------------------------
-    pub fn usb_mouse_move(&self, mut report: WheelMouseReport, speed: i8) -> WheelMouseReport {
-        match *self {
-            KC::MouseLeft  => report.x = i8::saturating_add(report.x, -speed),
-            KC::MouseDown  => report.y = i8::saturating_add(report.y, speed),
-            KC::MouseUp    => report.y = i8::saturating_add(report.y, -speed),
-            KC::MouseRight => report.x = i8::saturating_add(report.x, speed),
-
-            KC::MouseWheelLeft  => report.horizontal_wheel = i8::saturating_add(report.horizontal_wheel, speed),
-            KC::MouseWheelDown  => report.vertical_wheel   = i8::saturating_add(report.vertical_wheel, -speed),
-            KC::MouseWheelUp    => report.vertical_wheel   = i8::saturating_add(report.vertical_wheel, speed),
-            KC::MouseWheelRight => report.horizontal_wheel = i8::saturating_add(report.horizontal_wheel, -speed),
-            _ => {}
-        }
-        report
-    }
-
-    // Keyboard -------------------------------------------------------------------------
     /// Convert a Chew keycode into an array of Keyboard page.
     pub fn usb_code(&self, buffer: Buffer, mods: &Modifiers) -> Buffer {
         match *self {

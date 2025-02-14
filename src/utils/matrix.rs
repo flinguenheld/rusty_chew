@@ -1,5 +1,5 @@
-use core::mem::{self, swap};
-use heapless::{FnvIndexMap, Vec};
+use core::mem;
+use heapless::Vec;
 
 /// The matrix struct allows Chew to be aware of key evolutions.
 /// It consists of two arrays of 34 integers.
@@ -18,9 +18,6 @@ use heapless::{FnvIndexMap, Vec};
 // }
 
 pub struct Matrix {
-    pub cur: [u32; 34],
-    pub prev: [u32; 34],
-
     current: Vec<usize, 16>,
     previous: Vec<usize, 16>,
 }
@@ -28,9 +25,6 @@ pub struct Matrix {
 impl Matrix {
     pub fn new() -> Matrix {
         Matrix {
-            cur: [0; 34],
-            prev: [0; 34],
-
             previous: Vec::new(),
             current: Vec::new(),
         }
@@ -48,19 +42,15 @@ impl Matrix {
             .copied()
             .collect()
     }
-    pub fn freshly_released(&self) -> Vec<usize, 16> {
-        self.previous
-            .iter()
-            .filter(|index| !self.current.contains(index))
-            .copied()
-            .collect()
-    }
+    // pub fn freshly_released(&self) -> Vec<usize, 16> {
+    //     self.previous
+    //         .iter()
+    //         .filter(|index| !self.current.contains(index))
+    //         .copied()
+    //         .collect()
+    // }
 
     pub fn is_active(&self, index: usize) -> bool {
         self.current.contains(&index)
-    }
-
-    pub fn is_matrix_active(&self) -> bool {
-        self.current != self.previous
     }
 }

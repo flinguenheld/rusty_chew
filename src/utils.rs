@@ -2,6 +2,7 @@ pub mod gpios;
 pub mod led;
 pub mod matrix;
 pub mod modifiers;
+pub mod mouse;
 pub mod options;
 pub mod serial;
 pub mod uart;

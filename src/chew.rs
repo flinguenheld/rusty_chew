@@ -5,19 +5,16 @@ use crate::{
         led::{LED_LAYOUT_FR, LED_LEADER_KEY},
         matrix::Matrix,
         modifiers::Modifiers,
-        options::{
-            COMBO_TIME, HOLD_TIME, MOUSE_SPEED_1, MOUSE_SPEED_2, MOUSE_SPEED_3, MOUSE_SPEED_4,
-            MOUSE_SPEED_DEFAULT, SCROLL_TEMP_SPEED_1, SCROLL_TEMP_SPEED_2, SCROLL_TEMP_SPEED_3,
-            SCROLL_TEMP_SPEED_4, SCROLL_TEMP_SPEED_DEFAULT,
-        },
+        mouse::Mouse,
+        options::{COMBO_TIME, HOLD_TIME},
     },
 };
 
-use heapless::{Deque, FnvIndexMap, Vec};
+use heapless::{Deque, Vec};
 use usbd_human_interface_device::device::mouse::WheelMouseReport;
 
 // Remove pub --
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct Key {
     pub index: usize,
     pub code: KC,
@@ -49,6 +46,9 @@ struct Leader {
 /// to the LAYOUT.
 pub struct Chew {
     layout: Layout,
+    leader: Leader,
+    mouse: Mouse,
+
     led_status: u8,
 
     matrix: Matrix,
@@ -56,15 +56,9 @@ pub struct Chew {
 
     homerow: Deque<Key, 5>,
 
-    // Allow to drastically slow down the wheel
-    mouse_scroll_tempo: u32,
-
-    leader: Leader,
-
     pre_pressed_keys: Vec<Key, 34>,
     pressed_keys: Vec<Key, 34>,
-    released_keys: Vec<usize, 34>,
-
+    // released_keys: Vec<usize, 34>,
     last_key: Option<usize>,
     last_ticks: u32,
 }
@@ -78,23 +72,20 @@ impl Chew {
                 dead: false,
                 dead_done: false,
             },
+            leader: Leader {
+                active: false,
+                buffer: Vec::new(),
+            },
+            mouse: Mouse::new(),
             led_status: 0,
 
             matrix: Matrix::new(),
             mods: Modifiers::new(),
             homerow: Deque::new(),
 
-            mouse_scroll_tempo: 0,
-
-            leader: Leader {
-                active: false,
-                buffer: Vec::new(),
-            },
-
             pre_pressed_keys: Vec::new(),
             pressed_keys: Vec::new(),
-            released_keys: Vec::new(),
-
+            // released_keys: Vec::new(),
             last_key: None,
             last_ticks: ticks,
         }
@@ -140,7 +131,7 @@ impl Chew {
             .iter_mut()
             .filter(|k| k.ticks > COMBO_TIME)
         {
-            self.pressed_keys.push(key.clone()).ok();
+            self.pressed_keys.push(*key).ok();
             key.code = KC::Done;
         }
 
@@ -154,7 +145,6 @@ impl Chew {
         &mut self,
         mut key_buffer: Buffer,
         mut mouse_report: WheelMouseReport,
-        ticks: u32,
     ) -> (Buffer, WheelMouseReport, u8) {
         // Set new keys with the current layout -----------------------------------------
         for key in self
@@ -195,8 +185,7 @@ impl Chew {
         // }
 
         // Layout -------------------------------------------------------------------
-        if !self.matrix.is_active(self.layout.index)
-            && (!self.layout.dead || (self.layout.dead && self.layout.dead_done))
+        if !(self.matrix.is_active(self.layout.index) || self.layout.dead && !self.layout.dead_done)
         {
             self.layout.number = 0;
             self.layout.dead = false;
@@ -206,13 +195,13 @@ impl Chew {
             match key.code {
                 KC::Layout(number) => {
                     // Allow this key to stay in key_pressed without being re-proceeded
-                    key.code = KC::LayoutDone;
+                    key.code = KC::DoneButKeep;
                     self.layout.number = number;
                     self.layout.index = key.index;
                     self.layout.dead = false;
                 }
                 KC::LayDead(number) => {
-                    key.code = KC::LayoutDone;
+                    key.code = KC::DoneButKeep;
                     self.layout.number = number;
                     self.layout.index = key.index;
                     self.layout.dead = true;
@@ -246,7 +235,7 @@ impl Chew {
                     {
                         self.leader.buffer.push(k).ok();
                         let temp_buffer: [KC; 3] = [
-                            *self.leader.buffer.get(0).unwrap_or(&KC::None),
+                            *self.leader.buffer.first().unwrap_or(&KC::None),
                             *self.leader.buffer.get(1).unwrap_or(&KC::None),
                             *self.leader.buffer.get(2).unwrap_or(&KC::None),
                         ];
@@ -355,12 +344,12 @@ impl Chew {
         for key in self
             .pressed_keys
             .iter_mut()
-            .filter(|k| k.code > KC::LayoutDone)
+            .filter(|k| k.code > KC::DoneButKeep)
         {
             match key.code {
                 k if (k >= KC::A && k <= KC::YDiaer) => {
                     if !self.homerow.is_empty() {
-                        self.homerow.push_back(key.clone()).ok();
+                        self.homerow.push_back(*key).ok();
                     } else {
                         key_buffer = k.usb_code(key_buffer, &self.mods);
                     }
@@ -374,140 +363,24 @@ impl Chew {
                 }
 
                 // Mouse --------------------------------------------------------
-                // k if (k >= KC::MouseBtLeft && k <= KC::MouseBtRight) => {
-                //     if *mat_cur > 0 {
-                //         mouse_report.buttons |= match k {
-                //             KC::MouseBtLeft => 0x1,
-                //             KC::MouseBtMiddle => 0x4,
-                //             _ => 0x2,
-                //         }
-                //     } else {
-                //         mouse_report.buttons &= match k {
-                //             KC::MouseBtLeft => 0xFF - 0x1,
-                //             KC::MouseBtMiddle => 0xFF - 0x4,
-                //             _ => 0xFF - 0x2,
-                //         }
-                //     }
-                // }
-                // k if (k >= &KC::MouseLeft && k <= &KC::MouseWheelRight) => {
-                //     self.mouse_scroll_tempo += 1;
+                k if (k >= KC::MouseBtLeft && k <= KC::MouseBtRight) => {
+                    self.mouse.active_button(&mut mouse_report, key);
+                    // key.code = KC::DoneButKeep;
+                }
+                k if (k >= KC::MouseSpeed1 && k <= KC::MouseSpeed4) => {
+                    self.mouse.speed(key);
+                    // key.code = KC::Done;
+                }
+                k if (k >= KC::MouseLeft && k <= KC::MouseRight) => {
+                    self.mouse.movement(&mut mouse_report, k);
+                }
+                k if (k >= KC::MouseWheelLeft && k <= KC::MouseWheelRight) => {
+                    self.mouse.scroll(&mut mouse_report, k);
+                }
 
-                //     if *mat_cur > 0 {
-                //         let (speed, (scroll_temp, scroll_speed)) = if let Some((key, _)) =
-                //             LAYOUTS[self.layout.number]
-                //                 .iter()
-                //                 .zip(self.matrix.cur.iter())
-                //                 .filter(|(k, m)| {
-                //                     **k >= KC::MouseSpeed1 && **k <= KC::MouseSpeed4 && **m > 0
-                //                 })
-                //                 .last()
-                //         {
-                //             match key {
-                //                 KC::MouseSpeed1 => (MOUSE_SPEED_1, SCROLL_TEMP_SPEED_1),
-                //                 KC::MouseSpeed2 => (MOUSE_SPEED_2, SCROLL_TEMP_SPEED_2),
-                //                 KC::MouseSpeed3 => (MOUSE_SPEED_3, SCROLL_TEMP_SPEED_3),
-                //                 _ => (MOUSE_SPEED_4, SCROLL_TEMP_SPEED_4),
-                //             }
-                //         } else {
-                //             (MOUSE_SPEED_DEFAULT, SCROLL_TEMP_SPEED_DEFAULT)
-                //         };
-
-                //         if k <= &KC::MouseRight {
-                //             mouse_report = k.usb_mouse_move(mouse_report, speed);
-                //         } else if self.mouse_scroll_tempo >= scroll_temp {
-                //             self.mouse_scroll_tempo = 0;
-                //             mouse_report = k.usb_mouse_move(mouse_report, scroll_speed);
-                //         }
-                //     }
-                // }
                 _ => {}
             }
         }
-
-        // for ((index, layout), (mat_prev, mat_cur)) in LAYOUTS[self.layout.number]
-        //     .iter()
-        //     .enumerate()
-        //     .zip(self.matrix.prev.iter().zip(self.matrix.cur.iter()))
-        //     .filter(|((index, _), (_, _))| {
-        //         !self.to_skip.iter().any(|(i, _)| i == index) && !self.mods.is_active(*index)
-        //     })
-        // {
-        //     match layout {
-        //         k if (k >= &KC::A && k <= &KC::Yen) => {
-        //             if *mat_prev < PRESSED_TIME && *mat_cur >= PRESSED_TIME {
-        //                 self.layout.dead = false;
-
-        //                 if self.homerow.is_empty() {
-        //                     key_buffer = k.usb_code(key_buffer, &[index], &self.mods);
-        //                 } else {
-        //                     self.homerow.push_back(KeyIndex { key: *k, index }).ok();
-        //                 }
-        //             }
-        //         }
-        //         k if (k >= &KC::ACircum && k <= &KC::YDiaer) => {
-        //             if *mat_prev < PRESSED_TIME && *mat_cur >= PRESSED_TIME {
-        //                 self.layout.dead = false;
-
-        //                 if self.homerow.is_empty() {
-        //                     key_buffer = k.usb_code(key_buffer, &[], &self.mods);
-        //                 } else {
-        //                     self.homerow.push_back(KeyIndex { key: *k, index }).ok();
-        //                 }
-        //             }
-        //         }
-
-        //         // Mouse --------------------------------------------------------
-        //         k if (k >= &KC::MouseBtLeft && k <= &KC::MouseBtRight) => {
-        //             if *mat_cur > 0 {
-        //                 mouse_report.buttons |= match k {
-        //                     KC::MouseBtLeft => 0x1,
-        //                     KC::MouseBtMiddle => 0x4,
-        //                     _ => 0x2,
-        //                 }
-        //             } else {
-        //                 mouse_report.buttons &= match k {
-        //                     KC::MouseBtLeft => 0xFF - 0x1,
-        //                     KC::MouseBtMiddle => 0xFF - 0x4,
-        //                     _ => 0xFF - 0x2,
-        //                 }
-        //             }
-        //         }
-        //         k if (k >= &KC::MouseLeft && k <= &KC::MouseWheelRight) => {
-        //             self.mouse_scroll_tempo += 1;
-
-        //             if *mat_cur > 0 {
-        //                 let (speed, (scroll_temp, scroll_speed)) = if let Some((key, _)) =
-        //                     LAYOUTS[self.layout.number]
-        //                         .iter()
-        //                         .zip(self.matrix.cur.iter())
-        //                         .filter(|(k, m)| {
-        //                             **k >= KC::MouseSpeed1 && **k <= KC::MouseSpeed4 && **m > 0
-        //                         })
-        //                         .last()
-        //                 {
-        //                     match key {
-        //                         KC::MouseSpeed1 => (MOUSE_SPEED_1, SCROLL_TEMP_SPEED_1),
-        //                         KC::MouseSpeed2 => (MOUSE_SPEED_2, SCROLL_TEMP_SPEED_2),
-        //                         KC::MouseSpeed3 => (MOUSE_SPEED_3, SCROLL_TEMP_SPEED_3),
-        //                         _ => (MOUSE_SPEED_4, SCROLL_TEMP_SPEED_4),
-        //                     }
-        //                 } else {
-        //                     (MOUSE_SPEED_DEFAULT, SCROLL_TEMP_SPEED_DEFAULT)
-        //                 };
-
-        //                 if k <= &KC::MouseRight {
-        //                     mouse_report = k.usb_mouse_move(mouse_report, speed);
-        //                 } else if self.mouse_scroll_tempo >= scroll_temp {
-        //                     self.mouse_scroll_tempo = 0;
-        //                     mouse_report = k.usb_mouse_move(mouse_report, scroll_speed);
-        //                 }
-        //             }
-        //         }
-
-        //         _ => {}
-        // }
-        // }
-        // }
 
         if self
             .last_key
@@ -528,6 +401,9 @@ impl Chew {
                 self.last_key = Some(k.1);
             }
         }
+
+        // --
+        self.mouse.release(&self.matrix, &mut mouse_report);
 
         // --
         self.led_status = 0;

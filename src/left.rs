@@ -7,20 +7,17 @@ mod layouts;
 mod utils;
 
 use chew::Chew;
-use embedded_io::Write;
-use keys::{BuffCase, Buffer, KC};
+use keys::{BuffCase, Buffer};
 use usbd_serial::SerialPort;
 use utils::gpios::Gpios;
 use utils::led::{Led, LedColor, LED_LAYOUT_FR, LED_LEADER_KEY};
-use utils::matrix::Matrix;
-use utils::options::{BUFFER_CASE_LENGTH, TIMER_UART_LOOP, TIMER_USB_LOOP};
+use utils::options::{TIMER_UART_LOOP, TIMER_USB_LOOP};
 use utils::serial::*;
 use utils::uart::{Uart, UartError, HR_KEYS, HR_LED};
 
+// use embedded_io::Write;
 // use core::fmt::Write;
 // use core::panic;
-
-use heapless::Vec;
 
 use waveshare_rp2040_zero as bsp;
 
@@ -47,7 +44,6 @@ use usb_device::class_prelude::*;
 use usb_device::prelude::*;
 use usbd_human_interface_device::device::keyboard::NKROBootKeyboard;
 use usbd_human_interface_device::device::mouse::{WheelMouse, WheelMouseReport};
-use usbd_human_interface_device::page::Keyboard;
 use usbd_human_interface_device::prelude::*;
 
 #[entry]
@@ -203,8 +199,7 @@ fn main() -> ! {
                         //     serial.write("\r\n".as_bytes()).ok();
                         // }
 
-                        (key_buffer, mouse_report, led_status) =
-                            chew.run(key_buffer, mouse_report, ticks);
+                        (key_buffer, mouse_report, led_status) = chew.run(key_buffer, mouse_report);
 
                         // Mouse report directly done here ------------------------------
                         // Keyboard has its own timer two allow combinations
