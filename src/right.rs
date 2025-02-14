@@ -1,7 +1,11 @@
 #![no_std]
 #![no_main]
 
+mod chew;
+mod keys;
+mod layouts;
 mod utils;
+
 use utils::gpios::Gpios;
 use utils::led::{Led, LedColor, LED_LAYOUT_FR, LED_LEADER_KEY};
 use utils::options::TIMER_UART_LOOP;
@@ -18,7 +22,6 @@ use bsp::hal::{
     Sio,
 };
 use cortex_m::prelude::*;
-use defmt::*;
 use defmt_rtt as _;
 use fugit::ExtU32;
 use panic_probe as _;
@@ -100,7 +103,7 @@ fn main() -> ! {
     );
     let mut led = Led::new(&mut neopixel);
 
-    // UART -----
+    // UART --
     let mut uart = Uart::new(&mut pio, sm1, pins.gp11.reconfigure());
 
     let mut uart_count_down = timer.count_down();
@@ -149,8 +152,5 @@ fn main() -> ! {
                 }
             }
         }
-
-        // led.startup(TIMER_MAIN_LOOP);
-        // }
     }
 }

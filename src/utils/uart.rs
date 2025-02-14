@@ -36,6 +36,7 @@ pub enum UartError {
     Uart,
 }
 
+#[allow(dead_code)]
 impl UartError {
     pub fn to_serial(&self) -> String<40> {
         let mut output = String::new();

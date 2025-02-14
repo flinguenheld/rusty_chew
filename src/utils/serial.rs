@@ -1,6 +1,7 @@
 use core::fmt::Write;
 use heapless::String;
 
+#[allow(dead_code)]
 pub fn pins_to_str(left: &[u8; 4], right: &[u8; 4]) -> [String<50>; 4] {
     let mut rows: [String<50>; 4] = [String::new(), String::new(), String::new(), String::new()];
 
@@ -16,6 +17,7 @@ pub fn pins_to_str(left: &[u8; 4], right: &[u8; 4]) -> [String<50>; 4] {
     rows
 }
 
+#[allow(dead_code)]
 pub fn num_to_str(num: u32) -> String<10> {
     let mut l: String<10> = String::new();
     // write!(&mut l, "{:08b}", num).ok();
@@ -23,6 +25,7 @@ pub fn num_to_str(num: u32) -> String<10> {
     l
 }
 
+#[allow(dead_code)]
 pub fn time(txt: &str, ticks: u64) -> String<50> {
     let mut l: String<50> = String::new();
 

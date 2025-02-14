@@ -1,5 +1,5 @@
 pub const HOLD_TIME: u32 = 170; // From free to held (ms)
-pub const COMBO_TIME: u32 = 30;
+pub const COMBO_TIME: u32 = 20;
 
 pub const BUFFER_LENGTH: usize = 50;
 pub const BUFFER_CASE_LENGTH: usize = 10;
@@ -9,7 +9,6 @@ pub const TEMPO_DEAD_KEY: u32 = 50;
 // Milliseconds
 pub const TIMER_UART_LOOP: u32 = 1;
 pub const TIMER_USB_LOOP: u32 = 15;
-pub const TIMER_LED_STARTUP: u32 = 2_000;
 
 // pub const UART_SPEED: u32 = 115_200;
 pub const UART_SPEED: u32 = 19200;

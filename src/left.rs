@@ -12,12 +12,7 @@ use usbd_serial::SerialPort;
 use utils::gpios::Gpios;
 use utils::led::{Led, LedColor, LED_LAYOUT_FR, LED_LEADER_KEY};
 use utils::options::{TIMER_UART_LOOP, TIMER_USB_LOOP};
-use utils::serial::*;
 use utils::uart::{Uart, UartError, HR_KEYS, HR_LED};
-
-// use embedded_io::Write;
-// use core::fmt::Write;
-// use core::panic;
 
 use waveshare_rp2040_zero as bsp;
 
@@ -31,9 +26,7 @@ use bsp::hal::{
     Sio,
 };
 use cortex_m::prelude::*;
-// use defmt::*;
 use defmt_rtt as _;
-// use embedded_io::Read;
 
 use fugit::ExtU32;
 use panic_probe as _;
@@ -66,7 +59,6 @@ fn main() -> ! {
     let timer = Timer::new(pac.TIMER, &mut pac.RESETS, &clocks);
     let core = pac::CorePeripherals::take().unwrap();
     let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
-    // delay.delay_ms(1000);
 
     let sio = Sio::new(pac.SIO);
     let pins = bsp::Pins::new(
@@ -87,7 +79,7 @@ fn main() -> ! {
         &mut pac.RESETS,
     ));
 
-    let mut serial = SerialPort::new(&usb_bus);
+    let mut _serial = SerialPort::new(&usb_bus);
     let mut rusty_chew = UsbHidClassBuilder::new()
         .add_device(
             usbd_human_interface_device::device::keyboard::NKROBootKeyboardConfig::default(),
@@ -148,8 +140,6 @@ fn main() -> ! {
         clocks.peripheral_clock.freq(),
         timer.count_down(),
     );
-
-    // TODO simplify and create the neopixel in Led ?
     let mut led = Led::new(&mut neopixel);
 
     // UART --
@@ -170,7 +160,6 @@ fn main() -> ! {
     let mut chew = Chew::new(ticks);
 
     let mut key_buffer = Buffer::new();
-    // let mut last_printed_key: Vec<Keyboard, BUFFER_CASE_LENGTH> = Vec::new();
     let mut last_printed_key: BuffCase = BuffCase::default();
     let mut key_buffer_tempo = 0;
 
@@ -180,8 +169,6 @@ fn main() -> ! {
     let mut led_status;
 
     loop {
-        // led.light_off();
-
         if uart_count_down.wait().is_ok() {
             match uart.receive() {
                 Ok(mail) => match mail.header {
@@ -191,14 +178,6 @@ fn main() -> ! {
                             &mail.values.iter().cloned().collect(),
                             ticks,
                         );
-
-                        // for aaa in chew.pressed_keys.iter() {
-                        //     serial.write(num_to_str(aaa.index as u32).as_bytes()).ok();
-                        //     serial.write(": ".as_bytes()).ok();
-                        //     serial.write(num_to_str(aaa.ticks as u32).as_bytes()).ok();
-                        //     serial.write("\r\n".as_bytes()).ok();
-                        // }
-
                         (key_buffer, mouse_report, led_status) = chew.run(key_buffer, mouse_report);
 
                         // Mouse report directly done here ------------------------------
@@ -219,7 +198,6 @@ fn main() -> ! {
                                     mouse_report = WheelMouseReport::default();
                                 }
                                 Err(e) => {
-                                    led.light_on(LedColor::Orange);
                                     core::panic!("Failed to write mouse report: {:?}", e)
                                 }
                             };
@@ -242,24 +220,16 @@ fn main() -> ! {
                         uart.send(HR_KEYS, &[], &mut delay).ok();
                     }
                     _ => {
-                        serial
-                            .write(time("Error !!", timer.get_counter().ticks()).as_bytes())
-                            .ok();
                         led.light_on(LedColor::Red);
                     }
                 },
 
                 Err(e) => match e {
                     UartError::NothingToReadMax => {
-                        serial
-                            .write("Nothing to read maximum reached -----\r\n".as_bytes())
-                            .ok();
+                        // Try to relaunch the loop
                         uart.send(HR_KEYS, &[], &mut delay).ok();
-                        serial.write("Send a new request -----\r\n".as_bytes()).ok();
                     }
-                    _err => {
-                        // serial.write(err.to_serial().as_bytes()).ok();
-                    }
+                    _err => {}
                 },
             }
         }
@@ -276,13 +246,9 @@ fn main() -> ! {
                         }
                         Err(UsbHidError::Duplicate) => {
                             led.light_on(LedColor::Blue);
-                            // serial.write("Duplicate !\r\n".as_bytes()).ok();
                         }
                         Ok(_) => {
-                            led.light_off();
-                            serial.write("ok print a key !\r\n".as_bytes()).ok();
-                            // TODO add an infinite sum
-                            key_buffer_tempo = ticks + popped_key.tempo;
+                            key_buffer_tempo = ticks.wrapping_add(popped_key.tempo);
                             last_printed_key = popped_key;
                         }
                         Err(e) => {

@@ -1,8 +1,8 @@
 #![cfg_attr(rustfmt, rustfmt_skip)]
-
+use crate::{chew::Key, keys::KC};
 use heapless::Vec;
 use usbd_human_interface_device::page::Keyboard;
-use crate::{chew::Key, keys::KC};
+
 
 /// Due to layers modifiers have to be manage with their matrix index directly.
 /// This struct keeps the matrix index for each modifier.
