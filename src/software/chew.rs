@@ -8,7 +8,7 @@ use super::{
 };
 use crate::{
     hardware::{
-        led::{LED_LAYOUT_FR, LED_LEADER_KEY},
+        led::{LED_LAYOUT_FN, LED_LAYOUT_FR, LED_LEADER_KEY},
         matrix::Matrix,
     },
     layouts::{COMBOS, LAYOUTS, LEADER_KEY_COMBINATIONS},
@@ -407,10 +407,11 @@ impl Chew {
         self.mouse.release(&self.matrix, &mut mouse_report);
 
         // --
-        self.led_status = 0;
-        if self.layout.number == 4 {
-            self.led_status = LED_LAYOUT_FR;
-        }
+        self.led_status = match self.layout.number {
+            4 => LED_LAYOUT_FR,
+            5 => LED_LAYOUT_FN,
+            _ => 0,
+        };
         if self.leader.active {
             self.led_status = LED_LEADER_KEY;
         }

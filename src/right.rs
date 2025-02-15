@@ -8,7 +8,7 @@ mod software;
 
 use hardware::{
     gpios::Gpios,
-    led::{Led, LedColor, LED_LAYOUT_FR, LED_LEADER_KEY},
+    led::{Led, LedColor, LED_LAYOUT_FN, LED_LAYOUT_FR, LED_LEADER_KEY},
     uart::{Uart, UartError, HR_KEYS, HR_LED},
 };
 use options::TIMER_UART_LOOP;
@@ -125,6 +125,7 @@ fn main() -> ! {
                     HR_LED => {
                         match mail.values[0] {
                             LED_LAYOUT_FR => led.light_on(LedColor::Aqua),
+                            LED_LAYOUT_FN => led.light_on(LedColor::Fushia),
                             LED_LEADER_KEY => led.light_on(LedColor::Blue),
                             _ => led.light_off(),
                         }
