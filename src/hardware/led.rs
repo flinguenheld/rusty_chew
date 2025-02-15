@@ -10,8 +10,9 @@ use ws2812_pio::Ws2812;
 
 // Status --
 pub const LED_LAYOUT_FR: u8 = 1;
-pub const LED_LAYOUT_FN: u8 = 3;
-pub const LED_LEADER_KEY: u8 = 4;
+pub const LED_LAYOUT_FN: u8 = 2;
+pub const LED_LEADER_KEY: u8 = 3;
+pub const LED_CAPLOCK: u8 = 4;
 
 #[allow(dead_code)]
 #[derive(Clone, Copy)]

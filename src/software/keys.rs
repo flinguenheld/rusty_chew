@@ -251,6 +251,7 @@ pub enum KC {
     LayDead(usize) = 60001,
 
         LeaderKey = 61000,
+        CapLock = 61001,
 
     MacroGit = 62001,
     MacroMail = 62002,

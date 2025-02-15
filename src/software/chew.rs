@@ -8,7 +8,7 @@ use super::{
 };
 use crate::{
     hardware::{
-        led::{LED_LAYOUT_FN, LED_LAYOUT_FR, LED_LEADER_KEY},
+        led::{LED_CAPLOCK, LED_LAYOUT_FN, LED_LAYOUT_FR, LED_LEADER_KEY},
         matrix::Matrix,
     },
     layouts::{COMBOS, LAYOUTS, LEADER_KEY_COMBINATIONS},
@@ -54,7 +54,6 @@ pub struct Chew {
 
     matrix: Matrix,
     mods: Modifiers,
-
     homerow: Deque<Key, 5>,
 
     pre_pressed_keys: Vec<Key, 34>,
@@ -269,6 +268,12 @@ impl Chew {
             .filter(|k| k.code >= KC::Alt && k.code <= KC::Shift)
             .for_each(|k| self.mods.set(k.code, k.index));
 
+        // Caplock --
+        if let Some(caplock) = self.pressed_keys.iter_mut().find(|k| k.code == KC::CapLock) {
+            self.mods.set(KC::CapLock, 0);
+            caplock.code = KC::Done;
+        }
+
         // Homerows --
         while let Some(index) = self
             .pressed_keys
@@ -325,23 +330,24 @@ impl Chew {
                     } else {
                         // As regular key
                         key_buffer = popped_key.code.usb_code(key_buffer, &self.mods);
-                        // key_buffer = KC::None.usb_code(key_buffer, &self.mods);
                         self.last_key = Some(popped_key.index);
                     }
                 }
             // First released bebore being held --
             // Print all of them with homerow pressed status
-            // } else if key.ticks < HOLD_TIME && !self.matrix.is_active(key.index) {
             } else if !self.matrix.is_active(key.index) {
                 while let Some(popped_key) = self.homerow.pop_front() {
                     key_buffer = popped_key.code.usb_code(key_buffer, &self.mods);
-                    // key_buffer = KC::None.usb_code(key_buffer, &self.mods);
                     self.last_key = Some(popped_key.index);
                 }
             }
         }
 
         // Regular keys -----------------------------------------------------------------
+        if self.pressed_keys.iter().any(|k| k.code == KC::Esc) {
+            self.mods.caplock = false;
+        }
+
         for key in self
             .pressed_keys
             .iter_mut()
@@ -383,10 +389,10 @@ impl Chew {
         }
 
         // Repetition -------------------------------------------------------------------
-        if self
-            .last_key
-            .is_some_and(|index| !self.matrix.is_active(index))
-        {
+        if self.last_key.is_some_and(|index| {
+            !(self.matrix.is_active(index) || (index == usize::MAX && self.mods.caplock))
+        }) {
+            // The potential still active mod(s) will set the value again.
             self.last_key = None;
 
             // End --
@@ -397,9 +403,9 @@ impl Chew {
 
         // Add the active mods (useful for the real mouse) --
         if self.last_key.is_none() && !self.mods.active().is_empty() {
-            for k in self.mods.active_kc().iter() {
-                key_buffer = k.0.usb_code(key_buffer, &self.mods);
-                self.last_key = Some(k.1);
+            for (key, index) in self.mods.active_kc().iter() {
+                key_buffer = key.usb_code(key_buffer, &self.mods);
+                self.last_key = Some(*index);
             }
         }
 
@@ -414,6 +420,9 @@ impl Chew {
         };
         if self.leader.active {
             self.led_status = LED_LEADER_KEY;
+        }
+        if self.mods.caplock {
+            self.led_status = LED_CAPLOCK;
         }
 
         (key_buffer, mouse_report, self.led_status)

@@ -27,9 +27,9 @@ pub const LAYOUTS: [[KC; 34]; 6] = [[
 ],
 [
 //-------------------|-------------------|-------------------|-------------------|-------------------|        |-------------------|-------------------|-------------------|-------------------|-------------------|
-        KC::At       ,  KC::LeftBracket  ,   KC::Ampersand   , KC::RightBracket  ,     KC::None      ,              KC::None      ,      KC::Home     ,     KC::PageUp    ,    KC::PageDown   ,      KC::End      ,
+        KC::At       ,  KC::LeftBracket  ,   KC::Ampersand   , KC::RightBracket  ,     KC::None      ,            KC::LeaderKey   ,      KC::Home     ,     KC::PageUp    ,    KC::PageDown   ,      KC::End      ,
 //-------------------|-------------------|-------------------|-------------------|-------------------|        |-------------------|-------------------|-------------------|-------------------|-------------------|
-    KC::DoubleQuote  ,  KC::LeftParent   ,    KC::Quote      ,  KC::RightParent  ,     KC::Grave     ,            KC::LeaderKey   ,      KC::Left     ,      KC::Down     ,       KC::Up      ,     KC::Right     ,
+    KC::DoubleQuote  ,  KC::LeftParent   ,    KC::Quote      ,  KC::RightParent  ,     KC::Grave     ,             KC::CapLock    ,      KC::Left     ,      KC::Down     ,       KC::Up      ,     KC::Right     ,
 //-------------------|-------------------|-------------------|-------------------|-------------------|        |-------------------|-------------------|-------------------|-------------------|-------------------|
        KC::None      ,  KC::LeftCurly    ,    KC::Pipe       ,  KC::RightCurly   ,                                                       KC::Del      ,      KC::Tab      ,      KC::STab     ,   KC::BackSpace   ,
 //-------------------|-------------------|-------------------|-------------------|                                                |-------------------|-------------------|-------------------|-------------------|
@@ -97,7 +97,8 @@ pub const LEADER_KEY_COMBINATIONS: [([KC; 3], KC); 3] = [
 
 // --------------------------------------------------------------------------------------
 // COMBOS -------------------------------------------------------------------------------
-pub const COMBOS: [([KC; 2], KC); 2] = [
+pub const COMBOS: [([KC; 2], KC); 3] = [
     ([KC::Layout(1), KC::Layout(2)], KC::Layout(5)),
+    ([KC::HomeSftN, KC::HomeSftR], KC::CapLock),
     ([KC::P, KC::O], KC::At),
 ];

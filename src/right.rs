@@ -8,7 +8,7 @@ mod software;
 
 use hardware::{
     gpios::Gpios,
-    led::{Led, LedColor, LED_LAYOUT_FN, LED_LAYOUT_FR, LED_LEADER_KEY},
+    led::{Led, LedColor, LED_CAPLOCK, LED_LAYOUT_FN, LED_LAYOUT_FR, LED_LEADER_KEY},
     uart::{Uart, UartError, HR_KEYS, HR_LED},
 };
 use options::TIMER_UART_LOOP;
@@ -127,6 +127,7 @@ fn main() -> ! {
                             LED_LAYOUT_FR => led.light_on(LedColor::Aqua),
                             LED_LAYOUT_FN => led.light_on(LedColor::Fushia),
                             LED_LEADER_KEY => led.light_on(LedColor::Blue),
+                            LED_CAPLOCK => led.light_on(LedColor::Orange),
                             _ => led.light_off(),
                         }
 
