@@ -11,6 +11,10 @@ path = "src/left.rs"
 name = "right"
 path = "src/right.rs"
 
+[[bin]]
+name = "mono"
+path = "src/mono.rs"
+
 [dependencies]
 cortex-m = "0.7"
 cortex-m-rt = "0.7"

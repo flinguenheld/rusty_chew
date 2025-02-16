@@ -7,11 +7,10 @@ mod options;
 mod software;
 
 use hardware::{
-    gpios::Gpios,
+    gpios::GpiosMono,
     led::{Led, LedColor, LED_CAPLOCK, LED_LAYOUT_FN, LED_LAYOUT_FR, LED_LEADER_KEY},
-    uart::{Uart, UartError, HR_KEYS, HR_LED},
 };
-use options::{TIMER_UART_LOOP, TIMER_USB_LOOP};
+use options::{TIMER_MONO_LOOP, TIMER_USB_LOOP};
 use software::{
     chew::Chew,
     keys::{BuffCase, Buffer},
@@ -36,7 +35,7 @@ use fugit::ExtU32;
 use panic_probe as _;
 use ws2812_pio::Ws2812;
 
-#[allow(clippy::wildcard_imports)]
+// #[allow(clippy::wildcard_imports)]
 use usb_device::class_prelude::*;
 use usb_device::prelude::*;
 use usbd_human_interface_device::device::keyboard::NKROBootKeyboard;
@@ -72,7 +71,7 @@ fn main() -> ! {
         &mut pac.RESETS,
     );
 
-    let (mut pio, sm0, sm1, _, _) = pac.PIO0.split(&mut pac.RESETS);
+    let (mut pio, sm0, _, _, _) = pac.PIO0.split(&mut pac.RESETS);
 
     // USB --
     let usb_bus = UsbBusAllocator::new(usb::UsbBus::new(
@@ -91,49 +90,36 @@ fn main() -> ! {
         .add_device(usbd_human_interface_device::device::mouse::WheelMouseConfig::default())
         .build(&usb_bus);
 
-    let mut usb_dev = UsbDeviceBuilder::new(&usb_bus, UsbVidPid(0x1337, 0x1985))
+    let mut usb_dev = UsbDeviceBuilder::new(&usb_bus, UsbVidPid(0x1338, 0x1985))
         .strings(&[StringDescriptors::default()
             .manufacturer("florent@linguenheld.fr")
-            .product("Rusty Chew Split")
-            .serial_number("00")])
+            .product("Rusty Chew Mono")
+            .serial_number("01")])
         .unwrap()
         .build();
 
     // GPIO --
-    let mut gpios: Gpios = Gpios {
-        pins: [
-            [
-                Some(pins.gp4.into_pull_up_input().into_dyn_pin()),
-                Some(pins.gp3.into_pull_up_input().into_dyn_pin()),
-                Some(pins.gp2.into_pull_up_input().into_dyn_pin()),
-                Some(pins.gp1.into_pull_up_input().into_dyn_pin()),
-                Some(pins.gp0.into_pull_up_input().into_dyn_pin()),
-            ],
-            [
-                Some(pins.gp15.into_pull_up_input().into_dyn_pin()),
-                Some(pins.gp26.into_pull_up_input().into_dyn_pin()),
-                Some(pins.gp27.into_pull_up_input().into_dyn_pin()),
-                Some(pins.gp28.into_pull_up_input().into_dyn_pin()),
-                Some(pins.gp29.into_pull_up_input().into_dyn_pin()),
-            ],
-            [
-                Some(pins.gp14.into_pull_up_input().into_dyn_pin()),
-                Some(pins.gp13.into_pull_up_input().into_dyn_pin()),
-                Some(pins.gp9.into_pull_up_input().into_dyn_pin()),
-                Some(pins.gp8.into_pull_up_input().into_dyn_pin()),
-                None,
-            ],
-            [
-                Some(pins.gp7.into_pull_up_input().into_dyn_pin()),
-                Some(pins.gp6.into_pull_up_input().into_dyn_pin()),
-                Some(pins.gp5.into_pull_up_input().into_dyn_pin()),
-                None,
-                None,
-            ],
+    let mut gpios = GpiosMono {
+        rows: [
+            pins.gp5.into_pull_down_input().into_dyn_pin(),
+            pins.gp6.into_pull_down_input().into_dyn_pin(),
+            pins.gp7.into_pull_down_input().into_dyn_pin(),
+            pins.gp8.into_pull_down_input().into_dyn_pin(),
+        ],
+
+        columns: [
+            pins.gp28.into_push_pull_output().into_dyn_pin(),
+            pins.gp27.into_push_pull_output().into_dyn_pin(),
+            pins.gp26.into_push_pull_output().into_dyn_pin(),
+            pins.gp15.into_push_pull_output().into_dyn_pin(),
+            pins.gp14.into_push_pull_output().into_dyn_pin(),
+            pins.gp4.into_push_pull_output().into_dyn_pin(),
+            pins.gp3.into_push_pull_output().into_dyn_pin(),
+            pins.gp2.into_push_pull_output().into_dyn_pin(),
+            pins.gp1.into_push_pull_output().into_dyn_pin(),
+            pins.gp0.into_push_pull_output().into_dyn_pin(),
         ],
     };
-
-    // let is_left = pins.gp10.into_floating_input().is_high().unwrap();
 
     // Led --
     let mut neopixel = Ws2812::new(
@@ -146,15 +132,12 @@ fn main() -> ! {
     );
     let mut led = Led::new(&mut neopixel);
 
-    // UART --
-    let mut uart = Uart::new(&mut pio, sm1, pins.gp11.reconfigure());
-
     // Timers --
     let mut tick_count_down = timer.count_down();
     tick_count_down.start(1.millis());
 
-    let mut uart_count_down = timer.count_down();
-    uart_count_down.start(TIMER_UART_LOOP.millis());
+    let mut mono_count_down = timer.count_down();
+    mono_count_down.start(TIMER_MONO_LOOP.millis());
 
     let mut usb_count_down = timer.count_down();
     usb_count_down.start(TIMER_USB_LOOP.millis());
@@ -172,74 +155,40 @@ fn main() -> ! {
     let mut last_mouse_buttons = 0;
 
     loop {
-        if uart_count_down.wait().is_ok() {
-            match uart.receive() {
-                Ok(mail) => match mail.header {
-                    HR_KEYS => {
-                        chew.update_matrix(
-                            gpios
-                                .get_left_indexes()
-                                .iter()
-                                .chain(mail.values.iter())
-                                .cloned()
-                                .collect(),
-                            ticks,
-                        );
-                        (key_buffer, mouse_report, led_status) = chew.run(key_buffer, mouse_report);
+        if mono_count_down.wait().is_ok() {
+            let active_indexes = gpios.get_active_indexes(&mut delay);
+            chew.update_matrix(active_indexes, ticks);
+            (key_buffer, mouse_report, led_status) = chew.run(key_buffer, mouse_report);
 
-                        // Mouse report directly done here ------------------------------
-                        // Keyboard has its own timer two allow combinations
-                        if mouse_report.buttons != last_mouse_buttons
-                            || mouse_report.x != 0
-                            || mouse_report.y != 0
-                            || mouse_report.vertical_wheel != 0
-                            || mouse_report.horizontal_wheel != 0
-                        {
-                            let mouse = rusty_chew.device::<WheelMouse<'_, _>, _>();
-                            match mouse.write_report(&mouse_report) {
-                                Err(UsbHidError::WouldBlock) => {
-                                    led.light_on(LedColor::Red);
-                                }
-                                Ok(_) => {
-                                    last_mouse_buttons = mouse_report.buttons;
-                                    mouse_report = WheelMouseReport::default();
-                                }
-                                Err(e) => {
-                                    core::panic!("Failed to write mouse report: {:?}", e)
-                                }
-                            };
-                        }
+            match led_status {
+                LED_LAYOUT_FR => led.light_on(LedColor::Aqua),
+                LED_LAYOUT_FN => led.light_on(LedColor::Fushia),
+                LED_LEADER_KEY => led.light_on(LedColor::Blue),
+                LED_CAPLOCK => led.light_on(LedColor::Orange),
+                _ => led.light_off(),
+            }
 
-                        // Update Led --
-                        if uart.send(HR_LED, &[led_status], &mut delay).is_err() {
-                            led.light_on(LedColor::Red);
-                        }
-                    }
-
-                    HR_LED => {
-                        match mail.values[0] {
-                            LED_LAYOUT_FR => led.light_on(LedColor::Aqua),
-                            LED_LAYOUT_FN => led.light_on(LedColor::Fushia),
-                            LED_LEADER_KEY => led.light_on(LedColor::Blue),
-                            LED_CAPLOCK => led.light_on(LedColor::Orange),
-                            _ => led.light_off(),
-                        }
-
-                        // New uart loop --
-                        uart.send(HR_KEYS, &[], &mut delay).ok();
-                    }
-                    _ => {
+            // Mouse report directly done here ------------------------------------------
+            // Keyboard has its own timer two allow combinations
+            if mouse_report.buttons != last_mouse_buttons
+                || mouse_report.x != 0
+                || mouse_report.y != 0
+                || mouse_report.vertical_wheel != 0
+                || mouse_report.horizontal_wheel != 0
+            {
+                let mouse = rusty_chew.device::<WheelMouse<'_, _>, _>();
+                match mouse.write_report(&mouse_report) {
+                    Err(UsbHidError::WouldBlock) => {
                         led.light_on(LedColor::Red);
                     }
-                },
-
-                Err(e) => match e {
-                    UartError::NothingToReadMax => {
-                        // Try to relaunch the loop
-                        uart.send(HR_KEYS, &[], &mut delay).ok();
+                    Ok(_) => {
+                        last_mouse_buttons = mouse_report.buttons;
+                        mouse_report = WheelMouseReport::default();
                     }
-                    _err => {}
-                },
+                    Err(e) => {
+                        core::panic!("Failed to write mouse report: {:?}", e)
+                    }
+                };
             }
         }
 
@@ -278,7 +227,7 @@ fn main() -> ! {
             };
         }
 
-        // if !usb_dev.poll(&mut [&mut serial]) {
+        // if !usb_dev.poll(&mut [&mut _serial]) {
         //     continue;
         // }
 

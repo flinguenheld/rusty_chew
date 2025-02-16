@@ -30,7 +30,7 @@ impl Matrix {
         }
     }
 
-    pub fn update_new(&mut self, active_indexes: Vec<u8, 16>) {
+    pub fn update(&mut self, active_indexes: Vec<u8, 16>) {
         mem::swap(&mut self.previous, &mut self.current);
         self.current = active_indexes.iter().map(|&v| v as usize).collect();
     }

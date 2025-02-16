@@ -91,9 +91,11 @@ impl Chew {
         }
     }
 
-    pub fn update_matrix(&mut self, left: &Vec<u8, 8>, right: &Vec<u8, 8>, ticks: u32) {
+    // pub fn update_matrix(&mut self, left: &Vec<u8, 8>, right: &Vec<u8, 8>, ticks: u32) {
+    pub fn update_matrix(&mut self, active_indexes: Vec<u8, 16>, ticks: u32) {
         self.matrix
-            .update_new(left.iter().chain(right.iter()).cloned().collect());
+            // .update(left.iter().chain(right.iter()).cloned().collect());
+            .update(active_indexes);
 
         // Clean --
         self.pre_pressed_keys
