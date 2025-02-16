@@ -185,7 +185,8 @@ fn main() -> ! {
                                 .collect(),
                             ticks,
                         );
-                        (key_buffer, mouse_report, led_status) = chew.run(key_buffer, mouse_report);
+                        (key_buffer, mouse_report, led_status) =
+                            chew.run(key_buffer, mouse_report, ticks);
 
                         // Mouse report directly done here ------------------------------
                         // Keyboard has its own timer two allow combinations

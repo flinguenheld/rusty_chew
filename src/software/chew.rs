@@ -147,6 +147,7 @@ impl Chew {
         &mut self,
         mut key_buffer: Buffer,
         mut mouse_report: WheelMouseReport,
+        ticks: u32,
     ) -> (Buffer, WheelMouseReport, u8) {
         // Set new keys with the current layout -----------------------------------------
         for key in self
@@ -380,10 +381,10 @@ impl Chew {
                     key.code = KC::DoneButKeep;
                 }
                 k if (k >= KC::MouseLeft && k <= KC::MouseRight) => {
-                    self.mouse.movement(&mut mouse_report, k);
+                    self.mouse.movement(&mut mouse_report, k, ticks);
                 }
                 k if (k >= KC::MouseWheelLeft && k <= KC::MouseWheelRight) => {
-                    self.mouse.scroll(&mut mouse_report, k);
+                    self.mouse.scroll(&mut mouse_report, k, ticks);
                 }
 
                 _ => {}

@@ -35,7 +35,7 @@ use fugit::ExtU32;
 use panic_probe as _;
 use ws2812_pio::Ws2812;
 
-// #[allow(clippy::wildcard_imports)]
+#[allow(clippy::wildcard_imports)]
 use usb_device::class_prelude::*;
 use usb_device::prelude::*;
 use usbd_human_interface_device::device::keyboard::NKROBootKeyboard;
@@ -142,6 +142,9 @@ fn main() -> ! {
     let mut usb_count_down = timer.count_down();
     usb_count_down.start(TIMER_USB_LOOP.millis());
 
+    let mut mouse_count_down = timer.count_down();
+    mouse_count_down.start(10.millis());
+
     // --
     let mut ticks: u32 = 0;
     let mut chew = Chew::new(ticks);
@@ -158,7 +161,7 @@ fn main() -> ! {
         if mono_count_down.wait().is_ok() {
             let active_indexes = gpios.get_active_indexes(&mut delay);
             chew.update_matrix(active_indexes, ticks);
-            (key_buffer, mouse_report, led_status) = chew.run(key_buffer, mouse_report);
+            (key_buffer, mouse_report, led_status) = chew.run(key_buffer, mouse_report, ticks);
 
             match led_status {
                 LED_LAYOUT_FR => led.light_on(LedColor::Aqua),

@@ -14,8 +14,13 @@ use crate::{
 /// Speeds are saved by pressing order and have to be maintained to be effective.
 pub struct Mouse {
     buttons: Vec<(usize, u8), 3>,
-    speeds: Vec<(usize, i8, (u32, i8)), 4>,
-    scroll_tempo: u32, // Slow down the wheel
+    speeds: Vec<(usize, (i8, u32), (i8, u32)), 4>,
+
+    move_tempo: u32,
+    move_ok: u32,
+
+    scroll_tempo: u32,
+    scroll_ok: u32,
 }
 
 impl Mouse {
@@ -23,7 +28,12 @@ impl Mouse {
         Mouse {
             buttons: Vec::new(),
             speeds: Vec::new(),
+
+            move_tempo: 0,
+            move_ok: 0,
+
             scroll_tempo: 0,
+            scroll_ok: 0,
         }
     }
 
@@ -39,24 +49,30 @@ impl Mouse {
         self.scroll_tempo = 0;
     }
 
-    pub fn movement(&self, report: &mut WheelMouseReport, key: KC) {
-        let speed = self.speeds.last().map_or(MOUSE_SPEED_DEFAULT, |s| s.1);
+    pub fn movement(&mut self, report: &mut WheelMouseReport, key: KC, ticks: u32) {
+        let (speed, tempo) = self.speeds.last().map_or(MOUSE_SPEED_DEFAULT, |s| s.1);
 
-        match key {
-            KC::MouseLeft => report.x = i8::saturating_add(report.x, -speed),
-            KC::MouseDown => report.y = i8::saturating_add(report.y, speed),
-            KC::MouseUp => report.y = i8::saturating_add(report.y, -speed),
-            KC::MouseRight => report.x = i8::saturating_add(report.x, speed),
-            _ => {}
+        // Move_ok is saved to allow several moves in the same chew loop.
+        if ticks >= self.move_tempo || self.move_ok == ticks {
+            self.move_tempo = ticks.wrapping_add(tempo);
+            self.move_ok = ticks;
+
+            match key {
+                KC::MouseLeft => report.x = i8::saturating_add(report.x, -speed),
+                KC::MouseDown => report.y = i8::saturating_add(report.y, speed),
+                KC::MouseUp => report.y = i8::saturating_add(report.y, -speed),
+                KC::MouseRight => report.x = i8::saturating_add(report.x, speed),
+                _ => {}
+            }
         }
     }
 
-    pub fn scroll(&mut self, report: &mut WheelMouseReport, key: KC) {
-        let (tempo, speed) = self.speeds.last().map_or(SCROLL_SPEED_DEFAULT, |s| s.2);
-        self.scroll_tempo += 1;
+    pub fn scroll(&mut self, report: &mut WheelMouseReport, key: KC, ticks: u32) {
+        let (speed, tempo) = self.speeds.last().map_or(SCROLL_SPEED_DEFAULT, |s| s.2);
 
-        if self.scroll_tempo >= tempo {
-            self.scroll_tempo = 0;
+        if ticks >= self.scroll_tempo || self.scroll_ok == ticks {
+            self.scroll_tempo = ticks.wrapping_add(tempo);
+            self.scroll_ok = ticks;
 
             match key {
                 KC::MouseWheelLeft => {
