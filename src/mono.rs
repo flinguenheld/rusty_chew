@@ -96,6 +96,7 @@ fn main() -> ! {
             .product("Rusty Chew Mono")
             .serial_number("01")])
         .unwrap()
+        .supports_remote_wakeup(true)
         .build();
 
     // GPIO --
@@ -202,8 +203,14 @@ fn main() -> ! {
                     let keyboard = rusty_chew.device::<NKROBootKeyboard<'_, _>, _>();
                     match keyboard.write_report(popped_key.key_code.clone()) {
                         Err(UsbHidError::WouldBlock) => {
-                            led.light_on(LedColor::Red);
-                            key_buffer.keys.push_front(popped_key).ok();
+                            // Wake up --
+                            if usb_dev.state() == UsbDeviceState::Suspend {
+                                usb_dev.bus().remote_wakeup();
+                                key_buffer.keys.clear();
+                            } else {
+                                led.light_on(LedColor::Red);
+                                key_buffer.keys.push_front(popped_key).ok();
+                            }
                         }
                         Err(UsbHidError::Duplicate) => {
                             led.light_on(LedColor::Blue);
