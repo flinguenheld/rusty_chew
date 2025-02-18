@@ -12,7 +12,7 @@ use crate::{
         matrix::Matrix,
     },
     layouts::{COMBOS, LAYOUTS, LEADER_KEY_COMBINATIONS},
-    options::{COMBO_TIME, HOLD_TIME},
+    options::{COMBO_TIME, HOLD_TIME, NB_KEYS},
 };
 
 // Remove pub --
@@ -56,9 +56,9 @@ pub struct Chew {
     mods: Modifiers,
     homerow: Deque<Key, 5>,
 
-    pre_pressed_keys: Vec<Key, 34>,
-    pressed_keys: Vec<Key, 34>,
-    // released_keys: Vec<usize, 34>,
+    pre_pressed_keys: Vec<Key, NB_KEYS>,
+    pressed_keys: Vec<Key, NB_KEYS>,
+    // released_keys: Vec<usize, NB_KEYS>,
     last_key: Option<usize>,
     last_ticks: u32,
 }

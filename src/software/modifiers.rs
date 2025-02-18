@@ -2,6 +2,8 @@
 use heapless::Vec;
 use usbd_human_interface_device::page::Keyboard;
 
+use crate::options::NB_KEYS;
+
 use super::{chew::Key, keys::KC};
 
 /// Due to layers modifiers have to be manage with their matrix index directly.
@@ -63,7 +65,7 @@ impl Modifiers {
         output
     }    
 
-    pub fn update_state(&mut self, pressed_keys: &Vec<Key, 34>) {
+    pub fn update_state(&mut self, pressed_keys: &Vec<Key, NB_KEYS>) {
         self.alt    = pressed_keys.iter().find(|k| k.code == KC::Alt  ).map(|k| k.index).unwrap_or(usize::MAX);
         self.alt_gr = pressed_keys.iter().find(|k| k.code == KC::Altgr).map(|k| k.index).unwrap_or(usize::MAX);
         self.ctrl   = pressed_keys.iter().find(|k| k.code == KC::Ctrl ).map(|k| k.index).unwrap_or(usize::MAX);
