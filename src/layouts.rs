@@ -1,11 +1,16 @@
-use crate::{options::NB_KEYS, software::keys::KC};
+use crate::software::keys::KC::HomeRow as HOME;
+use crate::{
+    options::NB_KEYS,
+    software::keys::KC,
+    software::keys::KC::{Alt, Ctl, Gui, Sft},
+};
 
 #[rustfmt::skip]
 pub const LAYOUTS: [[KC; NB_KEYS]; 6] = [[
 //-------------------|-------------------|-------------------|-------------------|-------------------|        |-------------------|-------------------|-------------------|-------------------|-------------------|
          KC::Q       ,       KC::C       ,       KC::O       ,       KC::P       ,       KC::V       ,                KC::J       ,       KC::M       ,       KC::D       ,       KC::Y       ,       KC::W       ,
 //-------------------|-------------------|-------------------|-------------------|-------------------|        |-------------------|-------------------|-------------------|-------------------|-------------------|
-      KC::HomeAltA   ,    KC::HomeGuiS   ,   KC::HomeCtrlE   ,    KC::HomeSftN   ,       KC::F       ,                KC::L       ,    KC::HomeSftR   ,   KC::HomeCtrlT   ,    KC::HomeGuiI   ,    KC::HomeAltU   ,
+   HOME(&Alt,&KC::A) , HOME(&Gui,&KC::S) , HOME(&Ctl,&KC::E) , HOME(&Sft,&KC::N) ,       KC::F       ,                KC::L       , HOME(&Sft,&KC::R) , HOME(&Ctl,&KC::T) , HOME(&Gui,&KC::I) , HOME(&Alt,&KC::U) ,
 //-------------------|-------------------|-------------------|-------------------|-------------------|        |-------------------|-------------------|-------------------|-------------------|-------------------|
          KC::Z       ,       KC::X       ,    KC::EAcute     ,       KC::B       ,                                                        KC::H       ,       KC::G       ,   KC::LayDead(4)  ,       KC::K       ,
 //-------------------|-------------------|-------------------|-------------------|                                                |-------------------|-------------------|-------------------|-------------------|
@@ -89,16 +94,34 @@ pub const LAYOUTS: [[KC; NB_KEYS]; 6] = [[
 
 // --------------------------------------------------------------------------------------
 // LEADER KEY ---------------------------------------------------------------------------
-pub const LEADER_KEY_COMBINATIONS: [([KC; 3], KC); 3] = [
+#[rustfmt::skip]
+pub const LEADER_KEY_COMBINATIONS: [([KC; 3], KC); 15] = [
     ([KC::F, KC::L, KC::None], KC::MacroGit),
-    ([KC::M, KC::HomeAltA, KC::None], KC::MacroMail),
-    ([KC::M, KC::HomeGuiS, KC::None], KC::MacroMailShort),
+    ([KC::M, KC::A, KC::None], KC::MacroMail),
+    ([KC::M, KC::S, KC::None], KC::MacroMailShort),
+
+    ([KC::C, KC::O, KC::P], KC::Copyright),
+    ([KC::R, KC::E, KC::G], KC::Registered),
+    ([KC::E, KC::X, KC::Num1], KC::ExpOne),
+    ([KC::E, KC::X, KC::Num2], KC::ExpTwo),
+    ([KC::E, KC::X, KC::Num3], KC::ExpThree),
+    ([KC::B, KC::E, KC::T], KC::Beta),
+
+    ([KC::P, KC::I, KC::L], KC::Pilcrow),
+    ([KC::M, KC::U, KC::L], KC::Multi),
+    ([KC::D, KC::I, KC::V], KC::Div),
+
+    ([KC::Num1, KC::Num4, KC::None], KC::Quarter),
+    ([KC::Num1, KC::Num2, KC::None], KC::Half),
+    ([KC::Num3, KC::Num4, KC::None], KC::ThreeQuarter),
 ];
 
 // --------------------------------------------------------------------------------------
 // COMBOS -------------------------------------------------------------------------------
-pub const COMBOS: [([KC; 2], KC); 3] = [
+#[rustfmt::skip]
+pub const COMBOS: [([KC; 2], KC); 4] = [
     ([KC::Layout(1), KC::Layout(2)], KC::Layout(5)),
-    ([KC::HomeSftN, KC::HomeSftR], KC::CapLock),
-    ([KC::P, KC::O], KC::At),
+    ([KC::N,         KC::R],         KC::CapLock),
+    ([KC::Layout(1), KC::T],         KC::Tion),
+    ([KC::Space,     KC::Q],         KC::Qu),
 ];

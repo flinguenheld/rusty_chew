@@ -91,11 +91,8 @@ impl Chew {
         }
     }
 
-    // pub fn update_matrix(&mut self, left: &Vec<u8, 8>, right: &Vec<u8, 8>, ticks: u32) {
     pub fn update_matrix(&mut self, active_indexes: Vec<u8, 16>, ticks: u32) {
-        self.matrix
-            // .update(left.iter().chain(right.iter()).cloned().collect());
-            .update(active_indexes);
+        self.matrix.update(active_indexes);
 
         // Clean --
         self.pre_pressed_keys
@@ -161,16 +158,14 @@ impl Chew {
         // Combos -----------------------------------------------------------------------
         for (combo, new_key) in COMBOS.iter() {
             // Are these keys currently pressed ?
-            if let Some(first) = self
-                .pre_pressed_keys
-                .iter()
-                .position(|k| k.code == combo[0])
-            {
-                if let Some(second) = self
-                    .pre_pressed_keys
-                    .iter_mut()
-                    .position(|k| k.code == combo[1])
-                {
+            if let Some(first) = self.pre_pressed_keys.iter().position(|k| match k.code {
+                KC::HomeRow(_, c) => *c == combo[0],
+                c => c == combo[0],
+            }) {
+                if let Some(second) = self.pre_pressed_keys.iter_mut().position(|k| match k.code {
+                    KC::HomeRow(_, c) => *c == combo[1],
+                    c => c == combo[1],
+                }) {
                     // Remove pre-pressed & create the new pressed one
                     self.pre_pressed_keys[first].code = KC::Done;
                     self.pre_pressed_keys[second].code = KC::Done;
@@ -227,14 +222,14 @@ impl Chew {
         }
 
         if self.leader.active {
+            let mut success = None;
             for key in self.pressed_keys.iter_mut() {
                 match key.code {
                     KC::Esc => {
                         self.leader.active = false;
                     }
-                    k if (k >= KC::A && k <= KC::OE)
-                        || (k >= KC::Num0 && k <= KC::YDiaer)
-                        || (k >= KC::HomeAltA && k <= KC::HomeSftR) =>
+                    KC::HomeRow(_, &k) | k
+                        if (k >= KC::A && k <= KC::OE) || (k >= KC::Num0 && k <= KC::Tion) =>
                     {
                         self.leader.buffer.push(k).ok();
                         let temp_buffer: [KC; 3] = [
@@ -247,7 +242,8 @@ impl Chew {
                             .iter()
                             .find(|(comb, _)| *comb == temp_buffer)
                         {
-                            key_buffer = to_print.usb_code(key_buffer, &self.mods);
+                            // key_buffer = to_print.usb_code(key_buffer, &self.mods);
+                            success = Some(to_print);
                             self.leader.active = false;
                         } else if !LEADER_KEY_COMBINATIONS
                             .iter()
@@ -262,13 +258,23 @@ impl Chew {
                 // Deactivate all keys --
                 key.code = KC::None;
             }
+
+            if let Some(t) = success {
+                self.pressed_keys
+                    .push(Key {
+                        index: usize::MAX,
+                        code: *t,
+                        ticks: COMBO_TIME,
+                    })
+                    .ok();
+            }
         }
 
         // Modifiers --------------------------------------------------------------------
         // Regulars --
         self.pressed_keys
             .iter()
-            .filter(|k| k.code >= KC::Alt && k.code <= KC::Shift)
+            .filter(|k| k.code >= KC::Alt && k.code <= KC::Sft)
             .for_each(|k| self.mods.set(k.code, k.index));
 
         // Caplock --
@@ -278,11 +284,10 @@ impl Chew {
         }
 
         // Homerows --
-        while let Some(index) = self
-            .pressed_keys
-            .iter()
-            .position(|k| k.code >= KC::HomeAltA && k.code <= KC::HomeSftR)
-        {
+        while let Some(index) = self.pressed_keys.iter().position(|k| match k.code {
+            KC::HomeRow(_, _) => true,
+            _ => false,
+        }) {
             self.homerow
                 .push_back(self.pressed_keys.swap_remove(index))
                 .ok();
@@ -295,45 +300,32 @@ impl Chew {
             // Set all homerows as held and print the regular keys
             if key.ticks >= HOLD_TIME {
                 'hr: while let Some(mut popped_key) = self.homerow.pop_front() {
-                    if popped_key.code >= KC::HomeAltA && popped_key.code <= KC::HomeSftR {
-                        if popped_key.ticks >= HOLD_TIME {
-                            match popped_key.code {
-                                KC::HomeAltA | KC::HomeAltU => {
-                                    self.mods.set(KC::Alt, popped_key.index);
-                                    popped_key.code = KC::Alt;
-                                }
-                                KC::HomeCtrlE | KC::HomeCtrlT => {
-                                    self.mods.set(KC::Ctrl, popped_key.index);
-                                    popped_key.code = KC::Ctrl;
-                                }
-                                KC::HomeGuiS | KC::HomeGuiI => {
-                                    self.mods.set(KC::Gui, popped_key.index);
-                                    popped_key.code = KC::Gui;
-                                }
-                                KC::HomeSftN | KC::HomeSftR => {
-                                    self.mods.set(KC::Shift, popped_key.index);
-                                    popped_key.code = KC::Shift;
-                                }
-                                _ => {}
-                            }
-                            // Reintroduce the now-mod key
-                            self.pressed_keys.push(popped_key).ok();
+                    match popped_key.code {
+                        KC::HomeRow(modifier, regular) => {
+                            if popped_key.ticks >= HOLD_TIME {
+                                self.mods.set(*modifier, popped_key.index);
+                                popped_key.code = *modifier;
 
-                        // Print home as Regular key if released
-                        } else if !self.matrix.is_active(popped_key.index) {
-                            key_buffer = popped_key.code.usb_code(key_buffer, &self.mods);
-                            // key_buffer = KC::None.usb_code(key_buffer, &self.mods);
-                            self.last_key = Some(popped_key.index);
-                        } else {
-                            // Specific case with two homerow pressed consecutively
-                            // If the second is in an 'in-between' state, stop here to wait.
-                            self.homerow.push_front(popped_key).ok();
-                            break 'hr;
+                                // Reintroduce the now-mod key
+                                self.pressed_keys.push(popped_key).ok();
+
+                            // Print home as Regular key if released
+                            } else if !self.matrix.is_active(popped_key.index) {
+                                key_buffer = regular.usb_code(key_buffer, &self.mods);
+                                // TODO: Confirm that, is it necessary to update the key code ?
+                                self.last_key = Some(popped_key.index);
+                            } else {
+                                // Specific case with two homerow pressed consecutively
+                                // If the second is in an 'in-between' state, stop here to wait.
+                                self.homerow.push_front(popped_key).ok();
+                                break 'hr;
+                            }
                         }
-                    } else {
-                        // As regular key
-                        key_buffer = popped_key.code.usb_code(key_buffer, &self.mods);
-                        self.last_key = Some(popped_key.index);
+                        _ => {
+                            // Non Homerow key
+                            key_buffer = popped_key.code.usb_code(key_buffer, &self.mods);
+                            self.last_key = Some(popped_key.index);
+                        }
                     }
                 }
             // First released bebore being held --
@@ -349,6 +341,8 @@ impl Chew {
         // Regular keys -----------------------------------------------------------------
         if self.pressed_keys.iter().any(|k| k.code == KC::Esc) {
             self.mods.caplock = false;
+
+            // TODO: Deactivate dead layout
         }
 
         for key in self
@@ -357,7 +351,7 @@ impl Chew {
             .filter(|k| k.code > KC::DoneButKeep)
         {
             match key.code {
-                k if (k >= KC::A && k <= KC::YDiaer) => {
+                k if (k >= KC::A && k <= KC::Tion || (k >= KC::MacroGit)) => {
                     if !self.homerow.is_empty() {
                         self.homerow.push_back(*key).ok();
                     } else {
