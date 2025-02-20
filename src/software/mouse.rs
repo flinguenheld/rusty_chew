@@ -10,11 +10,14 @@ use crate::{
     },
 };
 
+// Move i8 each u32 ms
+type Speed = (i8, u32);
+
 /// Allows Chew to emulate the mouse.
 /// Speeds are saved by pressing order and have to be maintained to be effective.
 pub struct Mouse {
     buttons: Vec<(usize, u8), 3>,
-    speeds: Vec<(usize, (i8, u32), (i8, u32)), 4>,
+    speeds: Vec<(usize, Speed, Speed), 4>,
 
     move_tempo: u32,
     move_ok: u32,

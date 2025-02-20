@@ -261,7 +261,8 @@ pub enum KC {
         MouseSpeed4 = 30043,
 
     Layout(usize) = 40000,
-    LayDead(usize) = 40001,
+    LaySet(usize) = 40001,
+    LayDead(usize) = 40002,
 
         LeaderKey = 51000,
         CapLock = 51001,

@@ -35,6 +35,7 @@ impl Key {
 struct Layout {
     number: usize,
     index: usize,
+    default: usize,
     dead: bool,
     dead_done: bool,
 }
@@ -69,6 +70,7 @@ impl Chew {
             layout: Layout {
                 number: 0,
                 index: 0,
+                default: 0,
                 dead: false,
                 dead_done: false,
             },
@@ -185,7 +187,7 @@ impl Chew {
         // Layout -----------------------------------------------------------------------
         if !(self.matrix.is_active(self.layout.index) || self.layout.dead && !self.layout.dead_done)
         {
-            self.layout.number = 0;
+            self.layout.number = self.layout.default;
             self.layout.dead = false;
         }
 
@@ -196,12 +198,18 @@ impl Chew {
                     key.code = KC::DoneButKeep;
                     self.layout.number = number;
                     self.layout.index = key.index;
-                    self.layout.dead = false;
+                }
+                KC::LaySet(number) => {
+                    key.code = KC::Done;
+                    self.layout.default = number;
+                    self.layout.number = number;
+                    self.layout.index = key.index;
                 }
                 KC::LayDead(number) => {
                     key.code = KC::DoneButKeep;
                     self.layout.number = number;
                     self.layout.index = key.index;
+
                     self.layout.dead = true;
                     self.layout.dead_done = false;
                 }
@@ -242,7 +250,6 @@ impl Chew {
                             .iter()
                             .find(|(comb, _)| *comb == temp_buffer)
                         {
-                            // key_buffer = to_print.usb_code(key_buffer, &self.mods);
                             success = Some(to_print);
                             self.leader.active = false;
                         } else if !LEADER_KEY_COMBINATIONS
@@ -284,10 +291,11 @@ impl Chew {
         }
 
         // Homerows --
-        while let Some(index) = self.pressed_keys.iter().position(|k| match k.code {
-            KC::HomeRow(_, _) => true,
-            _ => false,
-        }) {
+        while let Some(index) = self
+            .pressed_keys
+            .iter()
+            .position(|k| matches!(k.code, KC::HomeRow(_, _)))
+        {
             self.homerow
                 .push_back(self.pressed_keys.swap_remove(index))
                 .ok();
@@ -341,8 +349,6 @@ impl Chew {
         // Regular keys -----------------------------------------------------------------
         if self.pressed_keys.iter().any(|k| k.code == KC::Esc) {
             self.mods.caplock = false;
-
-            // TODO: Deactivate dead layout
         }
 
         for key in self
