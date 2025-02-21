@@ -2,16 +2,16 @@
     <img src="./images/crab_coffee.png">
 </div>
 
-This is the rustynuine firmware for the [Chew](https://github.com/flinguenheld/chew) keyboard!
+This is the rustenuine firmware for the [Chew](https://github.com/flinguenheld/chew) keyboard!
 
-It performs some cool hacks that keyboard enthousiats love:
+It performs some cool hacks that keyboard enthusiasts love:
 
 - Layers
-    - Set defaut
-    - Activated as long as a key is held (the best ❤️)
+    - Set default
+    - Activated as long as a key is held down (the best ❤️)
     - Dead key style (activated until another key is pressed)
 - Homerows
-    - Hold to activate a modifier
+    - Hold down to activate a modifier
     - Press to print a regular key
 - Combos
     - Two keys pressed at once result in a third one
@@ -33,7 +33,7 @@ It performs some cool hacks that keyboard enthousiats love:
 ### Layout
 
 Here's my *current* layout which uses the US international extended keymap.  
-The letter positions come from [Ergo-L](https://ergol.org/) which my favourite French layout.
+The letter positions come from [Ergo-L](https://ergol.org/) which is the best French layout.
 
 <div align="center">
     <img src="./images/layouts.png">
@@ -76,9 +76,9 @@ Mount the controller's drive and use one of these commands:
 ### Thanks
 
 Rusty Chew uses the [usbd-human-interface-device](https://github.com/dlkj/usbd-human-interface-device) crate which simplifies
-**a lot** the usb management ❤️.  
-Also the [pio-uart](https://github.com/Sympatron/pio-uart) which allowed me to create a uart half-duplex protocol.  
-And the [rp-hal-boards](https://github.com/rp-rs/rp-hal-boards) as a base to use the rp2040-zero controller.  
+the usb management **a lot** ❤️.  
+Also the [pio-uart](https://github.com/Sympatron/pio-uart) which allowed me to create a UART half-duplex protocol.  
+And the [rp-hal-boards](https://github.com/rp-rs/rp-hal-boards) that I used as a base to use the RP2040-zero controller.  
 
 <div align="center">
     <img src="./images/crab_back.png">
