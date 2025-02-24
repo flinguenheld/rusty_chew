@@ -59,16 +59,12 @@ Then, hold down the controller's **boot** button and plug in the usb cable.
 Mount the controller's drive and use one of these commands:
 
 ```
-  cargo run --release --bin left
-```
-```
-  cargo run --release --bin right
+  cargo run --release --bin split
 ```
 ```
   cargo run --release --bin mono
 ```
 
-*The split version only works with the usb cable connected to the left part.*
 <div align="center">
     <img src="./images/prawns.png">
 </div>

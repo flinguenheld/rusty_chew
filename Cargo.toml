@@ -4,12 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "left"
-path = "src/left.rs"
-
-[[bin]]
-name = "right"
-path = "src/right.rs"
+name = "split"
+path = "src/split.rs"
 
 [[bin]]
 name = "mono"
