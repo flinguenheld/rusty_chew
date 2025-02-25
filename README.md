@@ -59,11 +59,15 @@ Then, hold down the controller's **boot** button and plug in the usb cable.
 Mount the controller's drive and use one of these commands:
 
 ```
-  cargo run --release --bin split
-```
-```
   cargo run --release --bin mono
 ```
+```
+  cargo run --release --bin split
+```
+
+> 💡 *The [0xCB-Gemini](https://github.com/0xCB-dev/0xCB-Gemini) controller has a vbus detection that allows the keyboard to know which side is
+connected to the computer.  
+> Therefore once you have flashed both sides with the split command, you'll be able to use any of them as master.*
 
 <div align="center">
     <img src="./images/prawns.png">

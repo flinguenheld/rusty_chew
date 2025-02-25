@@ -218,15 +218,17 @@ fn main() -> ! {
                 match uart.receive() {
                     Ok(mail) => match mail.header {
                         HR_KEYS => {
+                            // Get active indexes & combine them with the other side
+                            let indexes = match is_left {
+                                true => gpios.get_left_indexes(),
+                                false => gpios.get_right_indexes(),
+                            };
+
                             chew.update_matrix(
-                                gpios
-                                    .get_left_indexes()
-                                    .iter()
-                                    .chain(mail.values.iter())
-                                    .cloned()
-                                    .collect(),
+                                indexes.iter().chain(mail.values.iter()).cloned().collect(),
                                 ticks,
                             );
+
                             (key_buffer, mouse_report, led_status) =
                                 chew.run(key_buffer, mouse_report, ticks);
 
@@ -290,7 +292,10 @@ fn main() -> ! {
                 match uart.receive() {
                     Ok(mail) => match mail.header {
                         HR_KEYS => {
-                            let active_indexes = gpios.get_right_indexes();
+                            let active_indexes = match is_left {
+                                true => gpios.get_left_indexes(),
+                                false => gpios.get_right_indexes(),
+                            };
                             if uart.send(HR_KEYS, &active_indexes, &mut delay).is_err() {
                                 led.light_on(LedColor::Red);
                             }
