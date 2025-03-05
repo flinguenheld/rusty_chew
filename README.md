@@ -47,7 +47,7 @@ The letter positions come from [Ergo-L](https://ergol.org/) which is the best Fr
     <img src="./images/prawns.png">
 </div>
 
-### Install
+### Flash
 
 Clone this repo:
 
@@ -58,16 +58,29 @@ Clone this repo:
 Then, hold down the controller's **boot** button and plug in the usb cable.  
 Mount the controller's drive and use one of these commands:
 
+##### Mono
 ```
   cargo run --release --bin mono
 ```
+##### Split with the [0xCB-Gemini](https://github.com/0xCB-dev/0xCB-Gemini) controller
+
+>This controller has a vbus detection that allows the keyboard to know which side is
+>connected to the computer.  
+>Therefore once you have flashed both sides with the split command, you'll be able to use any of them as master.
 ```
   cargo run --release --bin split
 ```
 
-> 💡 *The [0xCB-Gemini](https://github.com/0xCB-dev/0xCB-Gemini) controller has a vbus detection that allows the keyboard to know which side is
-connected to the computer.  
-> Therefore once you have flashed both sides with the split command, you'll be able to use any of them as master.*
+##### Split with the [RP2040-Zéro](https://www.waveshare.com/wiki/RP2040-Zero) controller
+
+>For this one, the position of the master is fixed, you have to make your choice and flash both side with one of these commands:
+
+```
+  cargo run --release --bin split --features master
+```
+```
+  cargo run --release --bin split --features slave
+```
 
 <div align="center">
     <img src="./images/prawns.png">

@@ -6,6 +6,7 @@ mod layouts;
 mod options;
 mod software;
 
+use cfg_if::cfg_if;
 use embedded_hal::digital::InputPin;
 use hardware::{
     gpios::GpiosDirectPin,
@@ -102,8 +103,17 @@ fn main() -> ! {
         .build();
 
     // Side detection --
-    let is_left = pins.gp10.into_pull_up_input().is_high().unwrap();
-    let is_master = pins.gpio19.into_pull_up_input().is_high().unwrap();
+    let is_left = pins.gp10.into_pull_down_input().is_high().unwrap();
+
+    cfg_if! {
+        if #[cfg(feature = "master")] {
+            let is_master = true;
+        } else if #[cfg(feature = "slave")] {
+            let is_master = false;
+        } else {
+            let is_master = pins.gpio19.into_pull_up_input().is_high().unwrap();
+        }
+    }
 
     // GPIO --
     // Here are the indexes which are used by the matrix. Gpios struct is in
@@ -266,6 +276,7 @@ fn main() -> ! {
                         UartError::NothingToReadMax => {
                             // Try to relaunch the loop
                             uart.send(HR_KEYS, &[], &mut delay).ok();
+                            led.light_on(LedColor::Yellow);
                         }
                         _err => {}
                     },
@@ -314,7 +325,7 @@ fn main() -> ! {
                         // led.light_on(LedColor::Olive);
                     }
                     _ => {
-                        led.light_on(LedColor::Red);
+                        led.light_on(LedColor::Yellow);
                     }
                 }
             }

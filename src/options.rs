@@ -14,7 +14,6 @@ pub const TIMER_USB_LOOP: u32 = 15;
 
 pub const UART_SPEED: u32 = 115_200;
 // pub const UART_SPEED: u32 = 19200;
-pub const UART_SEND_DELAY: u32 = 100; // microseconds
 
 // Mouse
 // Move i8 each u32 ms

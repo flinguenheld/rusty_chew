@@ -15,11 +15,16 @@ use fugit::RateExtU32;
 use pio_uart::{PioUartRx, PioUartTx, RxProgram, TxProgram};
 use usbd_human_interface_device::interface::ReportBuffer;
 
-use crate::options::{UART_SEND_DELAY, UART_SPEED};
+use crate::options::UART_SPEED;
 
 const MAX_MESSAGE_LENGTH: usize = 9; // Max tested in January 2025
 const MAX_NOT_COMPLETE: u32 = 3;
 const MAX_NOTHING_RECEIVED: u32 = 100;
+
+#[cfg(debug_assertions)]
+pub const UART_SEND_DELAY: u32 = 100; // microseconds
+#[cfg(not(debug_assertions))]
+pub const UART_SEND_DELAY: u32 = 1000;
 
 // Values used as a header to validated a message
 pub const HR_KEYS: u8 = 0b11010000;
