@@ -8,7 +8,7 @@ mod software;
 
 use embedded_hal::digital::InputPin;
 use hardware::{
-    gpios::Gpios,
+    gpios::GpiosDirectPin,
     led::{Led, LedColor, LED_CAPLOCK, LED_LAYOUT_FN, LED_LAYOUT_FR, LED_LEADER_KEY},
     uart::{Uart, UartError, HR_KEYS, HR_LED},
 };
@@ -106,73 +106,57 @@ fn main() -> ! {
     let is_master = pins.gpio19.into_pull_up_input().is_high().unwrap();
 
     // GPIO --
-    let mut gpios: Gpios = if is_left {
-        Gpios {
-            pins: [
-                [
-                    Some(pins.gp4.into_pull_up_input().into_dyn_pin()),
-                    Some(pins.gp3.into_pull_up_input().into_dyn_pin()),
-                    Some(pins.gp2.into_pull_up_input().into_dyn_pin()),
-                    Some(pins.gp1.into_pull_up_input().into_dyn_pin()),
-                    Some(pins.gp0.into_pull_up_input().into_dyn_pin()),
-                ],
-                [
-                    Some(pins.gp15.into_pull_up_input().into_dyn_pin()),
-                    Some(pins.gp26.into_pull_up_input().into_dyn_pin()),
-                    Some(pins.gp27.into_pull_up_input().into_dyn_pin()),
-                    Some(pins.gp28.into_pull_up_input().into_dyn_pin()),
-                    Some(pins.gp29.into_pull_up_input().into_dyn_pin()),
-                ],
-                [
-                    Some(pins.gp14.into_pull_up_input().into_dyn_pin()),
-                    Some(pins.gp13.into_pull_up_input().into_dyn_pin()),
-                    Some(pins.gp9.into_pull_up_input().into_dyn_pin()),
-                    Some(pins.gp8.into_pull_up_input().into_dyn_pin()),
-                    None,
-                ],
-                [
-                    Some(pins.gp7.into_pull_up_input().into_dyn_pin()),
-                    Some(pins.gp6.into_pull_up_input().into_dyn_pin()),
-                    Some(pins.gp5.into_pull_up_input().into_dyn_pin()),
-                    None,
-                    None,
-                ],
-            ],
-        }
+    // Here are the indexes which are used by the matrix. Gpios struct is in
+    // charge of converting an active pin status into a matrix index.
+
+    // 00  01  02  03  04    |    05  06  07  08  09
+    // 10  11  12  13  14    |    15  16  17  18  19
+    // 20  21  22  23        |        24  25  26  27
+    //         28  29  30    |    31  32  33
+    let mut gpios = GpiosDirectPin::new();
+    if is_left {
+        gpios.add(pins.gp4.into_pull_up_input().into_dyn_pin(), 0);
+        gpios.add(pins.gp3.into_pull_up_input().into_dyn_pin(), 1);
+        gpios.add(pins.gp2.into_pull_up_input().into_dyn_pin(), 2);
+        gpios.add(pins.gp1.into_pull_up_input().into_dyn_pin(), 3);
+        gpios.add(pins.gp0.into_pull_up_input().into_dyn_pin(), 4);
+        // --
+        gpios.add(pins.gp15.into_pull_up_input().into_dyn_pin(), 10);
+        gpios.add(pins.gp26.into_pull_up_input().into_dyn_pin(), 11);
+        gpios.add(pins.gp27.into_pull_up_input().into_dyn_pin(), 12);
+        gpios.add(pins.gp28.into_pull_up_input().into_dyn_pin(), 13);
+        gpios.add(pins.gp29.into_pull_up_input().into_dyn_pin(), 14);
+        // --
+        gpios.add(pins.gp14.into_pull_up_input().into_dyn_pin(), 20);
+        gpios.add(pins.gp13.into_pull_up_input().into_dyn_pin(), 21);
+        gpios.add(pins.gp9.into_pull_up_input().into_dyn_pin(), 22);
+        gpios.add(pins.gp8.into_pull_up_input().into_dyn_pin(), 23);
+        // --
+        gpios.add(pins.gp7.into_pull_up_input().into_dyn_pin(), 28);
+        gpios.add(pins.gp6.into_pull_up_input().into_dyn_pin(), 29);
+        gpios.add(pins.gp5.into_pull_up_input().into_dyn_pin(), 30);
     } else {
-        Gpios {
-            pins: [
-                [
-                    Some(pins.gp0.into_pull_up_input().into_dyn_pin()),
-                    Some(pins.gp1.into_pull_up_input().into_dyn_pin()),
-                    Some(pins.gp2.into_pull_up_input().into_dyn_pin()),
-                    Some(pins.gp3.into_pull_up_input().into_dyn_pin()),
-                    Some(pins.gp4.into_pull_up_input().into_dyn_pin()),
-                ],
-                [
-                    Some(pins.gp29.into_pull_up_input().into_dyn_pin()),
-                    Some(pins.gp28.into_pull_up_input().into_dyn_pin()),
-                    Some(pins.gp27.into_pull_up_input().into_dyn_pin()),
-                    Some(pins.gp26.into_pull_up_input().into_dyn_pin()),
-                    Some(pins.gp15.into_pull_up_input().into_dyn_pin()),
-                ],
-                [
-                    Some(pins.gp8.into_pull_up_input().into_dyn_pin()),
-                    Some(pins.gp9.into_pull_up_input().into_dyn_pin()),
-                    Some(pins.gp13.into_pull_up_input().into_dyn_pin()),
-                    Some(pins.gp14.into_pull_up_input().into_dyn_pin()),
-                    None,
-                ],
-                [
-                    Some(pins.gp5.into_pull_up_input().into_dyn_pin()),
-                    Some(pins.gp6.into_pull_up_input().into_dyn_pin()),
-                    Some(pins.gp7.into_pull_up_input().into_dyn_pin()),
-                    None,
-                    None,
-                ],
-            ],
-        }
-    };
+        gpios.add(pins.gp0.into_pull_up_input().into_dyn_pin(), 5);
+        gpios.add(pins.gp1.into_pull_up_input().into_dyn_pin(), 6);
+        gpios.add(pins.gp2.into_pull_up_input().into_dyn_pin(), 7);
+        gpios.add(pins.gp3.into_pull_up_input().into_dyn_pin(), 8);
+        gpios.add(pins.gp4.into_pull_up_input().into_dyn_pin(), 9);
+        // --
+        gpios.add(pins.gp29.into_pull_up_input().into_dyn_pin(), 15);
+        gpios.add(pins.gp28.into_pull_up_input().into_dyn_pin(), 16);
+        gpios.add(pins.gp27.into_pull_up_input().into_dyn_pin(), 17);
+        gpios.add(pins.gp26.into_pull_up_input().into_dyn_pin(), 18);
+        gpios.add(pins.gp15.into_pull_up_input().into_dyn_pin(), 19);
+        // --
+        gpios.add(pins.gp8.into_pull_up_input().into_dyn_pin(), 24);
+        gpios.add(pins.gp9.into_pull_up_input().into_dyn_pin(), 25);
+        gpios.add(pins.gp13.into_pull_up_input().into_dyn_pin(), 26);
+        gpios.add(pins.gp14.into_pull_up_input().into_dyn_pin(), 27);
+        // --
+        gpios.add(pins.gp5.into_pull_up_input().into_dyn_pin(), 31);
+        gpios.add(pins.gp6.into_pull_up_input().into_dyn_pin(), 32);
+        gpios.add(pins.gp7.into_pull_up_input().into_dyn_pin(), 33);
+    }
 
     // Led --
     let mut neopixel = Ws2812::new(
@@ -219,13 +203,13 @@ fn main() -> ! {
                     Ok(mail) => match mail.header {
                         HR_KEYS => {
                             // Get active indexes & combine them with the other side
-                            let indexes = match is_left {
-                                true => gpios.get_left_indexes(),
-                                false => gpios.get_right_indexes(),
-                            };
-
                             chew.update_matrix(
-                                indexes.iter().chain(mail.values.iter()).cloned().collect(),
+                                gpios
+                                    .get_active_indexes()
+                                    .iter()
+                                    .chain(mail.values.iter())
+                                    .cloned()
+                                    .collect(),
                                 ticks,
                             );
 
@@ -292,11 +276,10 @@ fn main() -> ! {
                 match uart.receive() {
                     Ok(mail) => match mail.header {
                         HR_KEYS => {
-                            let active_indexes = match is_left {
-                                true => gpios.get_left_indexes(),
-                                false => gpios.get_right_indexes(),
-                            };
-                            if uart.send(HR_KEYS, &active_indexes, &mut delay).is_err() {
+                            if uart
+                                .send(HR_KEYS, &gpios.get_active_indexes(), &mut delay)
+                                .is_err()
+                            {
                                 led.light_on(LedColor::Red);
                             }
                         }
