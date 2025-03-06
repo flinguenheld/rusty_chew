@@ -111,7 +111,7 @@ fn main() -> ! {
         } else if #[cfg(feature = "slave")] {
             let is_master = false;
         } else {
-            let is_master = pins.gpio19.into_pull_up_input().is_high().unwrap();
+            let is_master = pins.gpio19.into_pull_down_input().is_high().unwrap();
         }
     }
 
