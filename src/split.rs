@@ -278,7 +278,10 @@ fn main() -> ! {
                             uart.send(HR_KEYS, &[], &mut delay).ok();
                             led.light_on(LedColor::Yellow);
                         }
-                        _err => {}
+                        UartError::NothingToRead => {}
+                        _err => {
+                            // led.light_on(LedColor::Blue);
+                        }
                     },
                 }
             } else {
