@@ -8,8 +8,9 @@ name = "split"
 path = "src/split.rs"
 
 [features]
-master=[]
-slave=[]
+master = []
+slave = []
+zero = []
 
 [[bin]]
 name = "mono"

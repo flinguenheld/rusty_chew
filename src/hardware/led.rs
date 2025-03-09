@@ -49,7 +49,7 @@ impl Led<'_> {
         cfg_if! {
 
             // RP2040-zero is GRB while Gemini is RGB -_-'
-            if #[cfg(all(feature = "master", feature = "slave"))] {
+            if #[cfg(feature = "zero")] {
                 self.neopixel
                     .write(brightness(
                         once(

@@ -33,7 +33,7 @@ It performs some cool hacks that keyboard enthusiasts love:
 ### Layout
 
 Here's my *current* layout which uses the US international extended keymap.  
-The letter positions come from [Ergo-L](https://ergol.org/) which is the best French layout.
+The letter positions come from [Ergo-L](https://ergol.org/) which is my favourite French layout.
 
 <div align="center">
     <img src="./images/layouts.png">
@@ -56,11 +56,15 @@ Clone this repo:
 ```
 
 Then, hold down the controller's **boot** button and plug in the usb cable.  
-Mount the controller's drive and use one of these commands:
+Mount the controller's drive and use one of these commands:  
+
+
+> 💡 Use the feature "zero" to flash the RP2040-zero (its led is wired GRB).
 
 ##### Mono
 ```
   cargo run --release --bin mono
+  cargo run --release --bin mono --features zero
 ```
 ##### Split with the [0xCB-Gemini](https://github.com/0xCB-dev/0xCB-Gemini) controller
 
@@ -76,10 +80,10 @@ Mount the controller's drive and use one of these commands:
 >For this one, the position of the master is fixed, you have to make your choice and flash both side with one of these commands:
 
 ```
-  cargo run --release --bin split --features master
+  cargo run --release --bin split --features master zero
 ```
 ```
-  cargo run --release --bin split --features slave
+  cargo run --release --bin split --features slave zero
 ```
 
 <div align="center">
