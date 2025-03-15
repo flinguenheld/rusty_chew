@@ -8,8 +8,8 @@ It performs some cool hacks that keyboard enthusiasts love:
 
 - Layers
     - Set default
-    - Activated as long as a key is held down (the best ❤️)
-    - Dead key style (activated until another key is pressed)
+    - Activated as long as a key is held down ❤️
+    - Dead key style (activated until another key is pressed or as long as being held)
 - Homerows
     - Hold down to activate a modifier
     - Press to print a regular key
@@ -31,10 +31,9 @@ It performs some cool hacks that keyboard enthusiasts love:
     - Record
         - Press `KC::DynMacRecord`
         - Then another key which will be used to create an entry in the macro dictionary
-        - Now all pressed key are recorded with their modifiers
+        - Now all pressed key are recorded with its modifiers
         - Press `KC::DynMacRecord` again to end up the record
     - Launch
-
         - Press `KC::DynMacGo`
         - Then the key which was used to record the macro
 

@@ -16,11 +16,11 @@ pub const LED_LEADER_KEY: u8 = 3;
 pub const LED_CAPLOCK: u8 = 4;
 
 pub const LED_DYNMAC_REC: u8 = 5;
-pub const LED_DYNMAC_GO_WAIT_KEY: u8 = 6;
-pub const LED_DYNMAC_REC_WAIT_KEY: u8 = 7;
+pub const LED_DYNMAC_GO_WAIT: u8 = 6;
+pub const LED_DYNMAC_REC_WAIT: u8 = 7;
 
 #[allow(dead_code)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum LedColor {
     Green,
     Red,
@@ -36,20 +36,43 @@ pub enum LedColor {
     Navy,
     Fushia,
     Purple,
+    None,
 }
 
 type Neopixel<'a> = Ws2812<PIO0, SM0, CountDown<'a>, Pin<Gpio16, FunctionPio0, PullDown>>;
 
 pub struct Led<'a> {
     neopixel: &'a mut Neopixel<'a>,
+    next_blinking_step: u32,
+    last_blinking_color: LedColor,
 }
 
 impl Led<'_> {
     pub fn new<'a>(neopixel: &'a mut Neopixel<'a>) -> Led<'a> {
-        Led { neopixel }
+        Led {
+            neopixel,
+            next_blinking_step: 0,
+            last_blinking_color: LedColor::None,
+        }
     }
 
-    pub fn light_on(&mut self, color: LedColor) {
+    pub fn blink(&mut self, color: LedColor, step_ms: u32, ticks: u32) {
+        if self.last_blinking_color != color || self.next_blinking_step == 0 {
+            self.next_blinking_step = ticks.wrapping_add(step_ms);
+        }
+
+        if self.next_blinking_step > ticks {
+            self.on(color);
+        } else if self.next_blinking_step + step_ms > ticks {
+            self.on(LedColor::None);
+        } else {
+            self.next_blinking_step = ticks.wrapping_add(step_ms);
+        }
+
+        self.last_blinking_color = color;
+    }
+
+    pub fn on(&mut self, color: LedColor) {
         cfg_if! {
 
             // RP2040-zero is GRB while Gemini is RGB -_-'
@@ -72,6 +95,7 @@ impl Led<'_> {
                                 LedColor::Navy   => [   0 ,   0 , 128 ],
                                 LedColor::Fushia => [   0 , 255 , 255 ],
                                 LedColor::Purple => [   0 , 128 , 128 ],
+                                LedColor::None   => [   0 ,   0 ,   0 ],
                             }
                             .into(),
                         ),
@@ -98,18 +122,19 @@ impl Led<'_> {
                                 LedColor::Navy   => [   0 ,   0 , 128 ],
                                 LedColor::Fushia => [ 255 ,   0 , 255 ],
                                 LedColor::Purple => [ 128 ,   0 , 128 ],
+                                LedColor::None   => [   0 ,   0 ,   0 ],
                             }
                             .into(),
                         ),
-                        30,
+                        20,
                     ))
                     .unwrap();
              }
         }
     }
-    pub fn light_off(&mut self) {
-        self.neopixel
-            .write(brightness(once([0, 0, 0].into()), 3))
-            .unwrap();
+
+    pub fn off(&mut self) {
+        self.on(LedColor::None);
+        self.last_blinking_color = LedColor::None; // Reset to avoid any lag on blinking
     }
 }

@@ -11,8 +11,8 @@ use embedded_hal::digital::InputPin;
 use hardware::{
     gpios::GpiosDirectPin,
     led::{
-        Led, LedColor, LED_CAPLOCK, LED_DYNMAC_GO_WAIT_KEY, LED_DYNMAC_REC,
-        LED_DYNMAC_REC_WAIT_KEY, LED_LAYOUT_FN, LED_LAYOUT_FR, LED_LEADER_KEY,
+        Led, LedColor, LED_CAPLOCK, LED_DYNMAC_GO_WAIT, LED_DYNMAC_REC, LED_DYNMAC_REC_WAIT,
+        LED_LAYOUT_FN, LED_LAYOUT_FR, LED_LEADER_KEY,
     },
     uart::{Uart, UartError, HR_KEYS, HR_LED},
 };
@@ -240,7 +240,7 @@ fn main() -> ! {
                                 let mouse = rusty_chew.device::<WheelMouse<'_, _>, _>();
                                 match mouse.write_report(&mouse_report) {
                                     Err(UsbHidError::WouldBlock) => {
-                                        led.light_on(LedColor::Red);
+                                        led.on(LedColor::Red);
                                     }
                                     Ok(_) => {
                                         last_mouse_buttons = mouse_report.buttons;
@@ -254,29 +254,29 @@ fn main() -> ! {
 
                             // Update Led --
                             if uart.send(HR_LED, &[led_status], &mut delay).is_err() {
-                                led.light_on(LedColor::Red);
+                                led.on(LedColor::Red);
                             }
                         }
 
                         HR_LED => {
                             match mail.values[0] {
-                                LED_LAYOUT_FR => led.light_on(LedColor::Aqua),
-                                LED_LAYOUT_FN => led.light_on(LedColor::Fushia),
-                                LED_LEADER_KEY => led.light_on(LedColor::Blue),
-                                LED_CAPLOCK => led.light_on(LedColor::Orange),
+                                LED_LAYOUT_FR => led.on(LedColor::Aqua),
+                                LED_LAYOUT_FN => led.on(LedColor::Fushia),
+                                LED_LEADER_KEY => led.on(LedColor::Blue),
+                                LED_CAPLOCK => led.on(LedColor::Orange),
 
-                                LED_DYNMAC_GO_WAIT_KEY => led.light_on(LedColor::Olive),
-                                LED_DYNMAC_REC => led.light_on(LedColor::Red),
-                                LED_DYNMAC_REC_WAIT_KEY => led.light_on(LedColor::Purple),
+                                LED_DYNMAC_GO_WAIT => led.blink(LedColor::Olive, 800, ticks),
+                                LED_DYNMAC_REC => led.blink(LedColor::Red, 600, ticks),
+                                LED_DYNMAC_REC_WAIT => led.blink(LedColor::Purple, 800, ticks),
 
-                                _ => led.light_off(),
+                                _ => led.off(),
                             }
 
                             // New uart loop --
                             uart.send(HR_KEYS, &[], &mut delay).ok();
                         }
                         _ => {
-                            led.light_on(LedColor::Red);
+                            led.on(LedColor::Red);
                         }
                     },
 
@@ -284,11 +284,11 @@ fn main() -> ! {
                         UartError::NothingToReadMax => {
                             // Try to relaunch the loop
                             uart.send(HR_KEYS, &[], &mut delay).ok();
-                            led.light_on(LedColor::Yellow);
+                            led.on(LedColor::Yellow);
                         }
                         UartError::NothingToRead => {}
                         _err => {
-                            // led.light_on(LedColor::Blue);
+                            // led.on(LedColor::Blue);
                         }
                     },
                 }
@@ -302,26 +302,26 @@ fn main() -> ! {
                                 .send(HR_KEYS, &gpios.get_active_indexes(), &mut delay)
                                 .is_err()
                             {
-                                led.light_on(LedColor::Red);
+                                led.on(LedColor::Red);
                             }
                         }
 
                         HR_LED => {
                             match mail.values[0] {
-                                LED_LAYOUT_FR => led.light_on(LedColor::Aqua),
-                                LED_LAYOUT_FN => led.light_on(LedColor::Fushia),
-                                LED_LEADER_KEY => led.light_on(LedColor::Blue),
-                                LED_CAPLOCK => led.light_on(LedColor::Orange),
+                                LED_LAYOUT_FR => led.on(LedColor::Aqua),
+                                LED_LAYOUT_FN => led.on(LedColor::Fushia),
+                                LED_LEADER_KEY => led.on(LedColor::Blue),
+                                LED_CAPLOCK => led.on(LedColor::Orange),
 
-                                LED_DYNMAC_GO_WAIT_KEY => led.light_on(LedColor::Olive),
-                                LED_DYNMAC_REC => led.light_on(LedColor::Red),
-                                LED_DYNMAC_REC_WAIT_KEY => led.light_on(LedColor::Purple),
+                                LED_DYNMAC_GO_WAIT => led.blink(LedColor::Olive, 800, ticks),
+                                LED_DYNMAC_REC => led.blink(LedColor::Red, 600, ticks),
+                                LED_DYNMAC_REC_WAIT => led.blink(LedColor::Purple, 800, ticks),
 
-                                _ => led.light_off(),
+                                _ => led.off(),
                             }
 
                             if uart.send(HR_LED, &[mail.values[0]], &mut delay).is_err() {
-                                led.light_on(LedColor::Red);
+                                led.on(LedColor::Red);
                             }
                         }
 
@@ -329,19 +329,19 @@ fn main() -> ! {
                     },
 
                     Err(UartError::NothingToRead) => {
-                        // led.light_on(LedColor::Blue);
+                        // led.on(LedColor::Blue);
                     }
                     Err(UartError::NothingToReadMax) => {
-                        led.light_on(LedColor::Red);
+                        led.on(LedColor::Red);
                     }
                     Err(UartError::NotComplete) => {
-                        // led.light_on(LedColor::Yellow);
+                        // led.on(LedColor::Yellow);
                     }
                     Err(UartError::Header) => {
-                        // led.light_on(LedColor::Olive);
+                        // led.on(LedColor::Olive);
                     }
                     _ => {
-                        led.light_on(LedColor::Yellow);
+                        led.on(LedColor::Yellow);
                     }
                 }
             }
@@ -360,12 +360,12 @@ fn main() -> ! {
                                     usb_dev.bus().remote_wakeup();
                                     key_buffer.keys.clear();
                                 } else {
-                                    led.light_on(LedColor::Red);
+                                    led.on(LedColor::Red);
                                     key_buffer.keys.push_front(popped_key).ok();
                                 }
                             }
                             Err(UsbHidError::Duplicate) => {
-                                led.light_on(LedColor::Blue);
+                                led.on(LedColor::Blue);
                             }
                             Ok(_) => {
                                 key_buffer_tempo = ticks.wrapping_add(popped_key.tempo);
@@ -405,6 +405,10 @@ fn main() -> ! {
                     Ok(_leds) => {}
                 }
             }
+
+        // Slave (ticks used to blink led)
+        } else if tick_count_down.wait().is_ok() {
+            ticks = ticks.wrapping_add(1);
         }
     }
 }

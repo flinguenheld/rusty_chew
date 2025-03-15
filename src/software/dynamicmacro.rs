@@ -6,7 +6,7 @@ use super::{
     modifiers::Modifiers,
 };
 use crate::{
-    hardware::led::{LED_DYNMAC_GO_WAIT_KEY, LED_DYNMAC_REC, LED_DYNMAC_REC_WAIT_KEY},
+    hardware::led::{LED_DYNMAC_GO_WAIT, LED_DYNMAC_REC, LED_DYNMAC_REC_WAIT},
     options::NB_KEYS,
 };
 
@@ -124,9 +124,9 @@ impl DynMac {
     pub fn up_led_status(&self, led_status: u8) -> u8 {
         match self.state {
             State::Inactive => led_status,
-            State::RecordWaitKey => LED_DYNMAC_REC_WAIT_KEY,
+            State::RecordWaitKey => LED_DYNMAC_REC_WAIT,
             State::RecordInProgress => LED_DYNMAC_REC,
-            State::GoWaitKey => LED_DYNMAC_GO_WAIT_KEY,
+            State::GoWaitKey => LED_DYNMAC_GO_WAIT,
         }
     }
 }

@@ -1,4 +1,4 @@
-use heapless::{Deque, FnvIndexMap, Vec};
+use heapless::{Deque, Vec};
 use usbd_human_interface_device::device::mouse::WheelMouseReport;
 
 use super::{
