@@ -18,13 +18,25 @@ It performs some cool hacks that keyboard enthusiasts love:
 - Leader key
     - Once activated, it allows you to hit a sequence (3 keys max) to produce another key
     - Leave it with Escape or a wrong key
-- Macros
-    - One key can produce a chain of keys (e.g. to automate accents or email addresses)
 - Mouse emulation
+- Indicator light management
+    - Synchronise the embedded controler's aRGB led (e.g. for layers, caplock...)
 - No mods
     - Prevent modifiers with specific keys (e.g. no shifted symbols)
 - Caplock
     - Deactivated by itself or Escape
+- Macros
+    - One key can produce a chain of keys (e.g. to automate accents or email addresses)
+- Dynamic macros
+    - Record
+        - Press `KC::DynMacRecord`
+        - Then another key which will be used to create an entry in the macro dictionary
+        - Now all pressed key are recorded with their modifiers
+        - Press `KC::DynMacRecord` again to end up the record
+    - Launch
+
+        - Press `KC::DynMacGo`
+        - Then the key which was used to record the macro
 
 <div align="center">
     <img src="./images/prawns.png">
