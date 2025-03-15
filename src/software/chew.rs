@@ -2,6 +2,7 @@ use heapless::{Deque, FnvIndexMap, Vec};
 use usbd_human_interface_device::device::mouse::WheelMouseReport;
 
 use super::{
+    dynamicmacro::DynMac,
     keys::{Buffer, KC},
     modifiers::Modifiers,
     mouse::Mouse,
@@ -43,11 +44,6 @@ struct Leader {
     active: bool,
     buffer: Vec<KC, 3>,
 }
-struct DynMac {
-    state: u8,
-    key_index: KC,
-    list: FnvIndexMap<KC, Vec<(KC, Modifiers), 64>, 32>,
-}
 
 /// This is the core of this keyboard,
 /// The Run function proceeds all the keyboard hacks to fill the key buffer according to the LAYOUT.
@@ -84,11 +80,7 @@ impl Chew {
                 active: false,
                 buffer: Vec::new(),
             },
-            dynmac: DynMac {
-                state: 0,
-                key_index: KC::None,
-                list: FnvIndexMap::new(),
-            },
+            dynmac: DynMac::new(),
             mouse: Mouse::new(),
             led_status: 0,
 
@@ -287,6 +279,9 @@ impl Chew {
             }
         }
 
+        // Dynamic macros ---------------------------------------------------------------
+        key_buffer = self.dynmac.run(&mut self.pressed_keys, key_buffer);
+
         // Modifiers --------------------------------------------------------------------
         // Regulars --
         self.pressed_keys
@@ -330,8 +325,8 @@ impl Chew {
                             // Print home as Regular key if released
                             } else if !self.matrix.is_active(popped_key.index) {
                                 key_buffer = regular.usb_code(key_buffer, &self.mods);
-                                // TODO: Confirm that, is it necessary to update the key code ?
                                 self.last_key = Some(popped_key.index);
+                                self.dynmac.record(*regular, &self.mods);
                             } else {
                                 // Specific case with two homerow pressed consecutively
                                 // If the second is in an 'in-between' state, stop here to wait.
@@ -343,6 +338,7 @@ impl Chew {
                             // Non Homerow key
                             key_buffer = popped_key.code.usb_code(key_buffer, &self.mods);
                             self.last_key = Some(popped_key.index);
+                            self.dynmac.record(popped_key.code, &self.mods);
                         }
                     }
                 }
@@ -352,78 +348,9 @@ impl Chew {
                 while let Some(popped_key) = self.homerow.pop_front() {
                     key_buffer = popped_key.code.usb_code(key_buffer, &self.mods);
                     self.last_key = Some(popped_key.index);
+                    self.dynmac.record(popped_key.code, &self.mods);
                 }
             }
-        }
-
-        // Dynamic macros ---------------------------------------------------------------
-        match self.dynmac.state {
-            0 => {
-                // Start a new record --
-                if let Some(key) = self
-                    .pressed_keys
-                    .iter_mut()
-                    .find(|k| k.code == KC::DynMacRecord)
-                {
-                    self.dynmac.state = 1;
-                    key.code = KC::Done;
-
-                // Go --
-                } else if let Some(key) = self
-                    .pressed_keys
-                    .iter_mut()
-                    .find(|k| k.code == KC::DynMacGo)
-                {
-                    self.dynmac.state = 10;
-                    key.code = KC::Done;
-                }
-            }
-
-            // Record active, now select the key to save it (erase if it already exists)
-            1 => {
-                if let Some(k) = self.pressed_keys.first_mut() {
-                    self.dynmac.list.insert(k.code, Vec::new()).ok();
-                    self.dynmac.key_index = k.code;
-                    self.dynmac.state = 2;
-                    k.code = KC::Done;
-                }
-            }
-
-            // Stop recording
-            2 => {
-                if let Some(key) = self
-                    .pre_pressed_keys
-                    .iter_mut()
-                    .find(|k| LAYOUTS[self.layout.number][k.index] == KC::DynMacRecord)
-                {
-                    self.dynmac.state = 0;
-                    key.code = KC::Done;
-                }
-            }
-
-            // Go active, now select the macro
-            10 => {
-                if let Some(k) = self.pressed_keys.first_mut() {
-                    // Then fill the key buffer
-                    if let Some(list) = self.dynmac.list.get(&k.code) {
-                        let mut previous = KC::None;
-                        for (k, m) in list.iter() {
-                            if previous == *k {
-                                // Add a break to allow twice same key
-                                key_buffer = KC::None.usb_code(key_buffer, &self.mods);
-                            }
-                            key_buffer = k.usb_code(key_buffer, &m);
-                            previous = *k;
-                        }
-                        key_buffer = KC::None.usb_code(key_buffer, &self.mods);
-                    }
-
-                    self.dynmac.state = 0;
-                    k.code = KC::Done;
-                }
-            }
-
-            _ => {}
         }
 
         // Regular keys -----------------------------------------------------------------
@@ -442,13 +369,7 @@ impl Chew {
                         self.homerow.push_back(*key).ok();
                     } else {
                         key_buffer = k.usb_code(key_buffer, &self.mods);
-
-                        // Dynamic macro record --
-                        if self.dynmac.state == 2 {
-                            if let Some(entry) = self.dynmac.list.get_mut(&self.dynmac.key_index) {
-                                entry.push((key.code, self.mods.clone())).ok();
-                            }
-                        }
+                        self.dynmac.record(k, &self.mods);
                     }
 
                     // No held with macros (They already add the NoEventIndicated)
@@ -514,13 +435,7 @@ impl Chew {
         if self.mods.caplock {
             self.led_status = LED_CAPLOCK;
         }
-        match self.dynmac.state {
-            1 => self.led_status = LED_LEADER_KEY,
-            2 => self.led_status = LED_CAPLOCK,
-            9 => self.led_status = LED_LAYOUT_FR,
-            10 => self.led_status = LED_LAYOUT_FN,
-            _ => {}
-        }
+        self.led_status = self.dynmac.up_led_status(self.led_status);
 
         (key_buffer, mouse_report, self.led_status)
     }

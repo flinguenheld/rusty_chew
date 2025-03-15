@@ -8,7 +8,10 @@ mod software;
 
 use hardware::{
     gpios::GpiosMono,
-    led::{Led, LedColor, LED_CAPLOCK, LED_LAYOUT_FN, LED_LAYOUT_FR, LED_LEADER_KEY},
+    led::{
+        Led, LedColor, LED_CAPLOCK, LED_DYNMAC_GO_WAIT_KEY, LED_DYNMAC_REC,
+        LED_DYNMAC_REC_WAIT_KEY, LED_LAYOUT_FN, LED_LAYOUT_FR, LED_LEADER_KEY,
+    },
 };
 use options::{TIMER_MONO_LOOP, TIMER_USB_LOOP};
 use software::{
@@ -169,6 +172,11 @@ fn main() -> ! {
                 LED_LAYOUT_FN => led.light_on(LedColor::Fushia),
                 LED_LEADER_KEY => led.light_on(LedColor::Blue),
                 LED_CAPLOCK => led.light_on(LedColor::Orange),
+
+                LED_DYNMAC_GO_WAIT_KEY => led.light_on(LedColor::Olive),
+                LED_DYNMAC_REC => led.light_on(LedColor::Red),
+                LED_DYNMAC_REC_WAIT_KEY => led.light_on(LedColor::Purple),
+
                 _ => led.light_off(),
             }
 

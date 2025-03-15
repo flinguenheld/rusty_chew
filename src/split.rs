@@ -10,7 +10,10 @@ use cfg_if::cfg_if;
 use embedded_hal::digital::InputPin;
 use hardware::{
     gpios::GpiosDirectPin,
-    led::{Led, LedColor, LED_CAPLOCK, LED_LAYOUT_FN, LED_LAYOUT_FR, LED_LEADER_KEY},
+    led::{
+        Led, LedColor, LED_CAPLOCK, LED_DYNMAC_GO_WAIT_KEY, LED_DYNMAC_REC,
+        LED_DYNMAC_REC_WAIT_KEY, LED_LAYOUT_FN, LED_LAYOUT_FR, LED_LEADER_KEY,
+    },
     uart::{Uart, UartError, HR_KEYS, HR_LED},
 };
 use options::{TIMER_UART_LOOP, TIMER_USB_LOOP};
@@ -261,6 +264,11 @@ fn main() -> ! {
                                 LED_LAYOUT_FN => led.light_on(LedColor::Fushia),
                                 LED_LEADER_KEY => led.light_on(LedColor::Blue),
                                 LED_CAPLOCK => led.light_on(LedColor::Orange),
+
+                                LED_DYNMAC_GO_WAIT_KEY => led.light_on(LedColor::Olive),
+                                LED_DYNMAC_REC => led.light_on(LedColor::Red),
+                                LED_DYNMAC_REC_WAIT_KEY => led.light_on(LedColor::Purple),
+
                                 _ => led.light_off(),
                             }
 
@@ -304,6 +312,11 @@ fn main() -> ! {
                                 LED_LAYOUT_FN => led.light_on(LedColor::Fushia),
                                 LED_LEADER_KEY => led.light_on(LedColor::Blue),
                                 LED_CAPLOCK => led.light_on(LedColor::Orange),
+
+                                LED_DYNMAC_GO_WAIT_KEY => led.light_on(LedColor::Olive),
+                                LED_DYNMAC_REC => led.light_on(LedColor::Red),
+                                LED_DYNMAC_REC_WAIT_KEY => led.light_on(LedColor::Purple),
+
                                 _ => led.light_off(),
                             }
 

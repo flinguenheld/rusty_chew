@@ -15,6 +15,10 @@ pub const LED_LAYOUT_FN: u8 = 2;
 pub const LED_LEADER_KEY: u8 = 3;
 pub const LED_CAPLOCK: u8 = 4;
 
+pub const LED_DYNMAC_REC: u8 = 5;
+pub const LED_DYNMAC_GO_WAIT_KEY: u8 = 6;
+pub const LED_DYNMAC_REC_WAIT_KEY: u8 = 7;
+
 #[allow(dead_code)]
 #[derive(Clone, Copy)]
 pub enum LedColor {
