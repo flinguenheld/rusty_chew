@@ -8,6 +8,7 @@ use super::{chew::Key, keys::KC};
 
 /// Due to layers modifiers have to be manage with their matrix index directly.
 /// This struct keeps the matrix index for each modifier.
+#[derive(Clone)]
 pub struct Modifiers {
     pub alt:     usize,
     pub alt_gr:  usize,

@@ -1,4 +1,4 @@
-use heapless::{Deque, Vec};
+use heapless::{Deque, FnvIndexMap, Vec};
 use usbd_human_interface_device::device::mouse::WheelMouseReport;
 
 use super::{
@@ -43,12 +43,18 @@ struct Leader {
     active: bool,
     buffer: Vec<KC, 3>,
 }
+struct DynMac {
+    state: u8,
+    key_index: KC,
+    list: FnvIndexMap<KC, Vec<(KC, Modifiers), 64>, 32>,
+}
 
 /// This is the core of this keyboard,
 /// The Run function proceeds all the keyboard hacks to fill the key buffer according to the LAYOUT.
 pub struct Chew {
     layout: Layout,
     leader: Leader,
+    dynmac: DynMac,
     mouse: Mouse,
 
     led_status: u8,
@@ -77,6 +83,11 @@ impl Chew {
             leader: Leader {
                 active: false,
                 buffer: Vec::new(),
+            },
+            dynmac: DynMac {
+                state: 0,
+                key_index: KC::None,
+                list: FnvIndexMap::new(),
             },
             mouse: Mouse::new(),
             led_status: 0,
@@ -182,7 +193,6 @@ impl Chew {
                 }
             }
         }
-        // }
 
         // Layout -----------------------------------------------------------------------
         if !(self.matrix.is_active(self.layout.index) || self.layout.dead && !self.layout.dead_done)
@@ -346,6 +356,76 @@ impl Chew {
             }
         }
 
+        // Dynamic macros ---------------------------------------------------------------
+        match self.dynmac.state {
+            0 => {
+                // Start a new record --
+                if let Some(key) = self
+                    .pressed_keys
+                    .iter_mut()
+                    .find(|k| k.code == KC::DynMacRecord)
+                {
+                    self.dynmac.state = 1;
+                    key.code = KC::Done;
+
+                // Go --
+                } else if let Some(key) = self
+                    .pressed_keys
+                    .iter_mut()
+                    .find(|k| k.code == KC::DynMacGo)
+                {
+                    self.dynmac.state = 10;
+                    key.code = KC::Done;
+                }
+            }
+
+            // Record active, now select the key to save it (erase if it already exists)
+            1 => {
+                if let Some(k) = self.pressed_keys.first_mut() {
+                    self.dynmac.list.insert(k.code, Vec::new()).ok();
+                    self.dynmac.key_index = k.code;
+                    self.dynmac.state = 2;
+                    k.code = KC::Done;
+                }
+            }
+
+            // Stop recording
+            2 => {
+                if let Some(key) = self
+                    .pre_pressed_keys
+                    .iter_mut()
+                    .find(|k| LAYOUTS[self.layout.number][k.index] == KC::DynMacRecord)
+                {
+                    self.dynmac.state = 0;
+                    key.code = KC::Done;
+                }
+            }
+
+            // Go active, now select the macro
+            10 => {
+                if let Some(k) = self.pressed_keys.first_mut() {
+                    // Then fill the key buffer
+                    if let Some(list) = self.dynmac.list.get(&k.code) {
+                        let mut previous = KC::None;
+                        for (k, m) in list.iter() {
+                            if previous == *k {
+                                // Add a break to allow twice same key
+                                key_buffer = KC::None.usb_code(key_buffer, &self.mods);
+                            }
+                            key_buffer = k.usb_code(key_buffer, &m);
+                            previous = *k;
+                        }
+                        key_buffer = KC::None.usb_code(key_buffer, &self.mods);
+                    }
+
+                    self.dynmac.state = 0;
+                    k.code = KC::Done;
+                }
+            }
+
+            _ => {}
+        }
+
         // Regular keys -----------------------------------------------------------------
         if self.pressed_keys.iter().any(|k| k.code == KC::Esc) {
             self.mods.caplock = false;
@@ -362,6 +442,13 @@ impl Chew {
                         self.homerow.push_back(*key).ok();
                     } else {
                         key_buffer = k.usb_code(key_buffer, &self.mods);
+
+                        // Dynamic macro record --
+                        if self.dynmac.state == 2 {
+                            if let Some(entry) = self.dynmac.list.get_mut(&self.dynmac.key_index) {
+                                entry.push((key.code, self.mods.clone())).ok();
+                            }
+                        }
                     }
 
                     // No held with macros (They already add the NoEventIndicated)
@@ -426,6 +513,13 @@ impl Chew {
         }
         if self.mods.caplock {
             self.led_status = LED_CAPLOCK;
+        }
+        match self.dynmac.state {
+            1 => self.led_status = LED_LEADER_KEY,
+            2 => self.led_status = LED_CAPLOCK,
+            9 => self.led_status = LED_LAYOUT_FR,
+            10 => self.led_status = LED_LAYOUT_FN,
+            _ => {}
         }
 
         (key_buffer, mouse_report, self.led_status)

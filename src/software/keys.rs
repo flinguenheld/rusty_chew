@@ -56,7 +56,7 @@ impl Buffer {
 #[rustfmt::skip]
 #[allow(dead_code)]
 #[repr(u16)]
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
+#[derive(Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
 pub enum KC {
     None = 0,
     Done = 1,
@@ -266,6 +266,8 @@ pub enum KC {
 
         LeaderKey = 51000,
         CapLock = 51001,
+        DynMacRecord = 51002,
+        DynMacGo = 51003,
 
     MacroGit = 52001,
     MacroMail = 52002,
