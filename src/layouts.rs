@@ -96,10 +96,16 @@ pub const LAYOUTS: [[KC; NB_KEYS]; 6] = [[
 // --------------------------------------------------------------------------------------
 // LEADER KEY ---------------------------------------------------------------------------
 #[rustfmt::skip]
-pub const LEADER_KEY_COMBINATIONS: [([KC; 3], KC); 15] = [
+pub const LEADER_KEY_COMBINATIONS: [([KC; 3], KC); 21] = [
     ([KC::F, KC::L, KC::None], KC::MacroGit),
     ([KC::M, KC::A, KC::None], KC::MacroMail),
     ([KC::M, KC::S, KC::None], KC::MacroMailShort),
+    ([KC::H, KC::T, KC::None], KC::MacroHTTPS),
+    ([KC::D, KC::O, KC::T],    KC::MacroDotfiles),
+    ([KC::N, KC::I, KC::X],    KC::MacroNixOS),
+
+    ([KC::D, KC::I, KC::A], KC::Diameter),
+    ([KC::D, KC::E, KC::G], KC::Degre),
 
     ([KC::C, KC::O, KC::P], KC::Copyright),
     ([KC::R, KC::E, KC::G], KC::Registered),
@@ -115,6 +121,8 @@ pub const LEADER_KEY_COMBINATIONS: [([KC; 3], KC); 15] = [
     ([KC::Num1, KC::Num4, KC::None], KC::Quarter),
     ([KC::Num1, KC::Num2, KC::None], KC::Half),
     ([KC::Num3, KC::Num4, KC::None], KC::ThreeQuarter),
+
+    ([KC::Y, KC::E, KC::N], KC::Yen),
 ];
 
 // --------------------------------------------------------------------------------------

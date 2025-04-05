@@ -3,7 +3,7 @@ use heapless::{Deque, Vec};
 use usbd_human_interface_device::page::Keyboard;
 
 use crate::options::{BUFFER_CASE_LENGTH, BUFFER_LENGTH, TEMPO_DEAD_KEY};
-use super::modifiers::Modifiers;
+use super::{macros::str_to_usb_code, modifiers::Modifiers};
 
 // --------------------------------------------------------------------------------------
 const DEAD_CIRCUMFLEX: [Keyboard; 2] = [Keyboard::RightAlt,  Keyboard::Keyboard6];
@@ -272,6 +272,9 @@ pub enum KC {
     MacroGit = 52001,
     MacroMail = 52002,
     MacroMailShort = 52003,
+    MacroHTTPS = 52004,
+    MacroDotfiles = 52005,
+    MacroNixOS = 52006,
 }
 
 impl KC {
@@ -447,7 +450,7 @@ impl KC {
             KC::YDiaer  => buffer.add_no_mods(&DEAD_DIAERIS,    TEMPO_DEAD_KEY).add_simple(&[Keyboard::Y], mods).add_no_mods(&[Keyboard::NoEventIndicated], 0),
             KC::YGrave  => buffer.add_no_mods(&DEAD_GRAVE,      TEMPO_DEAD_KEY).add_simple(&[Keyboard::Y], mods).add_no_mods(&[Keyboard::NoEventIndicated], 0),
 
-            KC::Qu   => buffer.add(&[Keyboard::Q, Keyboard::U],                           mods, &[Keyboard::LeftAlt, Keyboard::RightAlt, Keyboard::LeftGUI, Keyboard::LeftControl], 0).add_no_mods(&[Keyboard::NoEventIndicated], 0),
+            KC::Qu   => buffer.add(&[Keyboard::Q, Keyboard::U], mods, &[Keyboard::LeftAlt, Keyboard::RightAlt, Keyboard::LeftGUI, Keyboard::LeftControl], 0).add_no_mods(&[Keyboard::NoEventIndicated], 0),
             KC::Tion => buffer.add(&[Keyboard::T], mods, &[Keyboard::LeftAlt, Keyboard::RightAlt, Keyboard::LeftGUI, Keyboard::LeftControl], 0)
                               .add(&[Keyboard::I], mods, &[Keyboard::LeftAlt, Keyboard::RightAlt, Keyboard::LeftGUI, Keyboard::LeftControl], 0)
                               .add(&[Keyboard::O], mods, &[Keyboard::LeftAlt, Keyboard::RightAlt, Keyboard::LeftGUI, Keyboard::LeftControl], 0)
@@ -464,65 +467,14 @@ impl KC {
             KC::HomeRow(_, k) => k.usb_code(buffer, mods),
 
             // --
-            KC::MacroGit => {
-                buffer.add_no_mods(&[Keyboard::F], 0)
-                      .add_no_mods(&[Keyboard::L], 0)
-                      .add_no_mods(&[Keyboard::I], 0)
-                      .add_no_mods(&[Keyboard::N], 0)
-                      .add_no_mods(&[Keyboard::G], 0)
-                      .add_no_mods(&[Keyboard::U], 0)
-                      .add_no_mods(&[Keyboard::E], 0)
-                      .add_no_mods(&[Keyboard::N], 0)
-                      .add_no_mods(&[Keyboard::H], 0)
-                      .add_no_mods(&[Keyboard::E], 0)
-                      .add_no_mods(&[Keyboard::L], 0)
-                      .add_no_mods(&[Keyboard::D], 0)
-                      .add_no_mods(&[Keyboard::NoEventIndicated],0)
-            }
-            KC::MacroMail => {
-                buffer.add_no_mods(&[Keyboard::F], 0)
-                      .add_no_mods(&[Keyboard::L], 0)
-                      .add_no_mods(&[Keyboard::O], 0)
-                      .add_no_mods(&[Keyboard::R], 0)
-                      .add_no_mods(&[Keyboard::E], 0)
-                      .add_no_mods(&[Keyboard::N], 0)
-                      .add_no_mods(&[Keyboard::T], 0)
-                      .add_no_mods(&[Keyboard::LeftShift, Keyboard::Keyboard2], 0)
-                      .add_no_mods(&[Keyboard::L], 0)
-                      .add_no_mods(&[Keyboard::I], 0)
-                      .add_no_mods(&[Keyboard::N], 0)
-                      .add_no_mods(&[Keyboard::G], 0)
-                      .add_no_mods(&[Keyboard::U], 0)
-                      .add_no_mods(&[Keyboard::E], 0)
-                      .add_no_mods(&[Keyboard::N], 0)
-                      .add_no_mods(&[Keyboard::H], 0)
-                      .add_no_mods(&[Keyboard::E], 0)
-                      .add_no_mods(&[Keyboard::L], 0)
-                      .add_no_mods(&[Keyboard::D], 0)
-                      .add_no_mods(&[Keyboard::Dot], 0)
-                      .add_no_mods(&[Keyboard::F], 0)
-                      .add_no_mods(&[Keyboard::R], 0)
-                      .add_no_mods(&[Keyboard::NoEventIndicated], 0)
-            }
-            KC::MacroMailShort => {
-                buffer.add_no_mods(&[Keyboard::F], 0)
-                      .add_no_mods(&[Keyboard::LeftShift, Keyboard::Keyboard2], 0)
-                      .add_no_mods(&[Keyboard::L], 0)
-                      .add_no_mods(&[Keyboard::I], 0)
-                      .add_no_mods(&[Keyboard::N], 0)
-                      .add_no_mods(&[Keyboard::G], 0)
-                      .add_no_mods(&[Keyboard::U], 0)
-                      .add_no_mods(&[Keyboard::E], 0)
-                      .add_no_mods(&[Keyboard::N], 0)
-                      .add_no_mods(&[Keyboard::H], 0)
-                      .add_no_mods(&[Keyboard::E], 0)
-                      .add_no_mods(&[Keyboard::L], 0)
-                      .add_no_mods(&[Keyboard::D], 0)
-                      .add_no_mods(&[Keyboard::Dot], 0)
-                      .add_no_mods(&[Keyboard::F], 0)
-                      .add_no_mods(&[Keyboard::R], 0)
-                      .add_no_mods(&[Keyboard::NoEventIndicated], 0)
-            }
+            // Use ↵ to enter
+            KC::MacroGit       => str_to_usb_code("flinguenheld",                              buffer),
+            KC::MacroMailShort => str_to_usb_code("f@linguenheld.fr",                          buffer),
+            KC::MacroMail      => str_to_usb_code("florent@linguenheld.fr",                    buffer),
+            KC::MacroHTTPS     => str_to_usb_code("https://",                                  buffer),
+            KC::MacroDotfiles  => str_to_usb_code("https://github.com/flinguenheld/dotfiles",  buffer),
+            KC::MacroNixOS     => str_to_usb_code("sudo nixos-rebuild switch --flake .#flopc", buffer),
+
             _ => buffer,
         }
     }
