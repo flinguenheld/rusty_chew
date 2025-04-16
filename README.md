@@ -101,6 +101,20 @@ Mount the controller's drive and use one of these commands:
     <img src="./images/prawns.png">
 </div>
 
+##### Serial
+
+To do some tests and print text throught the terminal, use the feature `serial`  
+Then you can see the usb events to know which tty is used.  
+```
+    sudo udevadm monitor
+```
+
+And connect to it for instance with minicom or picocom: *Ctrl-A X to exit* 
+```
+    sudo minicom --device /dev/ttyACM0
+    sudo picocom /dev/ttyACM0 -b 115200
+```
+
 ### Thanks
 
 Rusty Chew uses the [usbd-human-interface-device](https://github.com/dlkj/usbd-human-interface-device) crate which simplifies

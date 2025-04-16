@@ -4,4 +4,4 @@ pub mod keys;
 pub mod macros;
 pub mod modifiers;
 pub mod mouse;
-pub mod serial;
+pub mod serial_usb;

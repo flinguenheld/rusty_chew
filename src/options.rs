@@ -1,3 +1,5 @@
+use cfg_if::cfg_if;
+
 pub const HOLD_TIME: u32 = 170; // From free to held (ms)
 pub const COMBO_TIME: u32 = 20;
 
@@ -8,7 +10,7 @@ pub const NB_KEYS: usize = 34;
 pub const TEMPO_DEAD_KEY: u32 = 50;
 
 // Milliseconds
-pub const TIMER_UART_LOOP: u32 = 1;
+pub const TIMER_UART_LOOP: u32 = 200;
 pub const TIMER_MONO_LOOP: u32 = 5;
 pub const TIMER_USB_LOOP: u32 = 15;
 
@@ -28,3 +30,11 @@ pub const SCROLL_SPEED_2: (i8, u32) = (1, 80);
 pub const SCROLL_SPEED_3: (i8, u32) = (5, 10);
 pub const SCROLL_SPEED_4: (i8, u32) = (15, 10);
 pub const SCROLL_SPEED_DEFAULT: (i8, u32) = (1, 20);
+
+cfg_if! {
+    if #[cfg(feature = "serial")] {
+        pub const SERIAL_ON: bool = true;
+    } else {
+        pub const SERIAL_ON: bool = false;
+    }
+}

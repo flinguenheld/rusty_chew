@@ -13,7 +13,7 @@ use hardware::{
         LED_LAYOUT_FN, LED_LAYOUT_FR, LED_LEADER_KEY,
     },
 };
-use options::{TIMER_MONO_LOOP, TIMER_USB_LOOP};
+use options::{SERIAL_ON, TIMER_MONO_LOOP, TIMER_USB_LOOP};
 use software::{
     chew::Chew,
     keys::{BuffCase, Buffer},
@@ -85,7 +85,7 @@ fn main() -> ! {
         &mut pac.RESETS,
     ));
 
-    let mut _serial = SerialPort::new(&usb_bus);
+    let mut serial = SerialPort::new(&usb_bus);
     let mut rusty_chew = UsbHidClassBuilder::new()
         .add_device(
             usbd_human_interface_device::device::keyboard::NKROBootKeyboardConfig::default(),
@@ -162,6 +162,11 @@ fn main() -> ! {
     let mut last_mouse_buttons = 0;
 
     loop {
+        if SERIAL_ON && !usb_dev.poll(&mut [&mut serial]) {
+            led.on(LedColor::Red);
+            continue;
+        }
+
         if mono_count_down.wait().is_ok() {
             let active_indexes = gpios.get_active_indexes(&mut delay);
             chew.update_matrix(active_indexes, ticks);
@@ -205,7 +210,7 @@ fn main() -> ! {
         }
 
         // USB --------------------------------------------------------------------------
-        if usb_count_down.wait().is_ok() && key_buffer_tempo <= ticks {
+        if !SERIAL_ON && usb_count_down.wait().is_ok() && key_buffer_tempo <= ticks {
             if let Some(popped_key) = key_buffer.keys.pop_front() {
                 if popped_key != last_printed_key {
                     let keyboard = rusty_chew.device::<NKROBootKeyboard<'_, _>, _>();
@@ -249,7 +254,7 @@ fn main() -> ! {
         //     continue;
         // }
 
-        if usb_dev.poll(&mut [&mut rusty_chew]) {
+        if !SERIAL_ON && usb_dev.poll(&mut [&mut rusty_chew]) {
             match rusty_chew
                 .device::<NKROBootKeyboard<'_, _>, _>()
                 .read_report()

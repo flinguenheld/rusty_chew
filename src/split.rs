@@ -16,10 +16,11 @@ use hardware::{
     },
     uart::{Uart, UartError, HR_KEYS, HR_LED},
 };
-use options::{TIMER_UART_LOOP, TIMER_USB_LOOP};
+use options::{SERIAL_ON, TIMER_UART_LOOP, TIMER_USB_LOOP};
 use software::{
     chew::Chew,
     keys::{BuffCase, Buffer},
+    serial_usb,
 };
 use usbd_serial::SerialPort;
 
@@ -88,7 +89,7 @@ fn main() -> ! {
         &mut pac.RESETS,
     ));
 
-    let mut _serial = SerialPort::new(&usb_bus);
+    let mut serial = SerialPort::new(&usb_bus);
     let mut rusty_chew = UsbHidClassBuilder::new()
         .add_device(
             usbd_human_interface_device::device::keyboard::NKROBootKeyboardConfig::default(),
@@ -208,7 +209,15 @@ fn main() -> ! {
     let mut last_mouse_buttons = 0;
 
     loop {
+        if SERIAL_ON && !usb_dev.poll(&mut [&mut serial]) {
+            led.on(LedColor::Red);
+            continue;
+        }
+
         if uart_count_down.wait().is_ok() {
+            serial_usb::serial_write(&mut serial, "Hello \r\n");
+            serial_usb::serial_write_time(&mut serial, "Time: ", ticks, " ----\r\n");
+
             // --------------------------------------------------------------------------
             // ---------------------------------------------------------------- MASTER --
             if is_master {
@@ -349,7 +358,7 @@ fn main() -> ! {
 
         if is_master {
             // USB --
-            if usb_count_down.wait().is_ok() && key_buffer_tempo <= ticks {
+            if !SERIAL_ON && usb_count_down.wait().is_ok() && key_buffer_tempo <= ticks {
                 if let Some(popped_key) = key_buffer.keys.pop_front() {
                     if popped_key != last_printed_key {
                         let keyboard = rusty_chew.device::<NKROBootKeyboard<'_, _>, _>();
@@ -389,11 +398,7 @@ fn main() -> ! {
                 };
             }
 
-            // if is_master && !usb_dev.poll(&mut [&mut serial]) {
-            //     continue;
-            // }
-
-            if usb_dev.poll(&mut [&mut rusty_chew]) {
+            if !SERIAL_ON && usb_dev.poll(&mut [&mut rusty_chew]) {
                 match rusty_chew
                     .device::<NKROBootKeyboard<'_, _>, _>()
                     .read_report()
@@ -406,7 +411,7 @@ fn main() -> ! {
                 }
             }
 
-        // Slave (ticks used to blink led)
+            // Slave (ticks used to blink led)
         } else if tick_count_down.wait().is_ok() {
             ticks = ticks.wrapping_add(1);
         }
