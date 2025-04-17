@@ -15,16 +15,7 @@ use fugit::RateExtU32;
 use pio_uart::{PioUartRx, PioUartTx, RxProgram, TxProgram};
 use usbd_human_interface_device::interface::ReportBuffer;
 
-use crate::options::UART_SPEED;
-
-const MAX_MESSAGE_LENGTH: usize = 9; // Max tested in January 2025
-const MAX_NOT_COMPLETE: u32 = 3;
-const MAX_NOTHING_RECEIVED: u32 = 100;
-
-#[cfg(debug_assertions)]
-pub const UART_SEND_DELAY: u32 = 100; // microseconds
-#[cfg(not(debug_assertions))]
-pub const UART_SEND_DELAY: u32 = 1000;
+use crate::options::{MAX_MESSAGE_LENGTH, MAX_NOT_COMPLETE, UART_SEND_DELAY, UART_SPEED};
 
 // Values used as a header to validated a message
 pub const HR_KEYS: u8 = 0b11010000;
@@ -34,7 +25,6 @@ pub enum UartError {
     Capacity,
     Header,
     NothingToRead,
-    NothingToReadMax,
     NotReciever,
     NotTransmitter,
     NotComplete,
@@ -50,7 +40,6 @@ impl UartError {
                 UartError::Capacity => "-- Error Capacity --\r\n",
                 UartError::Header => "-- Error Header --\r\n",
                 UartError::NothingToRead => "-- Error Nothing to read --\r\n",
-                UartError::NothingToReadMax => "-- Error Nothing to read MAX --\r\n",
                 UartError::NotReciever => "-- Error Not reciever --\r\n",
                 UartError::NotTransmitter => "-- Error Not transmitter --\r\n",
                 UartError::NotComplete => "-- Error Not complete --\r\n",
@@ -78,14 +67,13 @@ pub struct Mail {
 /// The RP2040-zero board buffer is limited to 9 bytes messages.
 /// So here it uses one byte as a header to know what they want and give the amount of bytes
 /// which are following.
-/// The purpose for Chew is:
-///     - Left sends a request of the right active keys.
-///     - Right receives the request and return the indexes (see gpios).
-///     - Left receives them and procedes to the keyboard logic.
-///     - Left sends a request of the right active keys...
+/// The purpose for Chew is (Both sides read their buffer each n ms):
+///     - Slave sends its active indexes each n milliseconds
+///     - Master applies the chew logic when the slave message is validated
+///     - Master sends the LED states to the slave
+///     - Slave updates its LED
 ///
-/// In case of bug, the const MAX_NOT_COMPLETE & MAX_NOTHING_RECEIVED allow the uart struct to not get
-/// stuct and return an error. In this case the left restarts the loop.
+/// In case of error, the buffer is emptied (the chew loop is lost).
 pub struct Uart {
     tx_program: TxProgram<PIO0>,
     rx_program: RxProgram<PIO0>,
@@ -97,7 +85,6 @@ pub struct Uart {
     buffer: Vec<u8, 9>,
 
     counter_not_complete: u32,
-    counter_nothing_to_read: u32,
 }
 
 impl Uart {
@@ -116,7 +103,6 @@ impl Uart {
             buffer: Vec::new(),
 
             counter_not_complete: 0,
-            counter_nothing_to_read: 0,
         };
 
         uart.receiver = Some(
@@ -167,8 +153,6 @@ impl Uart {
         if self.read_uart_buffer().is_err() {
             Err(UartError::Uart)
         } else if let Some(first) = self.buffer.first() {
-            self.counter_nothing_to_read = 0;
-
             if first & 0b11110000 == HR_KEYS || first & 0b11110000 == HR_LED {
                 let l = first & 0b00001111;
 
@@ -190,13 +174,11 @@ impl Uart {
                     Err(UartError::NotComplete)
                 }
             } else {
+                self.buffer.clear();
+                self.counter_not_complete = 0;
                 Err(UartError::Header)
             }
-        } else if self.counter_nothing_to_read >= MAX_NOTHING_RECEIVED {
-            self.counter_nothing_to_read = 0;
-            Err(UartError::NothingToReadMax)
         } else {
-            self.counter_nothing_to_read += 1;
             Err(UartError::NothingToRead)
         }
     }

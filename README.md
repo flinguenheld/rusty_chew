@@ -91,10 +91,10 @@ Mount the controller's drive and use one of these commands:
 >For this one, the position of the master is fixed, you have to make your choice and flash both side with one of these commands:
 
 ```
-  cargo run --release --bin split --features master zero
+  cargo run --release --bin split --features master,zero
 ```
 ```
-  cargo run --release --bin split --features slave zero
+  cargo run --release --bin split --features slave,zero
 ```
 
 <div align="center">
@@ -103,13 +103,13 @@ Mount the controller's drive and use one of these commands:
 
 ##### Serial
 
-To do some tests and print text throught the terminal, use the feature `serial`  
-Then you can see the usb events to know which tty is used.  
+To do some tests and print text throught the [usb port](https://github.com/rust-embedded-community/usbd-serial), you can use the feature `serial`.  
+Then check the usb events to know which tty is used.  
 ```
     sudo udevadm monitor
 ```
 
-And connect to it for instance with minicom or picocom: *Ctrl-A X to exit* 
+And connect to it (for instance with minicom or picocom. *Ctrl-A X to exit* )
 ```
     sudo minicom --device /dev/ttyACM0
     sudo picocom /dev/ttyACM0 -b 115200

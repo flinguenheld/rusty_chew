@@ -7,15 +7,15 @@ edition = "2021"
 name = "split"
 path = "src/split.rs"
 
+[[bin]]
+name = "mono"
+path = "src/mono.rs"
+
 [features]
 master = []
 slave = []
 zero = []
 serial = []
-
-[[bin]]
-name = "mono"
-path = "src/mono.rs"
 
 [dependencies]
 cortex-m = "0.7"

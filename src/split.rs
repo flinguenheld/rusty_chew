@@ -16,11 +16,11 @@ use hardware::{
     },
     uart::{Uart, UartError, HR_KEYS, HR_LED},
 };
-use options::{SERIAL_ON, TIMER_UART_LOOP, TIMER_USB_LOOP};
+use options::{SERIAL_ON, TIMER_SPLIT_LOOP, TIMER_UART_LOOP, TIMER_USB_LOOP};
 use software::{
     chew::Chew,
     keys::{BuffCase, Buffer},
-    serial_usb,
+    serial_usb::{serial_write, serial_write_time, serial_write_values},
 };
 use usbd_serial::SerialPort;
 
@@ -196,6 +196,9 @@ fn main() -> ! {
     let mut usb_count_down = timer.count_down();
     usb_count_down.start(TIMER_USB_LOOP.millis());
 
+    let mut split_count_down = timer.count_down();
+    split_count_down.start(TIMER_SPLIT_LOOP.millis());
+
     // --
     let mut ticks: u32 = 0;
     let mut chew = Chew::new(ticks);
@@ -210,20 +213,20 @@ fn main() -> ! {
 
     loop {
         if SERIAL_ON && !usb_dev.poll(&mut [&mut serial]) {
-            led.on(LedColor::Red);
             continue;
         }
 
         if uart_count_down.wait().is_ok() {
-            serial_usb::serial_write(&mut serial, "Hello \r\n");
-            serial_usb::serial_write_time(&mut serial, "Time: ", ticks, " ----\r\n");
+            // serial_write_time(&mut serial, "Uart loop -- ", ticks, " --\r\n");
 
             // --------------------------------------------------------------------------
-            // ---------------------------------------------------------------- MASTER --
+            // ----------------------------------------------------------- UART MASTER --
             if is_master {
                 match uart.receive() {
-                    Ok(mail) => match mail.header {
-                        HR_KEYS => {
+                    Ok(mail) => {
+                        if mail.header == HR_KEYS {
+                            serial_write_values(&mut serial, "Indexes: ", &mail.values, "\r\n");
+
                             // Get active indexes & combine them with the other side
                             chew.update_matrix(
                                 gpios
@@ -261,14 +264,8 @@ fn main() -> ! {
                                 };
                             }
 
-                            // Update Led --
-                            if uart.send(HR_LED, &[led_status], &mut delay).is_err() {
-                                led.on(LedColor::Red);
-                            }
-                        }
-
-                        HR_LED => {
-                            match mail.values[0] {
+                            // Update LED & share its state to the slave --
+                            match led_status {
                                 LED_LAYOUT_FR => led.on(LedColor::Aqua),
                                 LED_LAYOUT_FN => led.on(LedColor::Fushia),
                                 LED_LEADER_KEY => led.on(LedColor::Blue),
@@ -281,41 +278,25 @@ fn main() -> ! {
                                 _ => led.off(),
                             }
 
-                            // New uart loop --
-                            uart.send(HR_KEYS, &[], &mut delay).ok();
+                            if uart.send(HR_LED, &[led_status], &mut delay).is_err() {
+                                serial_write_time(&mut serial, "LED msg failed", ticks, " --\r\n");
+                            }
                         }
-                        _ => {
-                            led.on(LedColor::Red);
-                        }
-                    },
+                    }
 
                     Err(e) => match e {
-                        UartError::NothingToReadMax => {
-                            // Try to relaunch the loop
-                            uart.send(HR_KEYS, &[], &mut delay).ok();
-                            led.on(LedColor::Yellow);
-                        }
                         UartError::NothingToRead => {}
-                        _err => {
-                            // led.on(LedColor::Blue);
+                        _ => {
+                            serial_write(&mut serial, &e.to_serial());
                         }
                     },
                 }
             } else {
                 // ----------------------------------------------------------------------
-                // ------------------------------------------------------------- SLAVE --
+                // -------------------------------------------------------- UART SLAVE --
                 match uart.receive() {
-                    Ok(mail) => match mail.header {
-                        HR_KEYS => {
-                            if uart
-                                .send(HR_KEYS, &gpios.get_active_indexes(), &mut delay)
-                                .is_err()
-                            {
-                                led.on(LedColor::Red);
-                            }
-                        }
-
-                        HR_LED => {
+                    Ok(mail) => {
+                        if mail.header == HR_LED {
                             match mail.values[0] {
                                 LED_LAYOUT_FR => led.on(LedColor::Aqua),
                                 LED_LAYOUT_FN => led.on(LedColor::Fushia),
@@ -328,34 +309,23 @@ fn main() -> ! {
 
                                 _ => led.off(),
                             }
-
-                            if uart.send(HR_LED, &[mail.values[0]], &mut delay).is_err() {
-                                led.on(LedColor::Red);
-                            }
                         }
+                    }
 
-                        _ => {}
-                    },
-
-                    Err(UartError::NothingToRead) => {
-                        // led.on(LedColor::Blue);
-                    }
-                    Err(UartError::NothingToReadMax) => {
-                        led.on(LedColor::Red);
-                    }
-                    Err(UartError::NotComplete) => {
-                        // led.on(LedColor::Yellow);
-                    }
-                    Err(UartError::Header) => {
-                        // led.on(LedColor::Olive);
-                    }
-                    _ => {
-                        led.on(LedColor::Yellow);
-                    }
+                    Err(UartError::NothingToRead) => {}
+                    // Err(UartError::Capacity) => led.on(LedColor::Green),
+                    // Err(UartError::Header) => led.on(LedColor::Blue),
+                    // Err(UartError::NotReciever) => led.on(LedColor::Purple),
+                    // Err(UartError::NotTransmitter) => led.on(LedColor::Red),
+                    // Err(UartError::NotComplete) => led.on(LedColor::Orange),
+                    // Err(UartError::Uart) => led.on(LedColor::Green),
+                    _ => led.on(LedColor::Red),
                 }
             }
         }
 
+        // ------------------------------------------------------------------------------
+        // -------------------------------------------------------------------- MASTER --
         if is_master {
             // USB --
             if !SERIAL_ON && usb_count_down.wait().is_ok() && key_buffer_tempo <= ticks {
@@ -369,7 +339,6 @@ fn main() -> ! {
                                     usb_dev.bus().remote_wakeup();
                                     key_buffer.keys.clear();
                                 } else {
-                                    led.on(LedColor::Red);
                                     key_buffer.keys.push_front(popped_key).ok();
                                 }
                             }
@@ -410,10 +379,24 @@ fn main() -> ! {
                     Ok(_leds) => {}
                 }
             }
+        } else {
+            // --------------------------------------------------------------------------
+            // ----------------------------------------------------------------- SLAVE --
+            // Ticks used to blink the LED
+            if tick_count_down.wait().is_ok() {
+                ticks = ticks.wrapping_add(1);
+            }
 
-            // Slave (ticks used to blink led)
-        } else if tick_count_down.wait().is_ok() {
-            ticks = ticks.wrapping_add(1);
+            // Slave is in charge of starting a new "chew loop"
+            // It sends its active indexes and the master proceeds to the logic only when
+            // it's able to combine the two matrix sides.
+            if split_count_down.wait().is_ok()
+                && uart
+                    .send(HR_KEYS, &gpios.get_active_indexes(), &mut delay)
+                    .is_err()
+            {
+                led.on(LedColor::Red);
+            }
         }
     }
 }

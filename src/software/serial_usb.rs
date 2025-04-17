@@ -25,6 +25,26 @@ pub fn serial_write_value<T: Display>(
 }
 
 #[allow(dead_code)]
+pub fn serial_write_values<T: Display>(
+    serial: &mut SerialPort<'_, UsbBus>,
+    before: &str,
+    values: &[T],
+    after: &str,
+) {
+    if !values.is_empty() {
+        let mut l: String<70> = String::new();
+
+        write!(&mut l, "{}", before).ok();
+        for v in values.iter() {
+            write!(&mut l, "{:2}  ", v).ok();
+        }
+        write!(&mut l, "{}", after).ok();
+
+        serial_write(serial, l.as_str());
+    }
+}
+
+#[allow(dead_code)]
 pub fn serial_write_time(
     serial: &mut SerialPort<'_, UsbBus>,
     before: &str,
@@ -40,8 +60,14 @@ pub fn serial_write_time(
 
     write!(
         &mut l,
+        // "{} {:02}:{:02}:{:02}:{} {}",
         "{} {:02}:{:02}:{:02} {}",
-        before, hours, minutes, seconds, after
+        before,
+        hours,
+        minutes,
+        seconds,
+        // ticks % 1000,
+        after
     )
     .ok();
 
