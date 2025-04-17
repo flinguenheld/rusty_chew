@@ -58,6 +58,36 @@ The letter positions come from [Ergo-L](https://ergol.org/) which is my favourit
     <img src="./images/prawns.png">
 </div>
 
+##### Leader-key
+| Combination | Printed |
+|    :---:    |  :---:  |
+| F + L       | flinguenheld |
+| M + A       | florent@linguenheld.fr |
+| M + S       | f@linguenheld.fr |
+| H + T       | https:// |
+| D + O + T   | https://github.com/flinguenheld/dotfiles |
+| N + I + X   | sudo nixos-rebuild switch --flake .#flopc |
+|             |   |
+| D + I + A   | ø |
+| D + E + G   | ° |
+| C + O + P   | © |
+| R + E + G   | ® |
+| E + X + 1   | ¹ |
+| E + X + 2   | ² |
+| E + X + 3   | ³ |
+| B + E + T   | ß |
+| P + I + L   | ¶ |
+| M + U + L   | × |
+| D + I + V   | ÷ |
+|             |   |
+| 1 + 4       | ¼ |
+| 1 + 2       | ½ |
+| 3 + 4       | ¾ |
+
+<div align="center" style="margin-top: 20px;">
+    <img src="./images/prawns.png">
+</div>
+
 ### Flash
 
 Clone this repo:
@@ -103,7 +133,7 @@ Mount the controller's drive and use one of these commands:
 
 ##### Serial
 
-To do some tests and print text throught the [usb port](https://github.com/rust-embedded-community/usbd-serial), you can use the feature `serial`.  
+To do some tests and print text throught the [usb port](https://github.com/rust-embedded-community/usbd-serial), you can compile with the feature `serial`:  
 Then check the usb events to know which tty is used.  
 ```
     sudo udevadm monitor
