@@ -52,15 +52,11 @@ The letter positions come from [Ergo-L](https://ergol.org/) which is my favourit
 
 <div align="center">
     <img src="./images/combos.png">
-</div>
 
-<div align="center">
-    <img src="./images/prawns.png">
-</div>
+#### Leader-key
 
-##### Leader-key
 | Combination | Printed |
-|    :---:    |  :---:  |
+| :---------: | :-----: |
 | F + L       | flinguenheld |
 | M + A       | florent@linguenheld.fr |
 | M + S       | f@linguenheld.fr |
@@ -72,17 +68,20 @@ The letter positions come from [Ergo-L](https://ergol.org/) which is my favourit
 | D + E + G   | ° |
 | C + O + P   | © |
 | R + E + G   | ® |
+| B + E + T   | ß |
+| P + I + L   | ¶ |
+|             |   |
+| M + U + L   | × |
+| D + I + V   | ÷ |
 | E + X + 1   | ¹ |
 | E + X + 2   | ² |
 | E + X + 3   | ³ |
-| B + E + T   | ß |
-| P + I + L   | ¶ |
-| M + U + L   | × |
-| D + I + V   | ÷ |
 |             |   |
 | 1 + 4       | ¼ |
 | 1 + 2       | ½ |
 | 3 + 4       | ¾ |
+
+</div>
 
 <div align="center" style="margin-top: 20px;">
     <img src="./images/prawns.png">
@@ -99,7 +98,6 @@ Clone this repo:
 Then, hold down the controller's **boot** button and plug in the usb cable.  
 Mount the controller's drive and use one of these commands:  
 
-
 > 💡 Use the feature "zero" to flash the RP2040-zero (its led is wired GRB).
 
 ##### Mono
@@ -107,6 +105,7 @@ Mount the controller's drive and use one of these commands:
   cargo run --release --bin mono
   cargo run --release --bin mono --features zero
 ```
+
 ##### Split with the [0xCB-Gemini](https://github.com/0xCB-dev/0xCB-Gemini) controller
 
 >This controller has a vbus detection that allows the keyboard to know which side is
@@ -127,10 +126,6 @@ Mount the controller's drive and use one of these commands:
   cargo run --release --bin split --features slave,zero
 ```
 
-<div align="center">
-    <img src="./images/prawns.png">
-</div>
-
 ##### Serial
 
 To do some tests and print text throught the [usb port](https://github.com/rust-embedded-community/usbd-serial), you can compile with the feature `serial`:  
@@ -144,6 +139,10 @@ And connect to it (for instance with minicom or picocom. *Ctrl-A X to exit* )
     sudo minicom --device /dev/ttyACM0
     sudo picocom /dev/ttyACM0 -b 115200
 ```
+
+<div align="center">
+    <img src="./images/prawns.png">
+</div>
 
 ### Thanks
 
