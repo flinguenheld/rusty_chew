@@ -286,8 +286,16 @@ fn main() -> ! {
 
                     Err(e) => match e {
                         UartError::NothingToRead => {}
+                        // UartError::Capacity => led.on(LedColor::Green),
+                        UartError::Header => led.on(LedColor::Blue),
+                        // UartError::NotReciever => led.on(LedColor::Purple),
+                        // UartError::NotTransmitter => led.on(LedColor::Red),
+                        // UartError::NotComplete => led.on(LedColor::Orange),
+                        UartError::NotComplete => {}
+                        // UartError::Uart => led.on(LedColor::Green),
                         _ => {
                             serial_write(&mut serial, &e.to_serial());
+                            led.on(LedColor::Red)
                         }
                     },
                 }
@@ -314,10 +322,11 @@ fn main() -> ! {
 
                     Err(UartError::NothingToRead) => {}
                     // Err(UartError::Capacity) => led.on(LedColor::Green),
-                    // Err(UartError::Header) => led.on(LedColor::Blue),
+                    Err(UartError::Header) => led.on(LedColor::Blue),
                     // Err(UartError::NotReciever) => led.on(LedColor::Purple),
                     // Err(UartError::NotTransmitter) => led.on(LedColor::Red),
                     // Err(UartError::NotComplete) => led.on(LedColor::Orange),
+                    Err(UartError::NotComplete) => {}
                     // Err(UartError::Uart) => led.on(LedColor::Green),
                     _ => led.on(LedColor::Red),
                 }
