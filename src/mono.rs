@@ -7,20 +7,23 @@ mod options;
 mod software;
 
 use hardware::{
+    buzzer::{Buzzer, Note, C, D, E, F, G, SILENCE, TIME},
     gpios::GpiosMono,
     led::{
         Led, LedColor, LED_CAPLOCK, LED_DYNMAC_GO_WAIT, LED_DYNMAC_REC, LED_DYNMAC_REC_WAIT,
         LED_LAYOUT_FN, LED_LAYOUT_FR, LED_LEADER_KEY,
     },
 };
+use heapless::Deque;
 use options::{SERIAL_ON, TIMER_MONO_LOOP, TIMER_USB_LOOP};
 use software::{
     chew::Chew,
     keys::{BuffCase, Buffer},
+    serial_usb::{self, serial_write_value},
 };
 use usbd_serial::SerialPort;
 
-use waveshare_rp2040_zero as bsp;
+use waveshare_rp2040_zero::{self as bsp, hal::pwm::Slices};
 
 use bsp::hal::{
     clocks::{init_clocks_and_plls, Clock},
@@ -125,6 +128,81 @@ fn main() -> ! {
         ],
     };
 
+    // Buzzer
+    // Initialize PWM slices
+    let mut pwm_slices = Slices::new(pac.PWM, &mut pac.RESETS);
+
+    // Configure PWM for GPIO12
+    // Configure PWM slice 2 (for GPIO 20)
+    let mut pwm2 = pwm_slices.pwm6; // PWM slice 2
+    pwm2.set_ph_correct(); // Optional: Enable phase-correct mode
+    pwm2.enable(); // Enable the slice
+
+    // pwm2.set_top((bsp::XOSC_CRYSTAL_FREQ / 494) as u16);
+
+    pwm2.channel_b.output_to(pins.gp29); // Assign GPIO 20 to channel B
+
+    let mut buzzer = Buzzer::new('B');
+    let mut score: Deque<Note, 50> = Deque::new();
+
+    score.push_back(Note::new(E, TIME * 2, 30)).ok();
+    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
+    score.push_back(Note::new(E, TIME * 2, 30)).ok();
+    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
+    score.push_back(Note::new(E, TIME * 4, 30)).ok();
+    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
+
+    score.push_back(Note::new(E, TIME * 2, 30)).ok();
+    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
+    score.push_back(Note::new(E, TIME * 2, 30)).ok();
+    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
+    score.push_back(Note::new(E, TIME * 4, 30)).ok();
+    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
+
+    score.push_back(Note::new(E, TIME * 2, 30)).ok();
+    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
+    score.push_back(Note::new(G, TIME * 2, 30)).ok();
+    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
+    score.push_back(Note::new(C, TIME * 2, 30)).ok();
+    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
+    score.push_back(Note::new(D, TIME * 2, 30)).ok();
+    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
+    score.push_back(Note::new(E, TIME * 4, 30)).ok();
+    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
+
+    score.push_back(Note::new(F, TIME * 2, 30)).ok();
+    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
+    score.push_back(Note::new(F, TIME * 2, 30)).ok();
+    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
+    score.push_back(Note::new(F, TIME * 2, 30)).ok();
+    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
+    score.push_back(Note::new(F, TIME * 2, 30)).ok();
+    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
+
+    score.push_back(Note::new(F, TIME * 2, 30)).ok();
+    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
+    score.push_back(Note::new(E, TIME * 2, 30)).ok();
+    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
+    score.push_back(Note::new(E, TIME * 2, 30)).ok();
+    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
+    score.push_back(Note::new(E, TIME * 1, 30)).ok();
+    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
+    score.push_back(Note::new(E, TIME * 1, 30)).ok();
+    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
+
+    score.push_back(Note::new(G, TIME * 2, 30)).ok();
+    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
+    score.push_back(Note::new(G, TIME * 2, 30)).ok();
+    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
+    score.push_back(Note::new(F, TIME * 2, 30)).ok();
+    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
+    score.push_back(Note::new(D, TIME * 2, 30)).ok();
+    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
+    score.push_back(Note::new(C, TIME * 2, 30)).ok();
+    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
+
+    buzzer.add_song(score);
+
     // Led --
     let mut neopixel = Ws2812::new(
         // The onboard NeoPixel is attached to GPIO pin #16 on the Waveshare RP2040-Zero.
@@ -168,6 +246,10 @@ fn main() -> ! {
         }
 
         if mono_count_down.wait().is_ok() {
+            buzzer.sing(ticks, &mut pwm2);
+
+            // serial_write_value(&mut serial, "max duty: ", max_duty, " <-");
+
             let active_indexes = gpios.get_active_indexes(&mut delay);
             chew.update_matrix(active_indexes, ticks);
             (key_buffer, mouse_report, led_status) = chew.run(key_buffer, mouse_report, ticks);
