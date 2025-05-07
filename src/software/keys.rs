@@ -12,7 +12,7 @@ const DEAD_GRAVE:      [Keyboard; 2] = [Keyboard::RightAlt,  Keyboard::Grave];
 
 // --------------------------------------------------------------------------------------
 // Help KC conversion along.
-// This buffer is fill here to be then emptied by the writing report.
+// This buffer is filled here to be then emptied by the writing report.
 // Each entry is a vec of Keyboard pages followed by a tempo (a break can be mandatory e.q with dead keys).
 #[derive(PartialEq, Default)]
 pub struct BuffCase {

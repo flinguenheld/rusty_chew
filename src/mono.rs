@@ -7,7 +7,7 @@ mod options;
 mod software;
 
 use hardware::{
-    buzzer::{Buzzer, Note, C, D, E, F, G, SILENCE, TIME},
+    buzzer::{Buzzer, Song},
     gpios::GpiosMono,
     led::{
         Led, LedColor, LED_CAPLOCK, LED_DYNMAC_GO_WAIT, LED_DYNMAC_REC, LED_DYNMAC_REC_WAIT,
@@ -18,7 +18,7 @@ use heapless::Deque;
 use options::{SERIAL_ON, TIMER_MONO_LOOP, TIMER_USB_LOOP};
 use software::{
     chew::Chew,
-    keys::{BuffCase, Buffer},
+    keys::{BuffCase, Buffer, KC},
     serial_usb::{self, serial_write_value},
 };
 use usbd_serial::SerialPort;
@@ -129,79 +129,13 @@ fn main() -> ! {
     };
 
     // Buzzer
-    // Initialize PWM slices
-    let mut pwm_slices = Slices::new(pac.PWM, &mut pac.RESETS);
+    let pwm_slices = Slices::new(pac.PWM, &mut pac.RESETS);
+    let mut pwm = pwm_slices.pwm6;
+    pwm.channel_b.output_to(pins.gp29); // Check doc to see the assignment pin/channel
+    let mut buzzer = Buzzer::new(pwm);
 
-    // Configure PWM for GPIO12
-    // Configure PWM slice 2 (for GPIO 20)
-    let mut pwm2 = pwm_slices.pwm6; // PWM slice 2
-    pwm2.set_ph_correct(); // Optional: Enable phase-correct mode
-    pwm2.enable(); // Enable the slice
-
-    // pwm2.set_top((bsp::XOSC_CRYSTAL_FREQ / 494) as u16);
-
-    pwm2.channel_b.output_to(pins.gp29); // Assign GPIO 20 to channel B
-
-    let mut buzzer = Buzzer::new('B');
-    let mut score: Deque<Note, 50> = Deque::new();
-
-    score.push_back(Note::new(E, TIME * 2, 30)).ok();
-    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
-    score.push_back(Note::new(E, TIME * 2, 30)).ok();
-    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
-    score.push_back(Note::new(E, TIME * 4, 30)).ok();
-    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
-
-    score.push_back(Note::new(E, TIME * 2, 30)).ok();
-    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
-    score.push_back(Note::new(E, TIME * 2, 30)).ok();
-    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
-    score.push_back(Note::new(E, TIME * 4, 30)).ok();
-    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
-
-    score.push_back(Note::new(E, TIME * 2, 30)).ok();
-    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
-    score.push_back(Note::new(G, TIME * 2, 30)).ok();
-    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
-    score.push_back(Note::new(C, TIME * 2, 30)).ok();
-    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
-    score.push_back(Note::new(D, TIME * 2, 30)).ok();
-    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
-    score.push_back(Note::new(E, TIME * 4, 30)).ok();
-    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
-
-    score.push_back(Note::new(F, TIME * 2, 30)).ok();
-    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
-    score.push_back(Note::new(F, TIME * 2, 30)).ok();
-    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
-    score.push_back(Note::new(F, TIME * 2, 30)).ok();
-    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
-    score.push_back(Note::new(F, TIME * 2, 30)).ok();
-    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
-
-    score.push_back(Note::new(F, TIME * 2, 30)).ok();
-    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
-    score.push_back(Note::new(E, TIME * 2, 30)).ok();
-    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
-    score.push_back(Note::new(E, TIME * 2, 30)).ok();
-    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
-    score.push_back(Note::new(E, TIME * 1, 30)).ok();
-    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
-    score.push_back(Note::new(E, TIME * 1, 30)).ok();
-    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
-
-    score.push_back(Note::new(G, TIME * 2, 30)).ok();
-    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
-    score.push_back(Note::new(G, TIME * 2, 30)).ok();
-    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
-    score.push_back(Note::new(F, TIME * 2, 30)).ok();
-    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
-    score.push_back(Note::new(D, TIME * 2, 30)).ok();
-    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
-    score.push_back(Note::new(C, TIME * 2, 30)).ok();
-    score.push_back(Note::new(SILENCE, TIME, 0)).ok();
-
-    buzzer.add_song(score);
+    // buzzer.add_song(Song::EMinor_Up);
+    buzzer.add_song(Song::EMinor_down);
 
     // Led --
     let mut neopixel = Ws2812::new(
@@ -224,9 +158,6 @@ fn main() -> ! {
     let mut usb_count_down = timer.count_down();
     usb_count_down.start(TIMER_USB_LOOP.millis());
 
-    let mut mouse_count_down = timer.count_down();
-    mouse_count_down.start(10.millis());
-
     // --
     let mut ticks: u32 = 0;
     let mut chew = Chew::new(ticks);
@@ -246,7 +177,7 @@ fn main() -> ! {
         }
 
         if mono_count_down.wait().is_ok() {
-            buzzer.sing(ticks, &mut pwm2);
+            buzzer.sing(ticks);
 
             // serial_write_value(&mut serial, "max duty: ", max_duty, " <-");
 
