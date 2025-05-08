@@ -9,17 +9,13 @@ mod software;
 use hardware::{
     buzzer::{Buzzer, Song},
     gpios::GpiosMono,
-    led::{
-        Led, LedColor, LED_CAPLOCK, LED_DYNMAC_GO_WAIT, LED_DYNMAC_REC, LED_DYNMAC_REC_WAIT,
-        LED_LAYOUT_FN, LED_LAYOUT_FR, LED_LEADER_KEY,
-    },
+    led::{Led, LedColor},
 };
-use heapless::Deque;
 use options::{SERIAL_ON, TIMER_MONO_LOOP, TIMER_USB_LOOP};
 use software::{
     chew::Chew,
-    keys::{BuffCase, Buffer, KC},
-    serial_usb::{self, serial_write_value},
+    keys::{BuffCase, Buffer},
+    status::{Status, Statuses},
 };
 use usbd_serial::SerialPort;
 
@@ -128,14 +124,14 @@ fn main() -> ! {
         ],
     };
 
-    // Buzzer
+    // Buzzer (Check doc to see the assignment pin/pwm/channel)
     let pwm_slices = Slices::new(pac.PWM, &mut pac.RESETS);
     let mut pwm = pwm_slices.pwm6;
-    pwm.channel_b.output_to(pins.gp29); // Check doc to see the assignment pin/channel
+    pwm.channel_b.output_to(pins.gp29);
     let mut buzzer = Buzzer::new(pwm);
 
-    // buzzer.add_song(Song::EMinor_Up);
-    buzzer.add_song(Song::EMinor_down);
+    buzzer.add_song(Song::EMinor_Up);
+    // buzzer.add_song(Song::EMinor_down);
 
     // Led --
     let mut neopixel = Ws2812::new(
@@ -161,7 +157,7 @@ fn main() -> ! {
     // --
     let mut ticks: u32 = 0;
     let mut chew = Chew::new(ticks);
-    let mut led_status;
+    let mut statuses = Statuses::new();
 
     let mut key_buffer = Buffer::new();
     let mut last_printed_key: BuffCase = BuffCase::default();
@@ -177,25 +173,51 @@ fn main() -> ! {
         }
 
         if mono_count_down.wait().is_ok() {
-            buzzer.sing(ticks);
-
             // serial_write_value(&mut serial, "max duty: ", max_duty, " <-");
 
             let active_indexes = gpios.get_active_indexes(&mut delay);
             chew.update_matrix(active_indexes, ticks);
-            (key_buffer, mouse_report, led_status) = chew.run(key_buffer, mouse_report, ticks);
+            (key_buffer, mouse_report, statuses) =
+                chew.run(key_buffer, mouse_report, statuses, ticks);
 
-            match led_status {
-                LED_LAYOUT_FR => led.on(LedColor::Aqua),
-                LED_LAYOUT_FN => led.on(LedColor::Fushia),
-                LED_LEADER_KEY => led.on(LedColor::Blue),
-                LED_CAPLOCK => led.on(LedColor::Orange),
+            if statuses.layout_fr == Status::On {
+                led.on(LedColor::Aqua);
+            } else if statuses.layout_fn == Status::On {
+                led.on(LedColor::Fushia);
+            } else if statuses.leader_key == Status::On {
+                led.on(LedColor::Blue);
+            } else if statuses.caplock == Status::On {
+                led.on(LedColor::Orange);
+            } else if statuses.dynmac_go_waitkey == Status::On {
+                led.blink(LedColor::Olive, 800, ticks);
+            } else if statuses.dynmac_rec_inprogess == Status::On {
+                led.blink(LedColor::Red, 600, ticks);
+            } else if statuses.dynmac_rec_waitkey == Status::On {
+                led.blink(LedColor::Purple, 800, ticks);
+            } else {
+                led.off();
+            }
 
-                LED_DYNMAC_GO_WAIT => led.blink(LedColor::Olive, 800, ticks),
-                LED_DYNMAC_REC => led.blink(LedColor::Red, 600, ticks),
-                LED_DYNMAC_REC_WAIT => led.blink(LedColor::Purple, 800, ticks),
-
-                _ => led.off(),
+            if statuses.layout_fr == Status::SwitchOn {
+                buzzer.add_song(Song::EMinor_Up);
+            } else if statuses.layout_fr == Status::SwitchOff {
+                buzzer.add_song(Song::EMinor_down);
+            } else if statuses.layout_fn == Status::SwitchOn {
+                buzzer.add_song(Song::EMinor_Up);
+            } else if statuses.layout_fn == Status::SwitchOff {
+                buzzer.add_song(Song::EMinor_down);
+            } else if statuses.leader_key == Status::SwitchOn {
+                buzzer.add_song(Song::EMinor_Up);
+            } else if statuses.caplock == Status::SwitchOn {
+                buzzer.add_song(Song::EMinor_Up);
+            } else if statuses.caplock == Status::SwitchOff {
+                buzzer.add_song(Song::EMinor_down);
+            } else if statuses.dynmac_go_waitkey == Status::SwitchOn {
+                buzzer.add_song(Song::EMinor_Up);
+            } else if statuses.dynmac_rec_inprogess == Status::SwitchOn {
+                buzzer.add_song(Song::EMinor_Up);
+            } else if statuses.dynmac_rec_waitkey == Status::SwitchOn {
+                buzzer.add_song(Song::EMinor_Up);
             }
 
             // Mouse report directly done here ------------------------------------------
@@ -220,6 +242,8 @@ fn main() -> ! {
                     }
                 };
             }
+
+            buzzer.sing(ticks);
         }
 
         // USB --------------------------------------------------------------------------

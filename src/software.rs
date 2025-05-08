@@ -5,3 +5,4 @@ pub mod macros;
 pub mod modifiers;
 pub mod mouse;
 pub mod serial_usb;
+pub mod status;

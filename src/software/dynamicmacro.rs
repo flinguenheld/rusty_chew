@@ -4,11 +4,9 @@ use super::{
     chew::Key,
     keys::{Buffer, KC},
     modifiers::Modifiers,
+    status::Statuses,
 };
-use crate::{
-    hardware::led::{LED_DYNMAC_GO_WAIT, LED_DYNMAC_REC, LED_DYNMAC_REC_WAIT},
-    options::NB_KEYS,
-};
+use crate::options::NB_KEYS;
 
 #[derive(PartialEq, Eq)]
 enum State {
@@ -121,12 +119,10 @@ impl DynMac {
         }
     }
 
-    pub fn up_led_status(&self, led_status: u8) -> u8 {
-        match self.state {
-            State::Inactive => led_status,
-            State::RecordWaitKey => LED_DYNMAC_REC_WAIT,
-            State::RecordInProgress => LED_DYNMAC_REC,
-            State::GoWaitKey => LED_DYNMAC_GO_WAIT,
-        }
+    pub fn up_statuses(&self, mut statuses: Statuses) -> Statuses {
+        statuses.up("DN_REC_WAIT", self.state == State::RecordWaitKey);
+        statuses.up("DN_REC_PROG", self.state == State::RecordInProgress);
+        statuses.up("DN_GO_WAIT", self.state == State::GoWaitKey);
+        statuses
     }
 }

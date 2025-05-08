@@ -6,12 +6,10 @@ use super::{
     keys::{Buffer, KC},
     modifiers::Modifiers,
     mouse::Mouse,
+    status::Statuses,
 };
 use crate::{
-    hardware::{
-        led::{LED_CAPLOCK, LED_LAYOUT_FN, LED_LAYOUT_FR, LED_LEADER_KEY},
-        matrix::Matrix,
-    },
+    hardware::matrix::Matrix,
     layouts::{COMBOS, LAYOUTS, LEADER_KEY_COMBINATIONS},
     options::{COMBO_TIME, HOLD_TIME, NB_KEYS},
 };
@@ -53,8 +51,6 @@ pub struct Chew {
     dynmac: DynMac,
     mouse: Mouse,
 
-    led_status: u8,
-
     matrix: Matrix,
     mods: Modifiers,
     homerow: Deque<Key, 5>,
@@ -82,7 +78,6 @@ impl Chew {
             },
             dynmac: DynMac::new(),
             mouse: Mouse::new(),
-            led_status: 0,
 
             matrix: Matrix::new(),
             mods: Modifiers::new(),
@@ -149,8 +144,9 @@ impl Chew {
         &mut self,
         mut key_buffer: Buffer,
         mut mouse_report: WheelMouseReport,
+        mut statuses: Statuses,
         ticks: u32,
-    ) -> (Buffer, WheelMouseReport, u8) {
+    ) -> (Buffer, WheelMouseReport, Statuses) {
         // Set new keys with the current layout -----------------------------------------
         for key in self
             .pre_pressed_keys
@@ -424,19 +420,14 @@ impl Chew {
         self.mouse.release(&self.matrix, &mut mouse_report);
 
         // --
-        self.led_status = match self.layout.number {
-            4 => LED_LAYOUT_FR,
-            5 => LED_LAYOUT_FN,
-            _ => 0,
-        };
-        if self.leader.active {
-            self.led_status = LED_LEADER_KEY;
-        }
-        if self.mods.caplock {
-            self.led_status = LED_CAPLOCK;
-        }
-        self.led_status = self.dynmac.up_led_status(self.led_status);
+        statuses.up("FR", self.layout.number == 4);
+        statuses.up("FN", self.layout.number == 5);
 
-        (key_buffer, mouse_report, self.led_status)
+        statuses.up("LEADER", self.leader.active);
+        statuses.up("CAPLOCK", self.mods.caplock);
+
+        statuses = self.dynmac.up_statuses(statuses);
+
+        (key_buffer, mouse_report, statuses)
     }
 }

@@ -91,17 +91,18 @@ impl<I: SliceId> Buzzer<I> {
                 self.score.push_back(Note::new(0 , TIME / 4)).ok();
             }
 
-            
-    Song::EMinor_Up=>{
-                self.score.push_back(Note::new(C4,      TIME / 4   )).ok();
-                self.score.push_back(Note::new(E4_FLAT, TIME / 4   )).ok();
-                self.score.push_back(Note::new(G4,      TIME / 4   )).ok();
-    },
-    Song::EMinor_down=>{
-                self.score.push_back(Note::new(G4, TIME  / 4  )).ok();
-                self.score.push_back(Note::new(E4_FLAT, TIME  / 4  )).ok();
-                self.score.push_back(Note::new(C4, TIME  / 4  )).ok();
-    },
+            Song::EMinor_Up=>{
+                        self.score.push_back(Note::new(C4,      TIME / 4)).ok();
+                        self.score.push_back(Note::new(E4_FLAT, TIME / 4)).ok();
+                        self.score.push_back(Note::new(G4,      TIME / 4)).ok();
+                        self.score.push_back(Note::new(0,       TIME / 4)).ok();
+            },
+            Song::EMinor_down=>{
+                        self.score.push_back(Note::new(G4,      TIME / 4)).ok();
+                        self.score.push_back(Note::new(E4_FLAT, TIME / 4)).ok();
+                        self.score.push_back(Note::new(C4,      TIME / 4)).ok();
+                        self.score.push_back(Note::new(0,       TIME / 4)).ok();
+            },
 
             
         }

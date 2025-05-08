@@ -19,7 +19,7 @@ use crate::options::{MAX_MESSAGE_LENGTH, MAX_NOT_COMPLETE, UART_SEND_DELAY, UART
 
 // Values used as a header to validated a message
 pub const HR_KEYS: u8 = 0b11010000;
-pub const HR_LED: u8 = 0b10110000;
+pub const HR_STATUS: u8 = 0b10110000;
 
 pub enum UartError {
     Capacity,
@@ -153,7 +153,7 @@ impl Uart {
         if self.read_uart_buffer().is_err() {
             Err(UartError::Uart)
         } else if let Some(first) = self.buffer.first() {
-            if first & 0b11110000 == HR_KEYS || first & 0b11110000 == HR_LED {
+            if first & 0b11110000 == HR_KEYS || first & 0b11110000 == HR_STATUS {
                 let l = first & 0b00001111;
 
                 if self.buffer.len() == (l + 1) as usize {

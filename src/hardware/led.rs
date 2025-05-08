@@ -9,16 +9,6 @@ use waveshare_rp2040_zero::hal::{
 };
 use ws2812_pio::Ws2812;
 
-// Status --
-pub const LED_LAYOUT_FR: u8 = 1;
-pub const LED_LAYOUT_FN: u8 = 2;
-pub const LED_LEADER_KEY: u8 = 3;
-pub const LED_CAPLOCK: u8 = 4;
-
-pub const LED_DYNMAC_REC: u8 = 5;
-pub const LED_DYNMAC_GO_WAIT: u8 = 6;
-pub const LED_DYNMAC_REC_WAIT: u8 = 7;
-
 #[allow(dead_code)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum LedColor {

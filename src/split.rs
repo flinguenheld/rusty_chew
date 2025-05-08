@@ -9,22 +9,24 @@ mod software;
 use cfg_if::cfg_if;
 use embedded_hal::digital::InputPin;
 use hardware::{
+    buzzer::{Buzzer, Song},
     gpios::GpiosDirectPin,
-    led::{
-        Led, LedColor, LED_CAPLOCK, LED_DYNMAC_GO_WAIT, LED_DYNMAC_REC, LED_DYNMAC_REC_WAIT,
-        LED_LAYOUT_FN, LED_LAYOUT_FR, LED_LEADER_KEY,
-    },
-    uart::{Uart, UartError, HR_KEYS, HR_LED},
+    led::{Led, LedColor},
+    uart::{Uart, UartError, HR_KEYS, HR_STATUS},
 };
 use options::{SERIAL_ON, TIMER_SPLIT_LOOP, TIMER_UART_LOOP, TIMER_USB_LOOP};
 use software::{
     chew::Chew,
     keys::{BuffCase, Buffer},
     serial_usb::{serial_write, serial_write_time, serial_write_values},
+    status::{Status, Statuses},
 };
 use usbd_serial::SerialPort;
 
-use waveshare_rp2040_zero as bsp;
+use waveshare_rp2040_zero::{
+    self as bsp,
+    hal::pwm::{SliceId, Slices},
+};
 
 use bsp::hal::{
     clocks::{init_clocks_and_plls, Clock},
@@ -48,6 +50,16 @@ use usb_device::prelude::*;
 use usbd_human_interface_device::device::keyboard::NKROBootKeyboard;
 use usbd_human_interface_device::device::mouse::{WheelMouse, WheelMouseReport};
 use usbd_human_interface_device::prelude::*;
+
+// Status --
+const STATUS_LAYOUT_FR: u8 = 1;
+const STATUS_LAYOUT_FN: u8 = 2;
+const STATUS_LEADER_KEY: u8 = 3;
+const STATUS_CAPLOCK: u8 = 4;
+
+const STATUS_DYNMAC_REC: u8 = 5;
+const STATUS_DYNMAC_GO_WAIT: u8 = 6;
+const STATUS_DYNMAC_REC_WAIT: u8 = 7;
 
 #[entry]
 fn main() -> ! {
@@ -106,8 +118,10 @@ fn main() -> ! {
         .supports_remote_wakeup(true)
         .build();
 
-    // Side detection --
-    let is_left = pins.gp10.into_pull_down_input().is_high().unwrap();
+    // Side detection (releases the pin for the buzzer)--
+    let mut pin10 = pins.gp10.into_pull_down_input();
+    let is_left = pin10.is_high().unwrap();
+    let pin10 = pin10.into_floating_input();
 
     cfg_if! {
         if #[cfg(feature = "master")] {
@@ -172,6 +186,31 @@ fn main() -> ! {
         gpios.add(pins.gp7.into_pull_up_input().into_dyn_pin(), 33);
     }
 
+    // Buzzer (Check doc to see the assignment pin/pwm/channel)
+    let pwm_slices = Slices::new(pac.PWM, &mut pac.RESETS);
+
+    let mut buz_left = if is_left {
+        let mut pwm = pwm_slices.pwm6;
+        pwm.channel_a.output_to(pins.gp12);
+        Some(Buzzer::new(pwm))
+    } else {
+        None
+    };
+    let mut buz_right = if !is_left {
+        let mut pwm = pwm_slices.pwm5;
+        pwm.channel_a.output_to(pin10);
+        Some(Buzzer::new(pwm))
+    } else {
+        None
+    };
+
+    sing(
+        &mut buz_left,
+        Song::JingleBells,
+        &mut buz_right,
+        Song::EMinor_Up,
+    );
+
     // Led --
     let mut neopixel = Ws2812::new(
         // The onboard NeoPixel is attached to GPIO pin #16 on the Waveshare RP2040-Zero.
@@ -202,7 +241,7 @@ fn main() -> ! {
     // --
     let mut ticks: u32 = 0;
     let mut chew = Chew::new(ticks);
-    let mut led_status;
+    let mut statuses = Statuses::new();
 
     let mut key_buffer = Buffer::new();
     let mut last_printed_key: BuffCase = BuffCase::default();
@@ -238,8 +277,8 @@ fn main() -> ! {
                                 ticks,
                             );
 
-                            (key_buffer, mouse_report, led_status) =
-                                chew.run(key_buffer, mouse_report, ticks);
+                            (key_buffer, mouse_report, statuses) =
+                                chew.run(key_buffer, mouse_report, statuses, ticks);
 
                             // Mouse report directly done here --------------------------
                             // Keyboard has its own timer to allow combinations
@@ -265,21 +304,123 @@ fn main() -> ! {
                             }
 
                             // Update LED & share its state to the slave --
-                            match led_status {
-                                LED_LAYOUT_FR => led.on(LedColor::Aqua),
-                                LED_LAYOUT_FN => led.on(LedColor::Fushia),
-                                LED_LEADER_KEY => led.on(LedColor::Blue),
-                                LED_CAPLOCK => led.on(LedColor::Orange),
+                            let led_status = if statuses.layout_fr == Status::On {
+                                led.on(LedColor::Aqua);
+                                STATUS_LAYOUT_FR
+                            } else if statuses.layout_fn == Status::On {
+                                led.on(LedColor::Fushia);
+                                STATUS_LAYOUT_FN
+                            } else if statuses.leader_key == Status::On {
+                                led.on(LedColor::Blue);
+                                STATUS_LEADER_KEY
+                            } else if statuses.caplock == Status::On {
+                                led.on(LedColor::Orange);
+                                STATUS_CAPLOCK
+                            } else if statuses.dynmac_go_waitkey == Status::On {
+                                led.blink(LedColor::Olive, 800, ticks);
+                                STATUS_DYNMAC_GO_WAIT
+                            } else if statuses.dynmac_rec_inprogess == Status::On {
+                                led.blink(LedColor::Red, 600, ticks);
+                                STATUS_DYNMAC_REC
+                            } else if statuses.dynmac_rec_waitkey == Status::On {
+                                led.blink(LedColor::Purple, 800, ticks);
+                                STATUS_DYNMAC_REC_WAIT
+                            } else {
+                                led.off();
+                                0
+                            };
 
-                                LED_DYNMAC_GO_WAIT => led.blink(LedColor::Olive, 800, ticks),
-                                LED_DYNMAC_REC => led.blink(LedColor::Red, 600, ticks),
-                                LED_DYNMAC_REC_WAIT => led.blink(LedColor::Purple, 800, ticks),
+                            // Update BUZZER & share its state to the slave --
+                            let buzzer_status = if statuses.layout_fr == Status::SwitchOn {
+                                sing(
+                                    &mut buz_left,
+                                    Song::EMinor_Up,
+                                    &mut buz_right,
+                                    Song::EMinor_Up,
+                                );
 
-                                _ => led.off(),
-                            }
+                                STATUS_LAYOUT_FR
+                            } else if statuses.layout_fr == Status::SwitchOff {
+                                sing(
+                                    &mut buz_left,
+                                    Song::EMinor_down,
+                                    &mut buz_right,
+                                    Song::EMinor_down,
+                                );
+                                STATUS_LAYOUT_FR + 128
+                            } else if statuses.layout_fn == Status::SwitchOn {
+                                sing(
+                                    &mut buz_left,
+                                    Song::EMinor_Up,
+                                    &mut buz_right,
+                                    Song::EMinor_Up,
+                                );
+                                STATUS_LAYOUT_FN
+                            } else if statuses.layout_fn == Status::SwitchOff {
+                                sing(
+                                    &mut buz_left,
+                                    Song::EMinor_down,
+                                    &mut buz_right,
+                                    Song::EMinor_down,
+                                );
+                                STATUS_LAYOUT_FN + 128
+                            } else if statuses.leader_key == Status::SwitchOn {
+                                sing(
+                                    &mut buz_left,
+                                    Song::EMinor_Up,
+                                    &mut buz_right,
+                                    Song::EMinor_Up,
+                                );
+                                STATUS_LEADER_KEY
+                            } else if statuses.caplock == Status::SwitchOn {
+                                sing(
+                                    &mut buz_left,
+                                    Song::EMinor_Up,
+                                    &mut buz_right,
+                                    Song::EMinor_Up,
+                                );
+                                STATUS_CAPLOCK
+                            } else if statuses.caplock == Status::SwitchOff {
+                                sing(
+                                    &mut buz_left,
+                                    Song::EMinor_down,
+                                    &mut buz_right,
+                                    Song::EMinor_down,
+                                );
+                                STATUS_CAPLOCK + 128
+                            } else if statuses.dynmac_go_waitkey == Status::SwitchOn {
+                                sing(
+                                    &mut buz_left,
+                                    Song::EMinor_Up,
+                                    &mut buz_right,
+                                    Song::EMinor_Up,
+                                );
+                                STATUS_DYNMAC_GO_WAIT
+                            } else if statuses.dynmac_rec_inprogess == Status::SwitchOn {
+                                sing(
+                                    &mut buz_left,
+                                    Song::EMinor_Up,
+                                    &mut buz_right,
+                                    Song::EMinor_Up,
+                                );
+                                STATUS_DYNMAC_REC
+                            } else if statuses.dynmac_rec_waitkey == Status::SwitchOn {
+                                sing(
+                                    &mut buz_left,
+                                    Song::EMinor_Up,
+                                    &mut buz_right,
+                                    Song::EMinor_Up,
+                                );
+                                STATUS_DYNMAC_REC_WAIT
+                            } else {
+                                0
+                            };
 
-                            if uart.send(HR_LED, &[led_status], &mut delay).is_err() {
-                                serial_write_time(&mut serial, "LED msg failed", ticks, " --\r\n");
+                            if uart
+                                .send(HR_STATUS, &[led_status, buzzer_status], &mut delay)
+                                .is_err()
+                            {
+                                serial_write_time(&mut serial, "STAT msg failed", ticks, " --\r\n");
                             }
                         }
                     }
@@ -304,18 +445,92 @@ fn main() -> ! {
                 // -------------------------------------------------------- UART SLAVE --
                 match uart.receive() {
                     Ok(mail) => {
-                        if mail.header == HR_LED {
+                        if mail.header == HR_STATUS {
                             match mail.values[0] {
-                                LED_LAYOUT_FR => led.on(LedColor::Aqua),
-                                LED_LAYOUT_FN => led.on(LedColor::Fushia),
-                                LED_LEADER_KEY => led.on(LedColor::Blue),
-                                LED_CAPLOCK => led.on(LedColor::Orange),
+                                STATUS_LAYOUT_FR => led.on(LedColor::Aqua),
+                                STATUS_LAYOUT_FN => led.on(LedColor::Fushia),
+                                STATUS_LEADER_KEY => led.on(LedColor::Blue),
+                                STATUS_CAPLOCK => led.on(LedColor::Orange),
 
-                                LED_DYNMAC_GO_WAIT => led.blink(LedColor::Olive, 800, ticks),
-                                LED_DYNMAC_REC => led.blink(LedColor::Red, 600, ticks),
-                                LED_DYNMAC_REC_WAIT => led.blink(LedColor::Purple, 800, ticks),
+                                STATUS_DYNMAC_GO_WAIT => led.blink(LedColor::Olive, 800, ticks),
+                                STATUS_DYNMAC_REC => led.blink(LedColor::Red, 600, ticks),
+                                STATUS_DYNMAC_REC_WAIT => led.blink(LedColor::Purple, 800, ticks),
 
                                 _ => led.off(),
+                            }
+
+                            if mail.values.len() == 2 {
+                                if mail.values[1] == STATUS_LAYOUT_FR {
+                                    sing(
+                                        &mut buz_left,
+                                        Song::EMinor_Up,
+                                        &mut buz_right,
+                                        Song::EMinor_Up,
+                                    );
+                                } else if mail.values[1] == STATUS_LAYOUT_FR + 128 {
+                                    sing(
+                                        &mut buz_left,
+                                        Song::EMinor_down,
+                                        &mut buz_right,
+                                        Song::EMinor_down,
+                                    );
+                                } else if mail.values[1] == STATUS_LAYOUT_FN {
+                                    sing(
+                                        &mut buz_left,
+                                        Song::EMinor_Up,
+                                        &mut buz_right,
+                                        Song::EMinor_Up,
+                                    );
+                                } else if mail.values[1] == STATUS_LAYOUT_FN + 128 {
+                                    sing(
+                                        &mut buz_left,
+                                        Song::EMinor_down,
+                                        &mut buz_right,
+                                        Song::EMinor_down,
+                                    );
+                                } else if mail.values[1] == STATUS_LEADER_KEY {
+                                    sing(
+                                        &mut buz_left,
+                                        Song::EMinor_Up,
+                                        &mut buz_right,
+                                        Song::EMinor_Up,
+                                    );
+                                } else if mail.values[1] == STATUS_CAPLOCK {
+                                    sing(
+                                        &mut buz_left,
+                                        Song::EMinor_Up,
+                                        &mut buz_right,
+                                        Song::EMinor_Up,
+                                    );
+                                } else if mail.values[1] == STATUS_CAPLOCK + 128 {
+                                    sing(
+                                        &mut buz_left,
+                                        Song::EMinor_down,
+                                        &mut buz_right,
+                                        Song::EMinor_down,
+                                    );
+                                } else if mail.values[1] == STATUS_DYNMAC_GO_WAIT {
+                                    sing(
+                                        &mut buz_left,
+                                        Song::EMinor_Up,
+                                        &mut buz_right,
+                                        Song::EMinor_Up,
+                                    );
+                                } else if mail.values[1] == STATUS_DYNMAC_REC {
+                                    sing(
+                                        &mut buz_left,
+                                        Song::EMinor_Up,
+                                        &mut buz_right,
+                                        Song::EMinor_Up,
+                                    );
+                                } else if mail.values[1] == STATUS_DYNMAC_REC_WAIT {
+                                    sing(
+                                        &mut buz_left,
+                                        Song::EMinor_Up,
+                                        &mut buz_right,
+                                        Song::EMinor_Up,
+                                    );
+                                }
                             }
                         }
                     }
@@ -330,6 +545,12 @@ fn main() -> ! {
                     // Err(UartError::Uart) => led.on(LedColor::Green),
                     _ => led.on(LedColor::Red),
                 }
+            }
+
+            if let Some(ref mut buzzer) = buz_left {
+                buzzer.sing(ticks);
+            } else if let Some(ref mut buzzer) = buz_right {
+                buzzer.sing(ticks);
             }
         }
 
@@ -407,5 +628,18 @@ fn main() -> ! {
                 led.on(LedColor::Red);
             }
         }
+    }
+}
+
+fn sing<IL: SliceId, IR: SliceId>(
+    buzzer_left: &mut Option<Buzzer<IL>>,
+    left_song: Song,
+    buzzer_right: &mut Option<Buzzer<IR>>,
+    right_song: Song,
+) {
+    if let Some(buzz) = buzzer_left {
+        buzz.add_song(left_song);
+    } else if let Some(buzz) = buzzer_right {
+        buzz.add_song(right_song);
     }
 }
