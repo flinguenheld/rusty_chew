@@ -9,7 +9,7 @@ mod software;
 use cfg_if::cfg_if;
 use embedded_hal::digital::InputPin;
 use hardware::{
-    buzzer::{Buzzer, Song},
+    buzzer::{Buzzer, Side, Song},
     gpios::GpiosDirectPin,
     led::{Led, LedColor},
     uart::{Uart, UartError, HR_KEYS, HR_STATUS},
@@ -204,12 +204,7 @@ fn main() -> ! {
         None
     };
 
-    sing(
-        &mut buz_left,
-        Song::JingleBells,
-        &mut buz_right,
-        Song::EMinor_Up,
-    );
+    sing(&mut buz_left, &mut buz_right, Song::JingleBells);
 
     // Led --
     let mut neopixel = Ws2812::new(
@@ -332,85 +327,35 @@ fn main() -> ! {
 
                             // Update BUZZER & share its state to the slave --
                             let buzzer_status = if statuses.layout_fr == Status::SwitchOn {
-                                sing(
-                                    &mut buz_left,
-                                    Song::EMinor_Up,
-                                    &mut buz_right,
-                                    Song::EMinor_Up,
-                                );
+                                sing(&mut buz_left, &mut buz_right, Song::CMinorUp);
 
                                 STATUS_LAYOUT_FR
                             } else if statuses.layout_fr == Status::SwitchOff {
-                                sing(
-                                    &mut buz_left,
-                                    Song::EMinor_down,
-                                    &mut buz_right,
-                                    Song::EMinor_down,
-                                );
+                                sing(&mut buz_left, &mut buz_right, Song::CMinorDown);
                                 STATUS_LAYOUT_FR + 128
                             } else if statuses.layout_fn == Status::SwitchOn {
-                                sing(
-                                    &mut buz_left,
-                                    Song::EMinor_Up,
-                                    &mut buz_right,
-                                    Song::EMinor_Up,
-                                );
+                                sing(&mut buz_left, &mut buz_right, Song::CMinorUp);
                                 STATUS_LAYOUT_FN
                             } else if statuses.layout_fn == Status::SwitchOff {
-                                sing(
-                                    &mut buz_left,
-                                    Song::EMinor_down,
-                                    &mut buz_right,
-                                    Song::EMinor_down,
-                                );
+                                sing(&mut buz_left, &mut buz_right, Song::CMinorDown);
                                 STATUS_LAYOUT_FN + 128
                             } else if statuses.leader_key == Status::SwitchOn {
-                                sing(
-                                    &mut buz_left,
-                                    Song::EMinor_Up,
-                                    &mut buz_right,
-                                    Song::EMinor_Up,
-                                );
+                                sing(&mut buz_left, &mut buz_right, Song::CMinorUp);
                                 STATUS_LEADER_KEY
                             } else if statuses.caplock == Status::SwitchOn {
-                                sing(
-                                    &mut buz_left,
-                                    Song::EMinor_Up,
-                                    &mut buz_right,
-                                    Song::EMinor_Up,
-                                );
+                                sing(&mut buz_left, &mut buz_right, Song::CMinorUp);
                                 STATUS_CAPLOCK
                             } else if statuses.caplock == Status::SwitchOff {
-                                sing(
-                                    &mut buz_left,
-                                    Song::EMinor_down,
-                                    &mut buz_right,
-                                    Song::EMinor_down,
-                                );
+                                sing(&mut buz_left, &mut buz_right, Song::CMinorDown);
                                 STATUS_CAPLOCK + 128
                             } else if statuses.dynmac_go_waitkey == Status::SwitchOn {
-                                sing(
-                                    &mut buz_left,
-                                    Song::EMinor_Up,
-                                    &mut buz_right,
-                                    Song::EMinor_Up,
-                                );
+                                sing(&mut buz_left, &mut buz_right, Song::CMinorUp);
                                 STATUS_DYNMAC_GO_WAIT
                             } else if statuses.dynmac_rec_inprogess == Status::SwitchOn {
-                                sing(
-                                    &mut buz_left,
-                                    Song::EMinor_Up,
-                                    &mut buz_right,
-                                    Song::EMinor_Up,
-                                );
+                                sing(&mut buz_left, &mut buz_right, Song::CMinorUp);
                                 STATUS_DYNMAC_REC
                             } else if statuses.dynmac_rec_waitkey == Status::SwitchOn {
-                                sing(
-                                    &mut buz_left,
-                                    Song::EMinor_Up,
-                                    &mut buz_right,
-                                    Song::EMinor_Up,
-                                );
+                                sing(&mut buz_left, &mut buz_right, Song::CMinorUp);
                                 STATUS_DYNMAC_REC_WAIT
                             } else {
                                 0
@@ -461,75 +406,25 @@ fn main() -> ! {
 
                             if mail.values.len() == 2 {
                                 if mail.values[1] == STATUS_LAYOUT_FR {
-                                    sing(
-                                        &mut buz_left,
-                                        Song::EMinor_Up,
-                                        &mut buz_right,
-                                        Song::EMinor_Up,
-                                    );
+                                    sing(&mut buz_left, &mut buz_right, Song::CMinorUp);
                                 } else if mail.values[1] == STATUS_LAYOUT_FR + 128 {
-                                    sing(
-                                        &mut buz_left,
-                                        Song::EMinor_down,
-                                        &mut buz_right,
-                                        Song::EMinor_down,
-                                    );
+                                    sing(&mut buz_left, &mut buz_right, Song::CMinorDown);
                                 } else if mail.values[1] == STATUS_LAYOUT_FN {
-                                    sing(
-                                        &mut buz_left,
-                                        Song::EMinor_Up,
-                                        &mut buz_right,
-                                        Song::EMinor_Up,
-                                    );
+                                    sing(&mut buz_left, &mut buz_right, Song::CMinorUp);
                                 } else if mail.values[1] == STATUS_LAYOUT_FN + 128 {
-                                    sing(
-                                        &mut buz_left,
-                                        Song::EMinor_down,
-                                        &mut buz_right,
-                                        Song::EMinor_down,
-                                    );
+                                    sing(&mut buz_left, &mut buz_right, Song::CMinorDown);
                                 } else if mail.values[1] == STATUS_LEADER_KEY {
-                                    sing(
-                                        &mut buz_left,
-                                        Song::EMinor_Up,
-                                        &mut buz_right,
-                                        Song::EMinor_Up,
-                                    );
+                                    sing(&mut buz_left, &mut buz_right, Song::CMinorUp);
                                 } else if mail.values[1] == STATUS_CAPLOCK {
-                                    sing(
-                                        &mut buz_left,
-                                        Song::EMinor_Up,
-                                        &mut buz_right,
-                                        Song::EMinor_Up,
-                                    );
+                                    sing(&mut buz_left, &mut buz_right, Song::CMinorUp);
                                 } else if mail.values[1] == STATUS_CAPLOCK + 128 {
-                                    sing(
-                                        &mut buz_left,
-                                        Song::EMinor_down,
-                                        &mut buz_right,
-                                        Song::EMinor_down,
-                                    );
+                                    sing(&mut buz_left, &mut buz_right, Song::CMinorDown);
                                 } else if mail.values[1] == STATUS_DYNMAC_GO_WAIT {
-                                    sing(
-                                        &mut buz_left,
-                                        Song::EMinor_Up,
-                                        &mut buz_right,
-                                        Song::EMinor_Up,
-                                    );
+                                    sing(&mut buz_left, &mut buz_right, Song::CMinorUp);
                                 } else if mail.values[1] == STATUS_DYNMAC_REC {
-                                    sing(
-                                        &mut buz_left,
-                                        Song::EMinor_Up,
-                                        &mut buz_right,
-                                        Song::EMinor_Up,
-                                    );
+                                    sing(&mut buz_left, &mut buz_right, Song::CMinorUp);
                                 } else if mail.values[1] == STATUS_DYNMAC_REC_WAIT {
-                                    sing(
-                                        &mut buz_left,
-                                        Song::EMinor_Up,
-                                        &mut buz_right,
-                                        Song::EMinor_Up,
-                                    );
+                                    sing(&mut buz_left, &mut buz_right, Song::CMinorUp);
                                 }
                             }
                         }
@@ -633,13 +528,12 @@ fn main() -> ! {
 
 fn sing<IL: SliceId, IR: SliceId>(
     buzzer_left: &mut Option<Buzzer<IL>>,
-    left_song: Song,
     buzzer_right: &mut Option<Buzzer<IR>>,
-    right_song: Song,
+    song: Song,
 ) {
     if let Some(buzz) = buzzer_left {
-        buzz.add_song(left_song);
+        buzz.add_song(song, Side::Left);
     } else if let Some(buzz) = buzzer_right {
-        buzz.add_song(right_song);
+        buzz.add_song(song, Side::Right);
     }
 }
