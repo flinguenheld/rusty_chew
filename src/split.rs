@@ -204,7 +204,7 @@ fn main() -> ! {
         None
     };
 
-    sing(&mut buz_left, &mut buz_right, Song::JingleBells);
+    sing(&mut buz_left, &mut buz_right, Song::WelcomeC, false);
 
     // Led --
     let mut neopixel = Ws2812::new(
@@ -327,35 +327,34 @@ fn main() -> ! {
 
                             // Update BUZZER & share its state to the slave --
                             let buzzer_status = if statuses.layout_fr == Status::SwitchOn {
-                                sing(&mut buz_left, &mut buz_right, Song::CMinorUp);
-
+                                sing(&mut buz_left, &mut buz_right, Song::StartupB, false);
                                 STATUS_LAYOUT_FR
                             } else if statuses.layout_fr == Status::SwitchOff {
-                                sing(&mut buz_left, &mut buz_right, Song::CMinorDown);
+                                sing(&mut buz_left, &mut buz_right, Song::StartupB, true);
                                 STATUS_LAYOUT_FR + 128
                             } else if statuses.layout_fn == Status::SwitchOn {
-                                sing(&mut buz_left, &mut buz_right, Song::CMinorUp);
+                                sing(&mut buz_left, &mut buz_right, Song::StartupC_2, false);
                                 STATUS_LAYOUT_FN
                             } else if statuses.layout_fn == Status::SwitchOff {
-                                sing(&mut buz_left, &mut buz_right, Song::CMinorDown);
+                                sing(&mut buz_left, &mut buz_right, Song::StartupC_2, true);
                                 STATUS_LAYOUT_FN + 128
                             } else if statuses.leader_key == Status::SwitchOn {
-                                sing(&mut buz_left, &mut buz_right, Song::CMinorUp);
+                                sing(&mut buz_left, &mut buz_right, Song::NotifA, false);
                                 STATUS_LEADER_KEY
                             } else if statuses.caplock == Status::SwitchOn {
-                                sing(&mut buz_left, &mut buz_right, Song::CMinorUp);
+                                sing(&mut buz_left, &mut buz_right, Song::StartupG, false);
                                 STATUS_CAPLOCK
                             } else if statuses.caplock == Status::SwitchOff {
-                                sing(&mut buz_left, &mut buz_right, Song::CMinorDown);
+                                sing(&mut buz_left, &mut buz_right, Song::StartupG, true);
                                 STATUS_CAPLOCK + 128
                             } else if statuses.dynmac_go_waitkey == Status::SwitchOn {
-                                sing(&mut buz_left, &mut buz_right, Song::CMinorUp);
+                                sing(&mut buz_left, &mut buz_right, Song::NotifF, false);
                                 STATUS_DYNMAC_GO_WAIT
                             } else if statuses.dynmac_rec_inprogess == Status::SwitchOn {
-                                sing(&mut buz_left, &mut buz_right, Song::CMinorUp);
+                                sing(&mut buz_left, &mut buz_right, Song::AlertD, false);
                                 STATUS_DYNMAC_REC
                             } else if statuses.dynmac_rec_waitkey == Status::SwitchOn {
-                                sing(&mut buz_left, &mut buz_right, Song::CMinorUp);
+                                sing(&mut buz_left, &mut buz_right, Song::AlertE, false);
                                 STATUS_DYNMAC_REC_WAIT
                             } else {
                                 0
@@ -406,25 +405,25 @@ fn main() -> ! {
 
                             if mail.values.len() == 2 {
                                 if mail.values[1] == STATUS_LAYOUT_FR {
-                                    sing(&mut buz_left, &mut buz_right, Song::CMinorUp);
+                                    sing(&mut buz_left, &mut buz_right, Song::StartupB, false);
                                 } else if mail.values[1] == STATUS_LAYOUT_FR + 128 {
-                                    sing(&mut buz_left, &mut buz_right, Song::CMinorDown);
+                                    sing(&mut buz_left, &mut buz_right, Song::StartupB, true);
                                 } else if mail.values[1] == STATUS_LAYOUT_FN {
-                                    sing(&mut buz_left, &mut buz_right, Song::CMinorUp);
+                                    sing(&mut buz_left, &mut buz_right, Song::StartupC_2, false);
                                 } else if mail.values[1] == STATUS_LAYOUT_FN + 128 {
-                                    sing(&mut buz_left, &mut buz_right, Song::CMinorDown);
+                                    sing(&mut buz_left, &mut buz_right, Song::StartupC_2, true);
                                 } else if mail.values[1] == STATUS_LEADER_KEY {
-                                    sing(&mut buz_left, &mut buz_right, Song::CMinorUp);
+                                    sing(&mut buz_left, &mut buz_right, Song::NotifA, false);
                                 } else if mail.values[1] == STATUS_CAPLOCK {
-                                    sing(&mut buz_left, &mut buz_right, Song::CMinorUp);
+                                    sing(&mut buz_left, &mut buz_right, Song::StartupG, false);
                                 } else if mail.values[1] == STATUS_CAPLOCK + 128 {
-                                    sing(&mut buz_left, &mut buz_right, Song::CMinorDown);
+                                    sing(&mut buz_left, &mut buz_right, Song::StartupG, true);
                                 } else if mail.values[1] == STATUS_DYNMAC_GO_WAIT {
-                                    sing(&mut buz_left, &mut buz_right, Song::CMinorUp);
+                                    sing(&mut buz_left, &mut buz_right, Song::NotifF, false);
                                 } else if mail.values[1] == STATUS_DYNMAC_REC {
-                                    sing(&mut buz_left, &mut buz_right, Song::CMinorUp);
+                                    sing(&mut buz_left, &mut buz_right, Song::AlertD, false);
                                 } else if mail.values[1] == STATUS_DYNMAC_REC_WAIT {
-                                    sing(&mut buz_left, &mut buz_right, Song::CMinorUp);
+                                    sing(&mut buz_left, &mut buz_right, Song::AlertE, false);
                                 }
                             }
                         }
@@ -530,10 +529,11 @@ fn sing<IL: SliceId, IR: SliceId>(
     buzzer_left: &mut Option<Buzzer<IL>>,
     buzzer_right: &mut Option<Buzzer<IR>>,
     song: Song,
+    reverse: bool,
 ) {
     if let Some(buzz) = buzzer_left {
-        buzz.add_song(song, Side::Left);
+        buzz.add_song(song, Side::Left, reverse);
     } else if let Some(buzz) = buzzer_right {
-        buzz.add_song(song, Side::Right);
+        buzz.add_song(song, Side::Right, reverse);
     }
 }

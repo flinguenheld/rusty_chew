@@ -130,7 +130,7 @@ fn main() -> ! {
     pwm.channel_b.output_to(pins.gp29);
     let mut buzzer = Buzzer::new(pwm);
 
-    buzzer.add_song(Song::CMinorUp, Side::Both);
+    buzzer.add_song(Song::WelcomeC, Side::Both, false);
 
     // Led --
     let mut neopixel = Ws2812::new(
@@ -198,25 +198,25 @@ fn main() -> ! {
             }
 
             if statuses.layout_fr == Status::SwitchOn {
-                buzzer.add_song(Song::CMinorUp, Side::Both);
+                buzzer.add_song(Song::StartupB, Side::Both, false);
             } else if statuses.layout_fr == Status::SwitchOff {
-                buzzer.add_song(Song::CMinorDown, Side::Both);
+                buzzer.add_song(Song::StartupB, Side::Both, true);
             } else if statuses.layout_fn == Status::SwitchOn {
-                buzzer.add_song(Song::CMinorUp, Side::Both);
+                buzzer.add_song(Song::StartupC_2, Side::Both, false);
             } else if statuses.layout_fn == Status::SwitchOff {
-                buzzer.add_song(Song::CMinorDown, Side::Both);
+                buzzer.add_song(Song::StartupC_2, Side::Both, true);
             } else if statuses.leader_key == Status::SwitchOn {
-                buzzer.add_song(Song::Chest, Side::Both);
+                buzzer.add_song(Song::NotifA, Side::Both, false);
             } else if statuses.caplock == Status::SwitchOn {
-                buzzer.add_song(Song::CMinorUp, Side::Both);
+                buzzer.add_song(Song::StartupG, Side::Both, false);
             } else if statuses.caplock == Status::SwitchOff {
-                buzzer.add_song(Song::CMinorDown, Side::Both);
+                buzzer.add_song(Song::StartupG, Side::Both, true);
             } else if statuses.dynmac_go_waitkey == Status::SwitchOn {
-                buzzer.add_song(Song::CMinorUp, Side::Both);
+                buzzer.add_song(Song::NotifF, Side::Both, false);
             } else if statuses.dynmac_rec_inprogess == Status::SwitchOn {
-                buzzer.add_song(Song::CMinorUp, Side::Both);
+                buzzer.add_song(Song::AlertD, Side::Both, false);
             } else if statuses.dynmac_rec_waitkey == Status::SwitchOn {
-                buzzer.add_song(Song::CMinorUp, Side::Both);
+                buzzer.add_song(Song::AlertE, Side::Both, false);
             }
 
             // Mouse report directly done here ------------------------------------------

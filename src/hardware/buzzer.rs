@@ -19,13 +19,35 @@ const A4_FLAT: u16 = (XOSC_CRYSTAL_FREQ as f32 / 415.0) as u16;
 const A4: u16 = (XOSC_CRYSTAL_FREQ as f32 / 440.0) as u16;
 const B4_FLAT: u16 = (XOSC_CRYSTAL_FREQ as f32 / 466.0) as u16;
 const B4: u16 = (XOSC_CRYSTAL_FREQ as f32 / 494.0) as u16;
-const TIME: u32 = 200;
+const TIME: u32 = 100;
 
 pub enum Song {
     JingleBells,
-    CMinorUp,
-    CMinorDown,
-    Chest,
+
+    WelcomeC,
+
+    StartupC,
+    StartupC_2,
+    StartupF,
+    StartupG,
+    StartupA,
+    StartupB,
+
+    NotifF,
+    NotifG,
+    NotifA,
+
+    ErrorE,
+    ErrorF,
+    ErrorG,
+
+    SuccessA,
+    SuccessB,
+    SuccessC,
+
+    AlertD,
+    AlertE,
+    AlertF,
 }
 
 pub enum Side {
@@ -87,7 +109,38 @@ impl<I: SliceId> Buzzer<I> {
     }
 
     /// Add notes in the sheet music according to their side and the given side.
-    fn add(&mut self, mut sheet_music: Deque<(Note, Side), SONG_MAX_LENGTH>, side: &Side) {
+    /// Side adapt the sheet music by replacing notes by silences if needed.
+    /// Reverse true to reverse the song but keep the order of the times.
+    fn add(
+        &mut self,
+        sheet_music: Deque<(Note, Side), SONG_MAX_LENGTH>,
+        side: &Side,
+        reverse: bool,
+    ) {
+        let mut sheet_music = if reverse {
+            let mut temp = Deque::new();
+
+            for (a, b) in sheet_music.iter().zip(sheet_music.iter().rev()) {
+                temp.push_back((
+                    Note {
+                        frequency: b.0.frequency,
+                        ticks_length: a.0.ticks_length,
+                        ticks_start: None,
+                    },
+                    match b.1 {
+                        Side::Left => Side::Right,
+                        Side::Right => Side::Left,
+                        Side::Both => Side::Both,
+                    },
+                ))
+                .ok();
+            }
+
+            temp
+        } else {
+            sheet_music
+        };
+
         while let Some(note) = sheet_music.pop_front() {
             match (side, note.1) {
                 (Side::Left, Side::Left) | (Side::Right, Side::Right) => {
@@ -110,60 +163,163 @@ impl<I: SliceId> Buzzer<I> {
 
     #[rustfmt::skip]
     /// Add a song in the buzzer sheet music.
-    pub fn add_song(&mut self, song: Song, side: Side) {
+    /// Side allow you to say which side is playing. So notes which are define in the other side,
+    /// will be replaced by silences.
+    /// Reverse to invert the notes and the sides but keep the order times.
+    pub fn add_song(&mut self, song: Song, side: Side, reverse: bool) {
         if BUZZER_ON {
             let mut new_sheet_music: Deque<(Note, Side), SONG_MAX_LENGTH> = Deque::new();
             match song {
                 Song::JingleBells => {
-                    new_sheet_music.push_back((Note::new(E4,      TIME    ), Side::Left)).ok();
-                    new_sheet_music.push_back((Note::new(0,       TIME / 4), Side::Left)).ok();
-                    new_sheet_music.push_back((Note::new(E4,      TIME    ), Side::Left)).ok();
-                    new_sheet_music.push_back((Note::new(0,       TIME / 4), Side::Left)).ok();
-                    new_sheet_music.push_back((Note::new(E4,      TIME * 2), Side::Left)).ok();
-                    new_sheet_music.push_back((Note::new(0,       TIME / 4), Side::Left)).ok();
+                    new_sheet_music .push_back((Note::new(E4          , TIME     ), Side::Left  )).ok();
+                    new_sheet_music .push_back((Note::new(0           , TIME / 4 ), Side::Left  )).ok();
+                    new_sheet_music .push_back((Note::new(E4          , TIME     ), Side::Left  )).ok();
+                    new_sheet_music .push_back((Note::new(0           , TIME / 4 ), Side::Left  )).ok();
+                    new_sheet_music .push_back((Note::new(E4          , TIME * 2 ), Side::Left  )).ok();
+                    new_sheet_music .push_back((Note::new(0           , TIME / 4 ), Side::Left  )).ok();
 
-                    new_sheet_music.push_back((Note::new(E4,      TIME    ), Side::Right)).ok();
-                    new_sheet_music.push_back((Note::new(0,       TIME / 4), Side::Right)).ok();
-                    new_sheet_music.push_back((Note::new(E4,      TIME    ), Side::Right)).ok();
-                    new_sheet_music.push_back((Note::new(0,       TIME / 4), Side::Right)).ok();
-                    new_sheet_music.push_back((Note::new(E4,      TIME * 2), Side::Right)).ok();
-                    new_sheet_music.push_back((Note::new(0,       TIME / 4), Side::Right)).ok();
+                    new_sheet_music .push_back((Note::new(E4          , TIME     ), Side::Right )).ok();
+                    new_sheet_music .push_back((Note::new(0           , TIME / 4 ), Side::Right )).ok();
+                    new_sheet_music .push_back((Note::new(E4          , TIME     ), Side::Right )).ok();
+                    new_sheet_music .push_back((Note::new(0           , TIME / 4 ), Side::Right )).ok();
+                    new_sheet_music .push_back((Note::new(E4          , TIME * 2 ), Side::Right )).ok();
+                    new_sheet_music .push_back((Note::new(0           , TIME / 4 ), Side::Right )).ok();
 
-                    new_sheet_music.push_back((Note::new(E4,      TIME    ), Side::Left)).ok();
-                    new_sheet_music.push_back((Note::new(0,       TIME / 4), Side::Left)).ok();
-                    new_sheet_music.push_back((Note::new(G4,      TIME    ), Side::Right)).ok();
-                    new_sheet_music.push_back((Note::new(0,       TIME / 4), Side::Right)).ok();
-                    new_sheet_music.push_back((Note::new(C4,      TIME    ), Side::Left)).ok();
-                    new_sheet_music.push_back((Note::new(0,       TIME / 4), Side::Left)).ok();
-                    new_sheet_music.push_back((Note::new(D4,      TIME    ), Side::Right)).ok();
-                    new_sheet_music.push_back((Note::new(0,       TIME / 4), Side::Right)).ok();
+                    new_sheet_music .push_back((Note::new(E4          , TIME     ), Side::Left  )).ok();
+                    new_sheet_music .push_back((Note::new(0           , TIME / 4 ), Side::Left  )).ok();
+                    new_sheet_music .push_back((Note::new(G4          , TIME     ), Side::Right )).ok();
+                    new_sheet_music .push_back((Note::new(0           , TIME / 4 ), Side::Right )).ok();
+                    new_sheet_music .push_back((Note::new(C4          , TIME     ), Side::Left  )).ok();
+                    new_sheet_music .push_back((Note::new(0           , TIME / 4 ), Side::Left  )).ok();
+                    new_sheet_music .push_back((Note::new(D4          , TIME     ), Side::Right )).ok();
+                    new_sheet_music .push_back((Note::new(0           , TIME / 4 ), Side::Right )).ok();
 
-                    new_sheet_music.push_back((Note::new(E4,      TIME * 4), Side::Both)).ok();
-                    new_sheet_music.push_back((Note::new(0,       TIME / 4), Side::Both)).ok();
+                    new_sheet_music .push_back((Note::new(E4          , TIME * 4 ), Side::Both  )).ok();
+                    new_sheet_music .push_back((Note::new(0           , TIME / 4 ), Side::Both  )).ok();
                 }
 
-                Song::CMinorUp => {
-                    new_sheet_music.push_back((Note::new(C4,      TIME / 5), Side::Left)).ok();
-                    new_sheet_music.push_back((Note::new(E4_FLAT, TIME / 5), Side::Right)).ok();
-                    new_sheet_music.push_back((Note::new(G4,      TIME / 5), Side::Left)).ok();
-                    new_sheet_music.push_back((Note::new(B4,      TIME / 5), Side::Right)).ok();
+                
+                Song::WelcomeC => {
+                    new_sheet_music .push_back((Note::new(C4          , TIME / 2 ), Side::Left  )).ok();
+                    new_sheet_music .push_back((Note::new(E4          , TIME / 2 ), Side::Right  )).ok();
+                    new_sheet_music .push_back((Note::new(G4          , TIME / 2 ), Side::Left  )).ok();
+                    new_sheet_music .push_back((Note::new(C4 / 2      , TIME / 1 ), Side::Both )).ok();
                 }
-                Song::CMinorDown => {
-                    new_sheet_music.push_back((Note::new(B4,      TIME / 5), Side::Left)).ok();
-                    new_sheet_music.push_back((Note::new(G4,      TIME / 5), Side::Right)).ok();
-                    new_sheet_music.push_back((Note::new(E4_FLAT, TIME / 5), Side::Left)).ok();
-                    new_sheet_music.push_back((Note::new(C4,      TIME / 5), Side::Right)).ok();
+                
+                Song::StartupC => {
+                    new_sheet_music .push_back((Note::new(C4          , TIME / 3 ), Side::Left  )).ok();
+                    new_sheet_music .push_back((Note::new(E4          , TIME / 3 ), Side::Right )).ok();
+                    new_sheet_music .push_back((Note::new(G4          , TIME / 3 ), Side::Left  )).ok();
+                    new_sheet_music .push_back((Note::new(C4 / 2      , TIME / 3 ), Side::Right )).ok();
+                    new_sheet_music .push_back((Note::new(E4 / 2      , TIME / 2 ), Side::Both  )).ok();
                 }
 
-                Song::Chest => {
-                    new_sheet_music.push_back((Note::new(C4,      TIME / 2 ), Side::Left)).ok();
-                    new_sheet_music.push_back((Note::new(E4,      TIME / 2 ), Side::Right)).ok();
-                    new_sheet_music.push_back((Note::new(G4,      TIME / 2 ), Side::Left)).ok();
-                    new_sheet_music.push_back((Note::new(C4 / 2,  TIME * 2), Side::Right)).ok();
+                Song::StartupC_2 => {
+                    new_sheet_music .push_back((Note::new(C4          , TIME / 5 ), Side::Left  )).ok();
+                    new_sheet_music .push_back((Note::new(E4_FLAT     , TIME / 5 ), Side::Right )).ok();
+                    new_sheet_music .push_back((Note::new(G4          , TIME / 5 ), Side::Left  )).ok();
+                    new_sheet_music .push_back((Note::new(B4          , TIME / 3 ), Side::Right )).ok();
                 }
+                Song::StartupF => {
+                    new_sheet_music .push_back((Note::new(F4          , TIME / 4 ), Side::Left  )).ok();
+                    new_sheet_music .push_back((Note::new(A4          , TIME / 2 ), Side::Right )).ok();
+                    new_sheet_music .push_back((Note::new(C4 / 2      , TIME / 4 ), Side::Left  )).ok();
+                    new_sheet_music .push_back((Note::new(F4 / 2      , TIME / 2 ), Side::Right )).ok();
+                    new_sheet_music .push_back((Note::new(A4 / 2      , TIME / 1 ), Side::Both  )).ok();
+                }
+                Song::StartupG => {
+                    new_sheet_music .push_back((Note::new(G4          , TIME / 6 ), Side::Left  )).ok();
+                    new_sheet_music .push_back((Note::new(B4          , TIME / 6 ), Side::Right )).ok();
+                    new_sheet_music .push_back((Note::new(D4 / 2      , TIME / 4 ), Side::Both  )).ok();
+                }
+                Song::StartupA => {
+                    new_sheet_music .push_back((Note::new(A4          , TIME / 2 ), Side::Left  )).ok();
+                    new_sheet_music .push_back((Note::new(C4_SHARP / 2, TIME / 3 ), Side::Right )).ok();
+                    new_sheet_music .push_back((Note::new(E4 / 2      , TIME / 4 ), Side::Left  )).ok();
+                    new_sheet_music .push_back((Note::new(A4 / 2      , TIME / 5 ), Side::Both  )).ok();
+                }
+                Song::StartupB => {
+                    new_sheet_music .push_back((Note::new(B4_FLAT     , TIME / 5 ), Side::Left  )).ok();
+                    new_sheet_music .push_back((Note::new(D4 / 2      , TIME / 5 ), Side::Right )).ok();
+                    new_sheet_music .push_back((Note::new(F4 / 2      , TIME / 3 ), Side::Both  )).ok();
+                }
+
+                Song::NotifF => {
+                    new_sheet_music .push_back((Note::new(F4 / 2      , TIME / 4 ), Side::Right )).ok();
+                    new_sheet_music .push_back((Note::new(A4 / 2      , TIME / 4 ), Side::Left  )).ok();
+                    new_sheet_music .push_back((Note::new(C4          , TIME / 4 ), Side::Right )).ok();
+                }
+                Song::NotifG => {
+                    new_sheet_music .push_back((Note::new(G4          , TIME / 4 ), Side::Right )).ok();
+                    new_sheet_music .push_back((Note::new(B4          , TIME / 2 ), Side::Left  )).ok();
+                    new_sheet_music .push_back((Note::new(D4 / 2      , TIME / 4 ), Side::Right )).ok();
+                    new_sheet_music .push_back((Note::new(G4 / 2      , TIME / 2 ), Side::Left  )).ok();
+                }
+                Song::NotifA => {
+                    new_sheet_music .push_back((Note::new(A4           , TIME / 4 ), Side::Right)).ok();
+                    new_sheet_music .push_back((Note::new(C4_SHARP / 2 , TIME / 4 ), Side::Left )).ok();
+                    new_sheet_music .push_back((Note::new(E4 / 2       , TIME / 4 ), Side::Right)).ok();
+                }
+
+                Song::ErrorE => {
+                    new_sheet_music .push_back((Note::new(E4_FLAT      , TIME / 2 ), Side::Left )).ok();
+                    new_sheet_music .push_back((Note::new(E4           , TIME / 2 ), Side::Right)).ok();
+                    new_sheet_music .push_back((Note::new(E4_FLAT      , TIME / 2 ), Side::Left )).ok();
+                }
+                Song::ErrorF => {
+                    new_sheet_music .push_back((Note::new(F4           , TIME / 2 ), Side::Left )).ok();
+                    new_sheet_music .push_back((Note::new(0            , TIME / 5 ), Side::Left )).ok();
+                    new_sheet_music .push_back((Note::new(F4_SHARP     , TIME / 2 ), Side::Right)).ok();
+                    new_sheet_music .push_back((Note::new(0            , TIME / 5 ), Side::Right)).ok();
+                    new_sheet_music .push_back((Note::new(F4           , TIME / 2 ), Side::Left )).ok();
+                    new_sheet_music .push_back((Note::new(0            , TIME / 5 ), Side::Left )).ok();
+                    new_sheet_music .push_back((Note::new(F4_SHARP     , TIME / 2 ), Side::Both )).ok();
+                }
+                Song::ErrorG => {
+                    new_sheet_music .push_back((Note::new(G4           , TIME / 3 ), Side::Right)).ok();
+                    new_sheet_music .push_back((Note::new(A4_FLAT      , TIME / 3 ), Side::Left )).ok();
+                    new_sheet_music .push_back((Note::new(G4           , TIME / 1 ), Side::Right)).ok();
+                }
+
+                Song::SuccessA => {
+                    new_sheet_music .push_back((Note::new(A4_FLAT      , TIME / 2 ), Side::Left )).ok();
+                    new_sheet_music .push_back((Note::new(C4 / 2       , TIME / 2 ), Side::Right)).ok();
+                    new_sheet_music .push_back((Note::new(E4_FLAT / 2  , TIME / 1 ), Side::Left )).ok();
+                }
+                Song::SuccessB => {
+                    new_sheet_music .push_back((Note::new(B4_FLAT      , TIME / 3 ), Side::Right)).ok();
+                    new_sheet_music .push_back((Note::new(D4 / 2       , TIME / 3 ), Side::Left )).ok();
+                    new_sheet_music .push_back((Note::new(F4 / 2       , TIME / 3 ), Side::Right)).ok();
+                    new_sheet_music .push_back((Note::new(B4_FLAT / 2  , TIME / 2 ), Side::Left )).ok();
+                }
+                Song::SuccessC => {
+                    new_sheet_music .push_back((Note::new(C4           , TIME / 3 ), Side::Right)).ok();
+                    new_sheet_music .push_back((Note::new(E4           , TIME / 3 ), Side::Both )).ok();
+                    new_sheet_music .push_back((Note::new(G4           , TIME / 1 ), Side::Right)).ok();
+                }
+
+                Song::AlertD => {
+                    new_sheet_music .push_back((Note::new(C4_SHARP     , TIME / 3 ), Side::Both )).ok();
+                    new_sheet_music .push_back((Note::new(F4           , TIME / 3 ), Side::Right)).ok();
+                    new_sheet_music .push_back((Note::new(C4_SHARP     , TIME / 2 ), Side::Left )).ok();
+                }
+                Song::AlertE => {
+                    new_sheet_music .push_back((Note::new(E4_FLAT      , TIME / 2 ), Side::Both )).ok();
+                    new_sheet_music .push_back((Note::new(G4           , TIME / 2 ), Side::Right)).ok();
+                    new_sheet_music .push_back((Note::new(E4_FLAT / 2  , TIME / 2 ), Side::Left )).ok();
+                    new_sheet_music .push_back((Note::new(G4 / 2       , TIME / 1 ), Side::Right)).ok();
+                }
+                Song::AlertF => {
+                    new_sheet_music .push_back((Note::new(F4           , TIME / 2 ), Side::Left )).ok();
+                    new_sheet_music .push_back((Note::new(0            , TIME / 5 ), Side::Left )).ok();
+                    new_sheet_music .push_back((Note::new(A4           , TIME / 2 ), Side::Right)).ok();
+                    new_sheet_music .push_back((Note::new(0            , TIME / 5 ), Side::Right)).ok();
+                    new_sheet_music .push_back((Note::new(F4           , TIME / 2 ), Side::Both )).ok();
+                }
+
             }
 
-            self.add(new_sheet_music, &side);
+            self.add(new_sheet_music, &side, reverse);
         }
     }
 }
