@@ -26,6 +26,12 @@ pub enum Song {
 
     WelcomeC,
 
+    TwoCE,
+    TwoFA,
+    TwoGB,
+    TwoAC,
+    TwoDF,
+
     StartupC,
     StartupC_2,
     StartupF,
@@ -33,6 +39,7 @@ pub enum Song {
     StartupA,
     StartupB,
 
+    NotifC,
     NotifF,
     NotifG,
     NotifA,
@@ -198,6 +205,26 @@ impl<I: SliceId> Buzzer<I> {
                     new_sheet_music .push_back((Note::new(0           , TIME / 4 ), Side::Both  )).ok();
                 }
 
+                Song::TwoCE => {
+                    new_sheet_music .push_back((Note::new(C4          , TIME / 4 ), Side::Left  )).ok();
+                    new_sheet_music .push_back((Note::new(E4          , TIME / 4 ), Side::Right  )).ok();
+                }
+                Song::TwoFA => {
+                    new_sheet_music .push_back((Note::new(F4          , TIME / 4 ), Side::Left  )).ok();
+                    new_sheet_music .push_back((Note::new(A4          , TIME / 4 ), Side::Right  )).ok();
+                }
+                Song::TwoGB => {
+                    new_sheet_music .push_back((Note::new(G4          , TIME / 4 ), Side::Left  )).ok();
+                    new_sheet_music .push_back((Note::new(B4          , TIME / 4 ), Side::Right  )).ok();
+                }
+                Song::TwoAC => {
+                    new_sheet_music .push_back((Note::new(A4          , TIME / 4 ), Side::Left  )).ok();
+                    new_sheet_music .push_back((Note::new(C4 / 2      , TIME / 4 ), Side::Right  )).ok();
+                }
+                Song::TwoDF => {
+                    new_sheet_music .push_back((Note::new(D4          , TIME / 4 ), Side::Left  )).ok();
+                    new_sheet_music .push_back((Note::new(F4_SHARP    , TIME / 4 ), Side::Right  )).ok();
+                }
                 
                 Song::WelcomeC => {
                     new_sheet_music .push_back((Note::new(C4          , TIME / 2 ), Side::Left  )).ok();
@@ -208,9 +235,9 @@ impl<I: SliceId> Buzzer<I> {
                 
                 Song::StartupC => {
                     new_sheet_music .push_back((Note::new(C4          , TIME / 3 ), Side::Left  )).ok();
-                    new_sheet_music .push_back((Note::new(E4          , TIME / 3 ), Side::Right )).ok();
+                    new_sheet_music .push_back((Note::new(E4          , TIME / 6 ), Side::Right )).ok();
                     new_sheet_music .push_back((Note::new(G4          , TIME / 3 ), Side::Left  )).ok();
-                    new_sheet_music .push_back((Note::new(C4 / 2      , TIME / 3 ), Side::Right )).ok();
+                    new_sheet_music .push_back((Note::new(C4 / 2      , TIME / 6 ), Side::Right )).ok();
                     new_sheet_music .push_back((Note::new(E4 / 2      , TIME / 2 ), Side::Both  )).ok();
                 }
 
@@ -244,6 +271,13 @@ impl<I: SliceId> Buzzer<I> {
                     new_sheet_music .push_back((Note::new(F4 / 2      , TIME / 3 ), Side::Both  )).ok();
                 }
 
+                Song::NotifC => {
+                    new_sheet_music .push_back((Note::new(C4          , TIME / 7 ), Side::Right )).ok();
+                    new_sheet_music .push_back((Note::new(0           , TIME / 4 ), Side::Right )).ok();
+                    new_sheet_music .push_back((Note::new(C4          , TIME / 7 ), Side::Right )).ok();
+                    new_sheet_music .push_back((Note::new(0           , TIME / 4 ), Side::Right )).ok();
+                    new_sheet_music .push_back((Note::new(D4          , TIME / 5 ), Side::Both  )).ok();
+                }
                 Song::NotifF => {
                     new_sheet_music .push_back((Note::new(F4 / 2      , TIME / 4 ), Side::Right )).ok();
                     new_sheet_music .push_back((Note::new(A4 / 2      , TIME / 4 ), Side::Left  )).ok();

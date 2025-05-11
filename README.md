@@ -19,8 +19,10 @@ It performs some cool hacks that keyboard enthusiasts love:
     - Once activated, it allows you to hit a sequence (3 keys max) to produce another key
     - Leave it with Escape or a wrong key
 - Mouse emulation
-- Indicator light management
-    - Synchronise the embedded controler's aRGB led (e.g. for layers, caplock...)
+- LED
+    - Synchronise the embedded controler's aRGB LED (e.g. for layers, caplock...)
+- Buzzer
+    - Buzz jingles (and do it in stereo with the split version!)
 - No mods
     - Prevent modifiers with specific keys (e.g. no shifted symbols)
 - Caplock
@@ -147,7 +149,7 @@ And connect to it (for instance with minicom or picocom. *Ctrl-A X to exit* )
 ### Thanks
 
 Rusty Chew uses the [usbd-human-interface-device](https://github.com/dlkj/usbd-human-interface-device) crate which simplifies
-the usb management **a lot** ❤️.  
+the usb management ❤️.  
 Also the [pio-uart](https://github.com/Sympatron/pio-uart) which allowed me to create a UART half-duplex protocol.  
 And the [rp-hal-boards](https://github.com/rp-rs/rp-hal-boards) that I used as a base to use the RP2040-zero controller.  
 

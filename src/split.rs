@@ -327,16 +327,16 @@ fn main() -> ! {
 
                             // Update BUZZER & share its state to the slave --
                             let buzzer_status = if statuses.layout_fr == Status::SwitchOn {
-                                sing(&mut buz_left, &mut buz_right, Song::StartupB, false);
+                                sing(&mut buz_left, &mut buz_right, Song::TwoDF, false);
                                 STATUS_LAYOUT_FR
                             } else if statuses.layout_fr == Status::SwitchOff {
-                                sing(&mut buz_left, &mut buz_right, Song::StartupB, true);
+                                sing(&mut buz_left, &mut buz_right, Song::TwoDF, true);
                                 STATUS_LAYOUT_FR + 128
                             } else if statuses.layout_fn == Status::SwitchOn {
-                                sing(&mut buz_left, &mut buz_right, Song::StartupC_2, false);
+                                sing(&mut buz_left, &mut buz_right, Song::NotifC, false);
                                 STATUS_LAYOUT_FN
                             } else if statuses.layout_fn == Status::SwitchOff {
-                                sing(&mut buz_left, &mut buz_right, Song::StartupC_2, true);
+                                sing(&mut buz_left, &mut buz_right, Song::NotifC, true);
                                 STATUS_LAYOUT_FN + 128
                             } else if statuses.leader_key == Status::SwitchOn {
                                 sing(&mut buz_left, &mut buz_right, Song::NotifA, false);

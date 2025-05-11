@@ -198,13 +198,13 @@ fn main() -> ! {
             }
 
             if statuses.layout_fr == Status::SwitchOn {
-                buzzer.add_song(Song::StartupB, Side::Both, false);
+                buzzer.add_song(Song::TwoDF, Side::Both, false);
             } else if statuses.layout_fr == Status::SwitchOff {
-                buzzer.add_song(Song::StartupB, Side::Both, true);
+                buzzer.add_song(Song::TwoDF, Side::Both, true);
             } else if statuses.layout_fn == Status::SwitchOn {
-                buzzer.add_song(Song::StartupC_2, Side::Both, false);
+                buzzer.add_song(Song::NotifC, Side::Both, false);
             } else if statuses.layout_fn == Status::SwitchOff {
-                buzzer.add_song(Song::StartupC_2, Side::Both, true);
+                buzzer.add_song(Song::NotifC, Side::Both, true);
             } else if statuses.leader_key == Status::SwitchOn {
                 buzzer.add_song(Song::NotifA, Side::Both, false);
             } else if statuses.caplock == Status::SwitchOn {
