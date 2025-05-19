@@ -361,17 +361,25 @@ impl Chew {
         {
             match key.code {
                 k if (k >= KC::A && k <= KC::Tion || (k >= KC::MacroGit)) => {
-                    if !self.homerow.is_empty() {
-                        self.homerow.push_back(*key).ok();
-                    } else {
-                        key_buffer = k.usb_code(key_buffer, &self.mods);
-                        self.dynmac.record(k, &self.mods);
+                    // Leave the dead layout without sending ESC
+                    // (except if layout key is held).
+                    if !(self.layout.dead
+                        && k == KC::Esc
+                        && !self.matrix.is_active(self.layout.index))
+                    {
+                        if !self.homerow.is_empty() {
+                            self.homerow.push_back(*key).ok();
+                        } else {
+                            key_buffer = k.usb_code(key_buffer, &self.mods);
+                            self.dynmac.record(k, &self.mods);
+                        }
                     }
 
                     // No held with macros (They already add the NoEventIndicated)
                     if k < KC::ACircum {
                         self.last_key = Some(key.index);
                     }
+
                     key.code = KC::Done;
                     self.layout.dead = false;
                 }
