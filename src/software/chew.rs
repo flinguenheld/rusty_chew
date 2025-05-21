@@ -350,10 +350,6 @@ impl Chew {
         }
 
         // Regular keys -----------------------------------------------------------------
-        if self.pressed_keys.iter().any(|k| k.code == KC::Esc) {
-            self.mods.caplock = false;
-        }
-
         for key in self
             .pressed_keys
             .iter_mut()
@@ -361,10 +357,13 @@ impl Chew {
         {
             match key.code {
                 k if (k >= KC::A && k <= KC::Tion || (k >= KC::MacroGit)) => {
-                    // Leave the dead layout without sending ESC
-                    // (except if layout key is held).
-                    if !(self.layout.dead
-                        && k == KC::Esc
+                    // Special case with ESC:
+                    //    Do not send the keycode when CapLock is a dead layout is on
+                    //    (except if the layout's key is held)
+                    if k == KC::Esc && self.mods.caplock {
+                        self.mods.caplock = false;
+                    } else if !(k == KC::Esc
+                        && self.layout.dead
                         && !self.matrix.is_active(self.layout.index))
                     {
                         if !self.homerow.is_empty() {
