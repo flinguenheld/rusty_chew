@@ -96,9 +96,10 @@ pub const LAYOUTS: [[KC; NB_KEYS]; 6] = [[
 // --------------------------------------------------------------------------------------
 // LEADER KEY ---------------------------------------------------------------------------
 #[rustfmt::skip]
-pub const LEADER_KEY_COMBINATIONS: [([KC; 3], KC); 21] = [
+pub const LEADER_KEY_COMBINATIONS: [([KC; 3], KC); 22] = [
     ([KC::F, KC::L, KC::None], KC::MacroGit),
     ([KC::M, KC::A, KC::None], KC::MacroMail),
+    ([KC::M, KC::E, KC::None], KC::MacroMailEnd),
     ([KC::M, KC::S, KC::None], KC::MacroMailShort),
     ([KC::H, KC::T, KC::None], KC::MacroHTTPS),
     ([KC::D, KC::O, KC::T],    KC::MacroDotfiles),

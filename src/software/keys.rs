@@ -271,10 +271,11 @@ pub enum KC {
 
     MacroGit = 52001,
     MacroMail = 52002,
-    MacroMailShort = 52003,
-    MacroHTTPS = 52004,
-    MacroDotfiles = 52005,
-    MacroNixOS = 52006,
+    MacroMailEnd = 52003,
+    MacroMailShort = 52004,
+    MacroHTTPS = 52005,
+    MacroDotfiles = 52006,
+    MacroNixOS = 52007,
 }
 
 impl KC {
@@ -469,8 +470,9 @@ impl KC {
             // --
             // Use ↵ to enter
             KC::MacroGit       => str_to_usb_code("flinguenheld",                              buffer),
-            KC::MacroMailShort => str_to_usb_code("f@linguenheld.fr",                          buffer),
-            KC::MacroMail      => str_to_usb_code("florent@linguenheld.fr",                    buffer),
+            KC::MacroMailShort => str_to_usb_code("f@linguenheld.net",                         buffer),
+            KC::MacroMail      => str_to_usb_code("florent@linguenheld.net",                   buffer),
+            KC::MacroMailEnd   => str_to_usb_code("@linguenheld.net",                          buffer),
             KC::MacroHTTPS     => str_to_usb_code("https://",                                  buffer),
             KC::MacroDotfiles  => str_to_usb_code("https://github.com/flinguenheld/dotfiles",  buffer),
             KC::MacroNixOS     => str_to_usb_code("sudo nixos-rebuild switch --flake .#flopc", buffer),

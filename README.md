@@ -60,8 +60,8 @@ The letter positions come from [Ergo-L](https://ergol.org/) which is my favourit
 | Combination | Printed |
 | :---------: | :-----: |
 | F + L       | flinguenheld |
-| M + A       | florent@linguenheld.fr |
-| M + S       | f@linguenheld.fr |
+| M + A       | florent@linguenheld.net |
+| M + S       | f@linguenheld.net |
 | H + T       | https:// |
 | D + O + T   | https://github.com/flinguenheld/dotfiles |
 | N + I + X   | sudo nixos-rebuild switch --flake .#flopc |
