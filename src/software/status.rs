@@ -1,3 +1,5 @@
+use crate::options::BUZZER_STARTUP_ACTIVATION;
+
 #[derive(PartialEq, Eq)]
 pub enum Status {
     On,
@@ -14,6 +16,7 @@ pub struct Statuses {
     pub dynmac_rec_waitkey: Status,
     pub dynmac_rec_inprogess: Status,
     pub dynmac_go_waitkey: Status,
+    pub buzzer_activation: Status,
 }
 
 impl Statuses {
@@ -27,6 +30,12 @@ impl Statuses {
             dynmac_rec_waitkey: Status::Off,
             dynmac_rec_inprogess: Status::Off,
             dynmac_go_waitkey: Status::Off,
+
+            buzzer_activation: if BUZZER_STARTUP_ACTIVATION {
+                Status::On
+            } else {
+                Status::Off
+            },
         }
     }
 
@@ -40,6 +49,8 @@ impl Statuses {
             "DN_REC_WAIT" => self.dynmac_rec_waitkey = next(&self.dynmac_rec_waitkey, value),
             "DN_REC_PROG" => self.dynmac_rec_inprogess = next(&self.dynmac_rec_inprogess, value),
             "DN_GO_WAIT" => self.dynmac_go_waitkey = next(&self.dynmac_go_waitkey, value),
+
+            "BUZZER" => self.buzzer_activation = next(&self.buzzer_activation, value),
             _ => {}
         }
     }

@@ -217,6 +217,12 @@ fn main() -> ! {
                 buzzer.add_song(Song::AlertD, Side::Both, false);
             } else if statuses.dynmac_rec_waitkey == Status::SwitchOn {
                 buzzer.add_song(Song::AlertE, Side::Both, false);
+            } else if statuses.buzzer_activation == Status::SwitchOn {
+                buzzer.set_active(true);
+                buzzer.add_song(Song::StartupA, Side::Both, false);
+            } else if statuses.buzzer_activation == Status::SwitchOff {
+                buzzer.add_song(Song::StartupA, Side::Both, true);
+                buzzer.set_active(false);
             }
 
             // Mouse report directly done here ------------------------------------------

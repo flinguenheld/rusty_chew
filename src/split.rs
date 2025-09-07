@@ -61,6 +61,8 @@ const STATUS_DYNMAC_REC: u8 = 5;
 const STATUS_DYNMAC_GO_WAIT: u8 = 6;
 const STATUS_DYNMAC_REC_WAIT: u8 = 7;
 
+const STATUS_TOGGLE_BUZZER: u8 = 8;
+
 #[entry]
 fn main() -> ! {
     let mut pac = pac::Peripherals::take().unwrap();
@@ -356,6 +358,14 @@ fn main() -> ! {
                             } else if statuses.dynmac_rec_waitkey == Status::SwitchOn {
                                 sing(&mut buz_left, &mut buz_right, Song::AlertE, false);
                                 STATUS_DYNMAC_REC_WAIT
+                            } else if statuses.buzzer_activation == Status::SwitchOn {
+                                active_buzzer(&mut buz_left, &mut buz_right, true);
+                                sing(&mut buz_left, &mut buz_right, Song::StartupA, false);
+                                STATUS_TOGGLE_BUZZER
+                            } else if statuses.buzzer_activation == Status::SwitchOff {
+                                sing(&mut buz_left, &mut buz_right, Song::StartupA, true);
+                                active_buzzer(&mut buz_left, &mut buz_right, false);
+                                STATUS_TOGGLE_BUZZER + 128
                             } else {
                                 0
                             };
@@ -409,9 +419,9 @@ fn main() -> ! {
                                 } else if mail.values[1] == STATUS_LAYOUT_FR + 128 {
                                     sing(&mut buz_left, &mut buz_right, Song::StartupB, true);
                                 } else if mail.values[1] == STATUS_LAYOUT_FN {
-                                    sing(&mut buz_left, &mut buz_right, Song::StartupC_2, false);
+                                    sing(&mut buz_left, &mut buz_right, Song::NotifC, false);
                                 } else if mail.values[1] == STATUS_LAYOUT_FN + 128 {
-                                    sing(&mut buz_left, &mut buz_right, Song::StartupC_2, true);
+                                    sing(&mut buz_left, &mut buz_right, Song::NotifC, true);
                                 } else if mail.values[1] == STATUS_LEADER_KEY {
                                     sing(&mut buz_left, &mut buz_right, Song::NotifA, false);
                                 } else if mail.values[1] == STATUS_CAPLOCK {
@@ -424,6 +434,12 @@ fn main() -> ! {
                                     sing(&mut buz_left, &mut buz_right, Song::AlertD, false);
                                 } else if mail.values[1] == STATUS_DYNMAC_REC_WAIT {
                                     sing(&mut buz_left, &mut buz_right, Song::AlertE, false);
+                                } else if mail.values[1] == STATUS_TOGGLE_BUZZER {
+                                    active_buzzer(&mut buz_left, &mut buz_right, true);
+                                    sing(&mut buz_left, &mut buz_right, Song::StartupA, false);
+                                } else if mail.values[1] == STATUS_TOGGLE_BUZZER + 128 {
+                                    sing(&mut buz_left, &mut buz_right, Song::StartupA, true);
+                                    active_buzzer(&mut buz_left, &mut buz_right, false);
                                 }
                             }
                         }
@@ -535,5 +551,17 @@ fn sing<IL: SliceId, IR: SliceId>(
         buzz.add_song(song, Side::Left, reverse);
     } else if let Some(buzz) = buzzer_right {
         buzz.add_song(song, Side::Right, reverse);
+    }
+}
+
+fn active_buzzer<IL: SliceId, IR: SliceId>(
+    buzzer_left: &mut Option<Buzzer<IL>>,
+    buzzer_right: &mut Option<Buzzer<IR>>,
+    active: bool,
+) {
+    if let Some(buzz) = buzzer_left {
+        buzz.set_active(active);
+    } else if let Some(buzz) = buzzer_right {
+        buzz.set_active(active);
     }
 }

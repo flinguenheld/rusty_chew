@@ -11,7 +11,7 @@ use super::{
 use crate::{
     hardware::matrix::Matrix,
     layouts::{COMBOS, LAYOUTS, LEADER_KEY_COMBINATIONS},
-    options::{COMBO_TIME, HOLD_TIME, NB_KEYS},
+    options::{BUZZER_STARTUP_ACTIVATION, COMBO_TIME, HOLD_TIME, NB_KEYS},
 };
 
 // Remove pub --
@@ -55,6 +55,8 @@ pub struct Chew {
     mods: Modifiers,
     homerow: Deque<Key, 5>,
 
+    buzzer_activation: bool,
+
     pre_pressed_keys: Vec<Key, NB_KEYS>,
     pressed_keys: Vec<Key, NB_KEYS>,
     // released_keys: Vec<usize, NB_KEYS>,
@@ -82,6 +84,8 @@ impl Chew {
             matrix: Matrix::new(),
             mods: Modifiers::new(),
             homerow: Deque::new(),
+
+            buzzer_activation: BUZZER_STARTUP_ACTIVATION,
 
             pre_pressed_keys: Vec::new(),
             pressed_keys: Vec::new(),
@@ -349,6 +353,16 @@ impl Chew {
             }
         }
 
+        // Buzzer -----------------------------------------------------------------------
+        if let Some(toggle_buzzer) = self
+            .pressed_keys
+            .iter_mut()
+            .find(|k| k.code == KC::ToggleBuzzer)
+        {
+            self.buzzer_activation = !self.buzzer_activation;
+            toggle_buzzer.code = KC::Done;
+        }
+
         // Regular keys -----------------------------------------------------------------
         for key in self
             .pressed_keys
@@ -432,6 +446,7 @@ impl Chew {
 
         statuses.up("LEADER", self.leader.active);
         statuses.up("CAPLOCK", self.mods.caplock);
+        statuses.up("BUZZER", self.buzzer_activation);
 
         statuses = self.dynmac.up_statuses(statuses);
 

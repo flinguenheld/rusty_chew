@@ -4,6 +4,7 @@ pub const HOLD_TIME: u32 = 150; // From free to held (ms)
 pub const COMBO_TIME: u32 = 20;
 
 pub const BUZZER_ON: bool = true;
+pub const BUZZER_STARTUP_ACTIVATION: bool = true;
 pub const SONG_MAX_LENGTH: usize = 50;
 
 pub const BUFFER_LENGTH: usize = 100;

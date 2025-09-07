@@ -66,6 +66,8 @@ The letter positions come from [Ergo-L](https://ergol.org/) which is my favourit
 | D + O + T   | https://github.com/flinguenheld/dotfiles |
 | N + I + X   | sudo nixos-rebuild switch --flake .#flopc |
 |             |   |
+| B + U + Z   | toggle buzzer |
+|             |   |
 | D + I + A   | ø |
 | D + E + G   | ° |
 | C + O + P   | © |
@@ -94,7 +96,7 @@ The letter positions come from [Ergo-L](https://ergol.org/) which is my favourit
 Clone this repo:
 
 ```
-  git clone https://github.com/flinguenheld/rustychew
+  git clone https://github.com/flinguenheld/rusty_chew
 ```
 
 Then, hold down the controller's **boot** button and plug in the usb cable.  

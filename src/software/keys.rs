@@ -276,6 +276,8 @@ pub enum KC {
     MacroHTTPS = 52005,
     MacroDotfiles = 52006,
     MacroNixOS = 52007,
+
+        ToggleBuzzer = 60000,
 }
 
 impl KC {
