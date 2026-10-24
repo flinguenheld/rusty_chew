@@ -399,7 +399,7 @@ fn main() -> ! {
                 // -------------------------------------------------------- UART SLAVE --
                 match uart.receive() {
                     Ok(mail) => {
-                        if mail.header == HR_STATUS {
+                        if mail.header == HR_STATUS && mail.values.len() == 2 {
                             match mail.values[0] {
                                 STATUS_LAYOUT_FR => led.on(LedColor::Aqua),
                                 STATUS_LAYOUT_FN => led.on(LedColor::Fushia),
@@ -413,34 +413,32 @@ fn main() -> ! {
                                 _ => led.off(),
                             }
 
-                            if mail.values.len() == 2 {
-                                if mail.values[1] == STATUS_LAYOUT_FR {
-                                    sing(&mut buz_left, &mut buz_right, Song::StartupB, false);
-                                } else if mail.values[1] == STATUS_LAYOUT_FR + 128 {
-                                    sing(&mut buz_left, &mut buz_right, Song::StartupB, true);
-                                } else if mail.values[1] == STATUS_LAYOUT_FN {
-                                    sing(&mut buz_left, &mut buz_right, Song::NotifC, false);
-                                } else if mail.values[1] == STATUS_LAYOUT_FN + 128 {
-                                    sing(&mut buz_left, &mut buz_right, Song::NotifC, true);
-                                } else if mail.values[1] == STATUS_LEADER_KEY {
-                                    sing(&mut buz_left, &mut buz_right, Song::NotifA, false);
-                                } else if mail.values[1] == STATUS_CAPLOCK {
-                                    sing(&mut buz_left, &mut buz_right, Song::StartupG, false);
-                                } else if mail.values[1] == STATUS_CAPLOCK + 128 {
-                                    sing(&mut buz_left, &mut buz_right, Song::StartupG, true);
-                                } else if mail.values[1] == STATUS_DYNMAC_GO_WAIT {
-                                    sing(&mut buz_left, &mut buz_right, Song::NotifF, false);
-                                } else if mail.values[1] == STATUS_DYNMAC_REC {
-                                    sing(&mut buz_left, &mut buz_right, Song::AlertD, false);
-                                } else if mail.values[1] == STATUS_DYNMAC_REC_WAIT {
-                                    sing(&mut buz_left, &mut buz_right, Song::AlertE, false);
-                                } else if mail.values[1] == STATUS_TOGGLE_BUZZER {
-                                    active_buzzer(&mut buz_left, &mut buz_right, true);
-                                    sing(&mut buz_left, &mut buz_right, Song::StartupA, false);
-                                } else if mail.values[1] == STATUS_TOGGLE_BUZZER + 128 {
-                                    sing(&mut buz_left, &mut buz_right, Song::StartupA, true);
-                                    active_buzzer(&mut buz_left, &mut buz_right, false);
-                                }
+                            if mail.values[1] == STATUS_LAYOUT_FR {
+                                sing(&mut buz_left, &mut buz_right, Song::StartupB, false);
+                            } else if mail.values[1] == STATUS_LAYOUT_FR + 128 {
+                                sing(&mut buz_left, &mut buz_right, Song::StartupB, true);
+                            } else if mail.values[1] == STATUS_LAYOUT_FN {
+                                sing(&mut buz_left, &mut buz_right, Song::NotifC, false);
+                            } else if mail.values[1] == STATUS_LAYOUT_FN + 128 {
+                                sing(&mut buz_left, &mut buz_right, Song::NotifC, true);
+                            } else if mail.values[1] == STATUS_LEADER_KEY {
+                                sing(&mut buz_left, &mut buz_right, Song::NotifA, false);
+                            } else if mail.values[1] == STATUS_CAPLOCK {
+                                sing(&mut buz_left, &mut buz_right, Song::StartupG, false);
+                            } else if mail.values[1] == STATUS_CAPLOCK + 128 {
+                                sing(&mut buz_left, &mut buz_right, Song::StartupG, true);
+                            } else if mail.values[1] == STATUS_DYNMAC_GO_WAIT {
+                                sing(&mut buz_left, &mut buz_right, Song::NotifF, false);
+                            } else if mail.values[1] == STATUS_DYNMAC_REC {
+                                sing(&mut buz_left, &mut buz_right, Song::AlertD, false);
+                            } else if mail.values[1] == STATUS_DYNMAC_REC_WAIT {
+                                sing(&mut buz_left, &mut buz_right, Song::AlertE, false);
+                            } else if mail.values[1] == STATUS_TOGGLE_BUZZER {
+                                active_buzzer(&mut buz_left, &mut buz_right, true);
+                                sing(&mut buz_left, &mut buz_right, Song::StartupA, false);
+                            } else if mail.values[1] == STATUS_TOGGLE_BUZZER + 128 {
+                                sing(&mut buz_left, &mut buz_right, Song::StartupA, true);
+                                active_buzzer(&mut buz_left, &mut buz_right, false);
                             }
                         }
                     }
