@@ -220,7 +220,12 @@ fn main() -> ! {
     let mut led = Led::new(&mut neopixel);
 
     // UART --
-    let mut uart = Uart::new(&mut pio, sm1, pins.gp11.reconfigure());
+    let mut uart = Uart::new(
+        &mut pio,
+        sm1,
+        pins.gp11.reconfigure(),
+        clocks.system_clock.freq(),
+    );
 
     // Timers --
     let mut tick_count_down = timer.count_down();

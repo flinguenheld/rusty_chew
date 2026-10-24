@@ -19,13 +19,13 @@ pub const TIMER_USB_LOOP: u32 = 15;
 pub const TIMER_UART_LOOP: u32 = 1;
 pub const TIMER_SPLIT_LOOP: u32 = 5; // New slave index sending
 
-pub const UART_SPEED: u32 = 921_600;
+// pub const UART_SPEED: u32 = 921_600;
 // pub const UART_SPEED: u32 = 460_800;
-// pub const UART_SPEED: u32 = 115_200;
+pub const UART_SPEED: u32 = 115_200;
 // pub const UART_SPEED: u32 = 19_200;
 pub const MAX_MESSAGE_LENGTH: usize = 9; // Max tested in January 2025
 pub const MAX_NOT_COMPLETE: u32 = 3;
-pub const UART_SEND_DELAY: u32 = 500; // microseconds
+pub const UART_SEND_DELAY: u32 = 500; // microseconds, margin around a sent frame
 
 // Mouse
 // Move i8 each u32 ms

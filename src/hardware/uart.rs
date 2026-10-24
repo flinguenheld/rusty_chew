@@ -11,7 +11,7 @@ use bsp::{
     pac::PIO0,
 };
 use cortex_m::delay::Delay;
-use fugit::RateExtU32;
+use fugit::{HertzU32, RateExtU32};
 use pio_uart::{PioUartRx, PioUartTx, RxProgram, TxProgram};
 use usbd_human_interface_device::interface::ReportBuffer;
 
@@ -85,6 +85,9 @@ pub struct Uart {
     buffer: Vec<u8, 9>,
 
     counter_not_complete: u32,
+
+    // System clock, the PIO clock divider is computed from it
+    sys_freq: HertzU32,
 }
 
 impl Uart {
@@ -92,6 +95,7 @@ impl Uart {
         pio: &mut PIO<PIO0>,
         sm1: UninitStateMachine<(PIO0, SM1)>,
         gp11: Pin<Gpio11, FunctionPio0, PullUp>,
+        sys_freq: HertzU32,
     ) -> Uart {
         let mut uart = Uart {
             tx_program: pio_uart::install_tx_program(pio).ok().unwrap(),
@@ -103,6 +107,8 @@ impl Uart {
             buffer: Vec::new(),
 
             counter_not_complete: 0,
+
+            sys_freq,
         };
 
         uart.receiver = Some(
@@ -111,7 +117,7 @@ impl Uart {
                 sm1,
                 &mut uart.rx_program,
                 UART_SPEED.Hz(),
-                bsp::XOSC_CRYSTAL_FREQ.Hz(),
+                uart.sys_freq,
             )
             .enable(),
         );
@@ -132,6 +138,10 @@ impl Uart {
                 values.iter().for_each(|v| to_send.push(*v).unwrap());
 
                 ok = transmiter.write_raw(&to_send).is_ok();
+
+                // write_raw returns once the bytes are queued, wait until they are on the wire
+                // (10 bits per byte: start + 8 data + stop)
+                delay.delay_us(to_send.len() as u32 * 10 * 1_000_000 / UART_SPEED);
             } else {
                 return Err(UartError::Capacity);
             }
@@ -211,7 +221,7 @@ impl Uart {
                     sm1,
                     &mut self.tx_program,
                     UART_SPEED.Hz(),
-                    bsp::XOSC_CRYSTAL_FREQ.Hz(),
+                    self.sys_freq,
                 )
                 .enable(),
             );
@@ -228,7 +238,7 @@ impl Uart {
                     sm1,
                     &mut self.rx_program,
                     UART_SPEED.Hz(),
-                    bsp::XOSC_CRYSTAL_FREQ.Hz(),
+                    self.sys_freq,
                 )
                 .enable(),
             );
