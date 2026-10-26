@@ -16,7 +16,7 @@ use panic_probe as _;
 /// Chew keyboard (split version) is wired in 'direct pins' so one pin = one key.
 ///
 /// This struct saves the pins and their indexes in the matrix with the function add.
-/// Then use get to get the eight first active indexes. (8 is the limit for the uart)
+/// Then use get to get the active indexes (a half has 17 keys).
 pub struct GpiosDirectPin<T: InputPin> {
     pub pins: Vec<(T, usize), 40>,
 }
@@ -29,7 +29,7 @@ impl<T: InputPin> GpiosDirectPin<T> {
         self.pins.push((pin, index)).ok();
     }
 
-    pub fn get_active_indexes(&mut self) -> Vec<u8, 8> {
+    pub fn get_active_indexes(&mut self) -> Vec<u8, 17> {
         let mut output = Vec::new();
 
         for (key, index) in self.pins.iter_mut() {

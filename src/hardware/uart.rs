@@ -21,8 +21,17 @@ use crate::options::{MAX_MESSAGE_LENGTH, MAX_NOT_COMPLETE, UART_SEND_DELAY, UART
 pub const HR_KEYS: u8 = 0b11010000;
 pub const HR_STATUS: u8 = 0b10110000;
 
-// Values per mail, the header and the CRC take 2 bytes of the frame
-pub const MAX_VALUES: usize = MAX_MESSAGE_LENGTH - 2;
+// Values per mail type, every frame of a type has the same length
+pub const KEYS_VALUES: usize = 3; // Mask of the slave's pressed keys (17 bits)
+pub const STATUS_VALUES: usize = 2; // LED state + event
+
+fn values_len(header: u8) -> Option<usize> {
+    match header {
+        HR_KEYS => Some(KEYS_VALUES),
+        HR_STATUS => Some(STATUS_VALUES),
+        _ => None,
+    }
+}
 
 pub enum UartError {
     Capacity,
@@ -57,13 +66,14 @@ impl UartError {
 
 /// Message Frame
 ///
-///  Openning                 Values (7 bytes maximum)           CRC-8
+///  Openning                 Values (fixed number per type)     CRC-8
 ///    /                                                         /
 /// 1010 1010   ->    0000 0000 - 0000 0000 ...   ->   0000 0000
 ///        \
-///      Number of values
+///      Number of values (must match the type: KEYS_VALUES or STATUS_VALUES)
 ///
 /// The CRC is computed over the header and the values.
+/// Values can take any value (keys mask), so a header is only searched at the buffer start.
 pub struct Mail {
     pub header: u8,
     pub values: Vec<u8, 8>,
@@ -74,12 +84,13 @@ pub struct Mail {
 /// So here it uses one byte as a header to know what they want and give the amount of bytes
 /// which are following, and one CRC-8 byte at the end to reject corrupted frames.
 /// The purpose for Chew is (Both sides read their buffer each n ms):
-///     - Slave sends its active indexes each n milliseconds
+///     - Slave sends its pressed keys mask each n milliseconds
 ///     - Master applies the chew logic when the slave message is validated
 ///     - Master sends the LED states to the slave
 ///     - Slave updates its LED
 ///
 /// In case of error, the buffer is emptied (the chew loop is lost).
+/// After a valid frame, the following bytes are kept for the next mail.
 pub struct Uart {
     tx_program: TxProgram<PIO0>,
     rx_program: RxProgram<PIO0>,
@@ -138,7 +149,7 @@ impl Uart {
 
         delay.delay_us(UART_SEND_DELAY);
         if let Some(transmiter) = &mut self.transmiter {
-            if values.len() <= MAX_VALUES {
+            if values_len(header) == Some(values.len()) {
                 let mut to_send: Vec<u8, MAX_MESSAGE_LENGTH> = Vec::new();
                 to_send.push(header | (values.len() as u8)).ok();
                 values.iter().for_each(|v| to_send.push(*v).unwrap());
@@ -169,28 +180,29 @@ impl Uart {
     pub fn receive(&mut self) -> Result<Mail, UartError> {
         if self.read_uart_buffer().is_err() {
             Err(UartError::Uart)
-        } else if let Some(first) = self.buffer.first() {
-            if first & 0b11110000 == HR_KEYS || first & 0b11110000 == HR_STATUS {
-                let l = first & 0b00001111;
+        } else if let Some(&first) = self.buffer.first() {
+            let header = first & 0b11110000;
+            let l = (first & 0b00001111) as usize;
 
+            if values_len(header) == Some(l) {
                 // Header + values + CRC
-                if self.buffer.len() == (l + 2) as usize {
+                let frame_len = l + 2;
+
+                if self.buffer.len() >= frame_len {
                     // The CRC of a frame which includes its own CRC is 0
-                    let m = if crc8(&self.buffer) == 0 {
-                        Ok(Mail {
-                            header: self.buffer.first().cloned().unwrap() & 0b11110000,
-                            values: self
-                                .buffer
-                                .iter()
-                                .skip(1)
-                                .take(l as usize)
-                                .cloned()
-                                .collect(),
-                        })
+                    let m = if crc8(&self.buffer[..frame_len]) == 0 {
+                        let m = Mail {
+                            header,
+                            values: self.buffer[1..=l].iter().cloned().collect(),
+                        };
+                        // Keep the start of the next frame
+                        self.buffer = self.buffer.iter().skip(frame_len).cloned().collect();
+                        Ok(m)
                     } else {
+                        // Frame boundaries can't be trusted anymore
+                        self.buffer.clear();
                         Err(UartError::Crc)
                     };
-                    self.buffer.clear();
                     self.counter_not_complete = 0;
 
                     m

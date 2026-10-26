@@ -12,8 +12,9 @@ use hardware::{
     buzzer::{Buzzer, Side, Song},
     gpios::GpiosDirectPin,
     led::{Led, LedColor},
-    uart::{Uart, UartError, HR_KEYS, HR_STATUS, MAX_VALUES},
+    uart::{Uart, UartError, HR_KEYS, HR_STATUS, KEYS_VALUES},
 };
+use heapless::Vec;
 use options::{SERIAL_ON, TIMER_LINK_REPORT, TIMER_SPLIT_LOOP, TIMER_UART_LOOP, TIMER_USB_LOOP};
 use software::{
     chew::Chew,
@@ -62,6 +63,15 @@ const STATUS_DYNMAC_GO_WAIT: u8 = 6;
 const STATUS_DYNMAC_REC_WAIT: u8 = 7;
 
 const STATUS_TOGGLE_BUZZER: u8 = 8;
+
+// Keys mask --
+// Matrix indexes of each half, bit n of the mask is the key at position n
+const LEFT_INDEXES: [u8; 17] = [
+    0, 1, 2, 3, 4, 10, 11, 12, 13, 14, 20, 21, 22, 23, 28, 29, 30,
+];
+const RIGHT_INDEXES: [u8; 17] = [
+    5, 6, 7, 8, 9, 15, 16, 17, 18, 19, 24, 25, 26, 27, 31, 32, 33,
+];
 
 #[entry]
 fn main() -> ! {
@@ -188,6 +198,13 @@ fn main() -> ! {
         gpios.add(pins.gp7.into_pull_up_input().into_dyn_pin(), 33);
     }
 
+    // The slave sends its keys as a mask, both sides convert it with these arrays
+    let (own_side, slave_side) = if is_left {
+        (&LEFT_INDEXES, &RIGHT_INDEXES)
+    } else {
+        (&RIGHT_INDEXES, &LEFT_INDEXES)
+    };
+
     // Buzzer (Check doc to see the assignment pin/pwm/channel)
     let pwm_slices = Slices::new(pac.PWM, &mut pac.RESETS);
 
@@ -245,7 +262,7 @@ fn main() -> ! {
 
     // Frames dropped by the master since the last report
     let mut crc_errors: u32 = 0;
-    let mut bad_indexes: u32 = 0;
+    let mut bad_masks: u32 = 0;
 
     // --
     let mut ticks: u32 = 0;
@@ -272,17 +289,23 @@ fn main() -> ! {
             if is_master {
                 match uart.receive() {
                     Ok(mail) => {
-                        if mail.header == HR_KEYS
-                            && mail.values.iter().all(|&i| is_slave_index(i, is_left))
-                        {
-                            serial_write_values(&mut serial, "Indexes: ", &mail.values, "\r\n");
+                        // None when the mask has a bit without key (corrupted frame)
+                        let slave_indexes = match mail.header {
+                            HR_KEYS => mask_to_indexes(&mail.values, slave_side),
+                            _ => None,
+                        };
+
+                        if let Some(slave_indexes) = slave_indexes {
+                            serial_write_values(&mut serial, "Indexes: ", &slave_indexes, "\r\n");
 
                             // Get active indexes & combine them with the other side
+                            // (the chew logic handles 16 keys pressed at once)
                             chew.update_matrix(
                                 gpios
                                     .get_active_indexes()
                                     .iter()
-                                    .chain(mail.values.iter())
+                                    .chain(slave_indexes.iter())
+                                    .take(16)
                                     .cloned()
                                     .collect(),
                                 ticks,
@@ -391,8 +414,7 @@ fn main() -> ! {
                                 serial_write_time(&mut serial, "STAT msg failed", ticks, " --\r\n");
                             }
                         } else if mail.header == HR_KEYS {
-                            // Index outside the slave's half: corrupted frame, dropped
-                            bad_indexes += 1;
+                            bad_masks += 1;
                         }
                     }
 
@@ -416,9 +438,9 @@ fn main() -> ! {
 
                 if link_report_count_down.wait().is_ok() {
                     serial_write_value(&mut serial, "Dropped frames / s - CRC:", crc_errors, "");
-                    serial_write_value(&mut serial, "| Bad indexes:", bad_indexes, "\r\n");
+                    serial_write_value(&mut serial, "| Bad masks:", bad_masks, "\r\n");
                     crc_errors = 0;
-                    bad_indexes = 0;
+                    bad_masks = 0;
                 }
             } else {
                 // ----------------------------------------------------------------------
@@ -554,14 +576,12 @@ fn main() -> ! {
             }
 
             // Slave is in charge of starting a new "chew loop"
-            // It sends its active indexes and the master proceeds to the logic only when
+            // It sends its pressed keys mask and the master proceeds to the logic only when
             // it's able to combine the two matrix sides.
             if split_count_down.wait().is_ok() {
-                // A frame holds MAX_VALUES indexes, the next pressed keys are dropped
-                let indexes = gpios.get_active_indexes();
-                let indexes = &indexes[..indexes.len().min(MAX_VALUES)];
+                let mask = indexes_to_mask(&gpios.get_active_indexes(), own_side);
 
-                if uart.send(HR_KEYS, indexes, &mut delay).is_err() {
+                if uart.send(HR_KEYS, &mask, &mut delay).is_err() {
                     led.on(LedColor::Red);
                 }
             }
@@ -594,15 +614,33 @@ fn active_buzzer<IL: SliceId, IR: SliceId>(
     }
 }
 
-/// Check that an index sent by the slave belongs to its half (see the matrix in main).
-/// A corrupted byte which passes the CRC would otherwise become a phantom key.
-fn is_slave_index(index: u8, is_master_left: bool) -> bool {
-    let is_right = matches!(index, 5..=9 | 15..=19 | 24..=27 | 31..=33);
-    let is_left = matches!(index, 0..=4 | 10..=14 | 20..=23 | 28..=30);
-
-    if is_master_left {
-        is_right
-    } else {
-        is_left
+/// Slave's pressed keys -> mask, bit n is the key at position n of its side array.
+fn indexes_to_mask(indexes: &[u8], side: &[u8; 17]) -> [u8; KEYS_VALUES] {
+    let mut mask = 0u32;
+    for index in indexes {
+        if let Some(bit) = side.iter().position(|i| i == index) {
+            mask |= 1 << bit;
+        }
     }
+    [mask as u8, (mask >> 8) as u8, (mask >> 16) as u8]
+}
+
+/// Mask -> slave's pressed keys.
+/// A bit set above the 17 keys can only come from a corrupted frame which passed the CRC.
+fn mask_to_indexes(mask: &[u8], side: &[u8; 17]) -> Option<Vec<u8, 17>> {
+    if mask.len() != KEYS_VALUES {
+        return None;
+    }
+    let mask = u32::from_le_bytes([mask[0], mask[1], mask[2], 0]);
+    if mask >> side.len() != 0 {
+        return None;
+    }
+
+    Some(
+        side.iter()
+            .enumerate()
+            .filter(|(bit, _)| mask & (1 << bit) != 0)
+            .map(|(_, index)| *index)
+            .collect(),
+    )
 }
