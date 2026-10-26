@@ -21,8 +21,12 @@ use crate::options::{MAX_MESSAGE_LENGTH, MAX_NOT_COMPLETE, UART_SEND_DELAY, UART
 pub const HR_KEYS: u8 = 0b11010000;
 pub const HR_STATUS: u8 = 0b10110000;
 
+// Values per mail, the header and the CRC take 2 bytes of the frame
+pub const MAX_VALUES: usize = MAX_MESSAGE_LENGTH - 2;
+
 pub enum UartError {
     Capacity,
+    Crc,
     Header,
     NothingToRead,
     NotReciever,
@@ -38,6 +42,7 @@ impl UartError {
         output
             .push_str(match self {
                 UartError::Capacity => "-- Error Capacity --\r\n",
+                UartError::Crc => "-- Error CRC --\r\n",
                 UartError::Header => "-- Error Header --\r\n",
                 UartError::NothingToRead => "-- Error Nothing to read --\r\n",
                 UartError::NotReciever => "-- Error Not reciever --\r\n",
@@ -52,12 +57,13 @@ impl UartError {
 
 /// Message Frame
 ///
-///  Openning                 Values (8 bytes maximum)
-///    /
-/// 1010 1010   ->    0000 0000 - 0000 0000 ...
+///  Openning                 Values (7 bytes maximum)           CRC-8
+///    /                                                         /
+/// 1010 1010   ->    0000 0000 - 0000 0000 ...   ->   0000 0000
 ///        \
 ///      Number of values
-///    
+///
+/// The CRC is computed over the header and the values.
 pub struct Mail {
     pub header: u8,
     pub values: Vec<u8, 8>,
@@ -66,7 +72,7 @@ pub struct Mail {
 /// Half-duplex uart, the system is on receiver mode all the time except to send a mail.
 /// The RP2040-zero board buffer is limited to 9 bytes messages.
 /// So here it uses one byte as a header to know what they want and give the amount of bytes
-/// which are following.
+/// which are following, and one CRC-8 byte at the end to reject corrupted frames.
 /// The purpose for Chew is (Both sides read their buffer each n ms):
 ///     - Slave sends its active indexes each n milliseconds
 ///     - Master applies the chew logic when the slave message is validated
@@ -132,10 +138,11 @@ impl Uart {
 
         delay.delay_us(UART_SEND_DELAY);
         if let Some(transmiter) = &mut self.transmiter {
-            if values.len() < MAX_MESSAGE_LENGTH {
+            if values.len() <= MAX_VALUES {
                 let mut to_send: Vec<u8, MAX_MESSAGE_LENGTH> = Vec::new();
                 to_send.push(header | (values.len() as u8)).ok();
                 values.iter().for_each(|v| to_send.push(*v).unwrap());
+                to_send.push(crc8(&to_send)).ok();
 
                 ok = transmiter.write_raw(&to_send).is_ok();
 
@@ -166,15 +173,27 @@ impl Uart {
             if first & 0b11110000 == HR_KEYS || first & 0b11110000 == HR_STATUS {
                 let l = first & 0b00001111;
 
-                if self.buffer.len() == (l + 1) as usize {
-                    let m = Mail {
-                        header: self.buffer.first().cloned().unwrap() & 0b11110000,
-                        values: self.buffer.iter().skip(1).cloned().collect(),
+                // Header + values + CRC
+                if self.buffer.len() == (l + 2) as usize {
+                    // The CRC of a frame which includes its own CRC is 0
+                    let m = if crc8(&self.buffer) == 0 {
+                        Ok(Mail {
+                            header: self.buffer.first().cloned().unwrap() & 0b11110000,
+                            values: self
+                                .buffer
+                                .iter()
+                                .skip(1)
+                                .take(l as usize)
+                                .cloned()
+                                .collect(),
+                        })
+                    } else {
+                        Err(UartError::Crc)
                     };
                     self.buffer.clear();
                     self.counter_not_complete = 0;
 
-                    Ok(m)
+                    m
                 } else if self.counter_not_complete > MAX_NOT_COMPLETE {
                     self.counter_not_complete = 0;
                     self.buffer.clear();
@@ -244,4 +263,24 @@ impl Uart {
             );
         }
     }
+}
+
+/// CRC-8 (poly 0x07, init 0), bitwise to avoid a lookup table.
+/// Frames are a few bytes long every 5 ms, so speed doesn't matter here.
+fn crc8(bytes: &[u8]) -> u8 {
+    // CRC-8 generator x^8 + x^2 + x + 1 (top bit implied)
+    let crc8_poly: u8 = 0x07;
+
+    let mut crc = 0u8;
+    for b in bytes {
+        crc ^= b;
+        for _ in 0..8 {
+            if crc & 0x80 != 0 {
+                crc = (crc << 1) ^ crc8_poly;
+            } else {
+                crc <<= 1;
+            }
+        }
+    }
+    crc
 }

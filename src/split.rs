@@ -12,7 +12,7 @@ use hardware::{
     buzzer::{Buzzer, Side, Song},
     gpios::GpiosDirectPin,
     led::{Led, LedColor},
-    uart::{Uart, UartError, HR_KEYS, HR_STATUS},
+    uart::{Uart, UartError, HR_KEYS, HR_STATUS, MAX_VALUES},
 };
 use options::{SERIAL_ON, TIMER_SPLIT_LOOP, TIMER_UART_LOOP, TIMER_USB_LOOP};
 use software::{
@@ -265,7 +265,9 @@ fn main() -> ! {
             if is_master {
                 match uart.receive() {
                     Ok(mail) => {
-                        if mail.header == HR_KEYS {
+                        if mail.header == HR_KEYS
+                            && mail.values.iter().all(|&i| is_slave_index(i, is_left))
+                        {
                             serial_write_values(&mut serial, "Indexes: ", &mail.values, "\r\n");
 
                             // Get active indexes & combine them with the other side
@@ -533,12 +535,14 @@ fn main() -> ! {
             // Slave is in charge of starting a new "chew loop"
             // It sends its active indexes and the master proceeds to the logic only when
             // it's able to combine the two matrix sides.
-            if split_count_down.wait().is_ok()
-                && uart
-                    .send(HR_KEYS, &gpios.get_active_indexes(), &mut delay)
-                    .is_err()
-            {
-                led.on(LedColor::Red);
+            if split_count_down.wait().is_ok() {
+                // A frame holds MAX_VALUES indexes, the next pressed keys are dropped
+                let indexes = gpios.get_active_indexes();
+                let indexes = &indexes[..indexes.len().min(MAX_VALUES)];
+
+                if uart.send(HR_KEYS, indexes, &mut delay).is_err() {
+                    led.on(LedColor::Red);
+                }
             }
         }
     }
@@ -566,5 +570,18 @@ fn active_buzzer<IL: SliceId, IR: SliceId>(
         buzz.set_active(active);
     } else if let Some(buzz) = buzzer_right {
         buzz.set_active(active);
+    }
+}
+
+/// Check that an index sent by the slave belongs to its half (see the matrix in main).
+/// A corrupted byte which passes the CRC would otherwise become a phantom key.
+fn is_slave_index(index: u8, is_master_left: bool) -> bool {
+    let is_right = matches!(index, 5..=9 | 15..=19 | 24..=27 | 31..=33);
+    let is_left = matches!(index, 0..=4 | 10..=14 | 20..=23 | 28..=30);
+
+    if is_master_left {
+        is_right
+    } else {
+        is_left
     }
 }
