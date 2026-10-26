@@ -9,8 +9,8 @@ use crate::software::status::{Status, Statuses};
 
 /// Content of the mails exchanged by the two halves (the frame itself is in uart.rs).
 ///
-///     KEYS    (slave -> master)  Mask of the slave's pressed keys (17 bits), on 3 bytes
-///     STATUS  (master -> slave)  Status bits, 0, 0
+///     STATUS  (master -> slave)  Status bits, 0, 0              Request, every 5 ms
+///     KEYS    (slave -> master)  Mask of the slave's pressed keys    Answer (17 bits, on 3 bytes)
 ///
 /// Both are states sent every cycle, a lost frame is caught up by the next one.
 

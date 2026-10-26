@@ -75,10 +75,10 @@ pub struct Mail {
 /// one byte as a header to know what they want, 3 values, and one CRC-8 byte at the end to
 /// reject corrupted frames.
 /// The purpose for Chew is (Both sides read their buffer each n ms):
-///     - Slave sends its pressed keys mask each n milliseconds
+///     - Master sends its statuses each n milliseconds, as a request
+///     - Slave updates its LED & buzzer, and answers with its pressed keys mask
 ///     - Master applies the chew logic when the slave message is validated
-///     - Master sends the LED states to the slave
-///     - Slave updates its LED
+/// Only the master starts an exchange, so both sides never send at the same time.
 ///
 /// In case of error, the buffer is emptied (the chew loop is lost).
 /// After a valid frame, the following bytes are kept for the next mail.

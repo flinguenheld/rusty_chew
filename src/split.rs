@@ -9,7 +9,9 @@ use rusty_chew::hardware::{
     led::{Led, LedColor},
     uart::{Uart, UartError, HR_KEYS, HR_STATUS},
 };
-use rusty_chew::options::{SERIAL_ON, TIMER_LINK_REPORT, TIMER_SPLIT_LOOP, TIMER_UART_LOOP, TIMER_USB_LOOP};
+use rusty_chew::options::{
+    SERIAL_ON, TIMER_LINK_REPORT, TIMER_SPLIT_LOOP, TIMER_UART_LOOP, TIMER_USB_LOOP,
+};
 use rusty_chew::software::{
     chew::Chew,
     keys::{BuffCase, Buffer},
@@ -236,6 +238,10 @@ fn main() -> ! {
     // Frames dropped by the master since the last report
     let mut crc_errors: u32 = 0;
     let mut bad_masks: u32 = 0;
+    let mut no_answers: u32 = 0;
+
+    // Master: whether the slave answered the last request
+    let mut waiting_answer = false;
 
     // Slave: last status bits received, None until the first STATUS frame
     let mut last_status_bits: Option<u8> = None;
@@ -244,6 +250,10 @@ fn main() -> ! {
     let mut ticks: u32 = 0;
     let mut chew = Chew::new(ticks);
     let mut statuses = Statuses::new();
+
+    // Master: status sent with the next request, it comes from the last chew.run.
+    // Starts from the initial statuses (not 0), the buzzer can be active at startup.
+    let mut status_bits = statuses_to_bits(&statuses);
 
     let mut key_buffer = Buffer::new();
     let mut last_printed_key: BuffCase = BuffCase::default();
@@ -272,6 +282,7 @@ fn main() -> ! {
                         };
 
                         if let Some(slave_indexes) = slave_indexes {
+                            waiting_answer = false;
                             serial_write_values(&mut serial, "Indexes: ", &slave_indexes, "\r\n");
 
                             // Get active indexes & combine them with the other side
@@ -314,7 +325,7 @@ fn main() -> ! {
                             }
 
                             // Update LED & BUZZER, the slave gets the same state --
-                            let status_bits = statuses_to_bits(&statuses);
+                            status_bits = statuses_to_bits(&statuses);
                             let buzzer_active = is_buzzer_active(status_bits);
                             show_status_led(&mut led, status_bits, ticks);
 
@@ -353,13 +364,6 @@ fn main() -> ! {
                             if !buzzer_active {
                                 active_buzzer(&mut buz_left, &mut buz_right, false);
                             }
-
-                            if uart
-                                .send(HR_STATUS, [status_bits, 0, 0], &mut delay)
-                                .is_err()
-                            {
-                                serial_write_time(&mut serial, "STAT msg failed", ticks, " --\r\n");
-                            }
                         } else if mail.header == HR_KEYS {
                             bad_masks += 1;
                         }
@@ -367,7 +371,7 @@ fn main() -> ! {
 
                     Err(e) => match e {
                         UartError::NothingToRead => {}
-                        // A corrupted frame is only a lost cycle, the slave sends again in 5 ms
+                        // A corrupted frame is only a lost cycle, the next request comes in 5 ms
                         UartError::Crc => crc_errors += 1,
                         UartError::Header => led.on(LedColor::Blue),
                         // UartError::NotReciever => led.on(LedColor::Purple),
@@ -382,11 +386,28 @@ fn main() -> ! {
                     },
                 }
 
+                // The master is the only one to start an exchange: it sends its status as a
+                // request and the slave answers with its keys, so both never talk at once.
+                if split_count_down.wait().is_ok() {
+                    if waiting_answer {
+                        no_answers += 1;
+                    }
+
+                    waiting_answer = uart
+                        .send(HR_STATUS, [status_bits, 0, 0], &mut delay)
+                        .is_ok();
+                    if !waiting_answer {
+                        serial_write_time(&mut serial, "STAT msg failed", ticks, " --\r\n");
+                    }
+                }
+
                 if link_report_count_down.wait().is_ok() {
                     serial_write_value(&mut serial, "Dropped frames / s - CRC:", crc_errors, "");
-                    serial_write_value(&mut serial, "| Bad masks:", bad_masks, "\r\n");
+                    serial_write_value(&mut serial, "| Bad masks:", bad_masks, "");
+                    serial_write_value(&mut serial, "| No answer:", no_answers, "\r\n");
                     crc_errors = 0;
                     bad_masks = 0;
+                    no_answers = 0;
                 }
             } else {
                 // ----------------------------------------------------------------------
@@ -414,6 +435,13 @@ fn main() -> ! {
                                 active_buzzer(&mut buz_left, &mut buz_right, false);
                             }
                             last_status_bits = Some(status_bits);
+
+                            // Answer the request with the pressed keys, the slave only talks
+                            // when the master asks
+                            let mask = indexes_to_mask(&gpios.get_active_indexes(), own_side);
+                            if uart.send(HR_KEYS, mask, &mut delay).is_err() {
+                                led.on(LedColor::Red);
+                            }
                         }
                     }
 
@@ -498,17 +526,6 @@ fn main() -> ! {
             // Ticks used to blink the LED
             if tick_count_down.wait().is_ok() {
                 ticks = ticks.wrapping_add(1);
-            }
-
-            // Slave is in charge of starting a new "chew loop"
-            // It sends its pressed keys mask and the master proceeds to the logic only when
-            // it's able to combine the two matrix sides.
-            if split_count_down.wait().is_ok() {
-                let mask = indexes_to_mask(&gpios.get_active_indexes(), own_side);
-
-                if uart.send(HR_KEYS, mask, &mut delay).is_err() {
-                    led.on(LedColor::Red);
-                }
             }
         }
     }
