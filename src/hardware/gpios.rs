@@ -7,7 +7,6 @@ use waveshare_rp2040_zero::{
 
 use bsp::hal::gpio::{DynPinId, FunctionSio, Pin, SioInput};
 use embedded_hal::digital::*;
-use panic_probe as _;
 
 // --------------------------------------------------------------------------------------
 // ----------------------------------------------------------------------------- SPLIT --

@@ -1,18 +1,13 @@
 #![no_std]
 #![no_main]
 
-mod hardware;
-mod layouts;
-mod options;
-mod software;
-
-use hardware::{
+use rusty_chew::hardware::{
     buzzer::{Buzzer, Side, Song},
     gpios::GpiosMono,
     led::{Led, LedColor},
 };
-use options::{SERIAL_ON, TIMER_MONO_LOOP, TIMER_USB_LOOP};
-use software::{
+use rusty_chew::options::{SERIAL_ON, TIMER_MONO_LOOP, TIMER_USB_LOOP};
+use rusty_chew::software::{
     chew::Chew,
     keys::{BuffCase, Buffer},
     status::{Status, Statuses},
