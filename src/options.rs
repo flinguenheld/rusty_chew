@@ -24,7 +24,7 @@ pub const TIMER_LINK_REPORT: u32 = 1000; // Master prints the dropped frames on 
 // pub const UART_SPEED: u32 = 460_800;
 pub const UART_SPEED: u32 = 115_200;
 // pub const UART_SPEED: u32 = 19_200;
-pub const MAX_MESSAGE_LENGTH: usize = 9; // Max tested in January 2025
+pub const MAX_MESSAGE_LENGTH: usize = 9; // RX FIFO (8 bytes) + shift register, a frame is 5 bytes
 pub const MAX_NOT_COMPLETE: u32 = 3;
 pub const UART_SEND_DELAY: u32 = 500; // microseconds, margin around a sent frame
 

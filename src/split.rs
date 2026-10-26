@@ -12,7 +12,7 @@ use hardware::{
     buzzer::{Buzzer, Side, Song},
     gpios::GpiosDirectPin,
     led::{Led, LedColor},
-    uart::{Uart, UartError, HR_KEYS, HR_STATUS, KEYS_VALUES},
+    uart::{Uart, UartError, FRAME_VALUES, HR_KEYS, HR_STATUS},
 };
 use heapless::Vec;
 use options::{SERIAL_ON, TIMER_LINK_REPORT, TIMER_SPLIT_LOOP, TIMER_UART_LOOP, TIMER_USB_LOOP};
@@ -408,7 +408,7 @@ fn main() -> ! {
                             };
 
                             if uart
-                                .send(HR_STATUS, &[led_status, buzzer_status], &mut delay)
+                                .send(HR_STATUS, [led_status, buzzer_status, 0], &mut delay)
                                 .is_err()
                             {
                                 serial_write_time(&mut serial, "STAT msg failed", ticks, " --\r\n");
@@ -420,7 +420,6 @@ fn main() -> ! {
 
                     Err(e) => match e {
                         UartError::NothingToRead => {}
-                        // UartError::Capacity => led.on(LedColor::Green),
                         // A corrupted frame is only a lost cycle, the slave sends again in 5 ms
                         UartError::Crc => crc_errors += 1,
                         UartError::Header => led.on(LedColor::Blue),
@@ -447,7 +446,7 @@ fn main() -> ! {
                 // -------------------------------------------------------- UART SLAVE --
                 match uart.receive() {
                     Ok(mail) => {
-                        if mail.header == HR_STATUS && mail.values.len() == 2 {
+                        if mail.header == HR_STATUS {
                             match mail.values[0] {
                                 STATUS_LAYOUT_FR => led.on(LedColor::Aqua),
                                 STATUS_LAYOUT_FN => led.on(LedColor::Fushia),
@@ -492,7 +491,6 @@ fn main() -> ! {
                     }
 
                     Err(UartError::NothingToRead) => {}
-                    // Err(UartError::Capacity) => led.on(LedColor::Green),
                     // The master sends its status again in the next cycle
                     Err(UartError::Crc) => {}
                     Err(UartError::Header) => led.on(LedColor::Blue),
@@ -581,7 +579,7 @@ fn main() -> ! {
             if split_count_down.wait().is_ok() {
                 let mask = indexes_to_mask(&gpios.get_active_indexes(), own_side);
 
-                if uart.send(HR_KEYS, &mask, &mut delay).is_err() {
+                if uart.send(HR_KEYS, mask, &mut delay).is_err() {
                     led.on(LedColor::Red);
                 }
             }
@@ -615,7 +613,7 @@ fn active_buzzer<IL: SliceId, IR: SliceId>(
 }
 
 /// Slave's pressed keys -> mask, bit n is the key at position n of its side array.
-fn indexes_to_mask(indexes: &[u8], side: &[u8; 17]) -> [u8; KEYS_VALUES] {
+fn indexes_to_mask(indexes: &[u8], side: &[u8; 17]) -> [u8; FRAME_VALUES] {
     let mut mask = 0u32;
     for index in indexes {
         if let Some(bit) = side.iter().position(|i| i == index) {
@@ -627,10 +625,7 @@ fn indexes_to_mask(indexes: &[u8], side: &[u8; 17]) -> [u8; KEYS_VALUES] {
 
 /// Mask -> slave's pressed keys.
 /// A bit set above the 17 keys can only come from a corrupted frame which passed the CRC.
-fn mask_to_indexes(mask: &[u8], side: &[u8; 17]) -> Option<Vec<u8, 17>> {
-    if mask.len() != KEYS_VALUES {
-        return None;
-    }
+fn mask_to_indexes(mask: &[u8; FRAME_VALUES], side: &[u8; 17]) -> Option<Vec<u8, 17>> {
     let mask = u32::from_le_bytes([mask[0], mask[1], mask[2], 0]);
     if mask >> side.len() != 0 {
         return None;

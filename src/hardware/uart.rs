@@ -21,20 +21,11 @@ use crate::options::{MAX_MESSAGE_LENGTH, MAX_NOT_COMPLETE, UART_SEND_DELAY, UART
 pub const HR_KEYS: u8 = 0b11010000;
 pub const HR_STATUS: u8 = 0b10110000;
 
-// Values per mail type, every frame of a type has the same length
-pub const KEYS_VALUES: usize = 3; // Mask of the slave's pressed keys (17 bits)
-pub const STATUS_VALUES: usize = 2; // LED state + event
-
-fn values_len(header: u8) -> Option<usize> {
-    match header {
-        HR_KEYS => Some(KEYS_VALUES),
-        HR_STATUS => Some(STATUS_VALUES),
-        _ => None,
-    }
-}
+// Every frame has the same length: header + values + CRC
+pub const FRAME_VALUES: usize = 3;
+const FRAME_LEN: usize = FRAME_VALUES + 2;
 
 pub enum UartError {
-    Capacity,
     Crc,
     Header,
     NothingToRead,
@@ -50,7 +41,6 @@ impl UartError {
         let mut output = String::new();
         output
             .push_str(match self {
-                UartError::Capacity => "-- Error Capacity --\r\n",
                 UartError::Crc => "-- Error CRC --\r\n",
                 UartError::Header => "-- Error Header --\r\n",
                 UartError::NothingToRead => "-- Error Nothing to read --\r\n",
@@ -64,25 +54,26 @@ impl UartError {
     }
 }
 
-/// Message Frame
+/// Message Frame, always 5 bytes
 ///
-///  Openning                 Values (fixed number per type)     CRC-8
-///    /                                                         /
-/// 1010 1010   ->    0000 0000 - 0000 0000 ...   ->   0000 0000
-///        \
-///      Number of values (must match the type: KEYS_VALUES or STATUS_VALUES)
+///  Header            Values (3 bytes)                  CRC-8
+///    /                    /                              /
+/// 1101 0000  ->  0000 0000 - 0000 0000 - 0000 0000  ->  0000 0000
+///
+///     HR_KEYS     Mask of the slave's pressed keys (17 bits)
+///     HR_STATUS   LED state, event, 0 (free)
 ///
 /// The CRC is computed over the header and the values.
 /// Values can take any value (keys mask), so a header is only searched at the buffer start.
 pub struct Mail {
     pub header: u8,
-    pub values: Vec<u8, 8>,
+    pub values: [u8; FRAME_VALUES],
 }
 
 /// Half-duplex uart, the system is on receiver mode all the time except to send a mail.
-/// The RP2040-zero board buffer is limited to 9 bytes messages.
-/// So here it uses one byte as a header to know what they want and give the amount of bytes
-/// which are following, and one CRC-8 byte at the end to reject corrupted frames.
+/// The RP2040-zero board buffer is limited to 9 bytes, so a frame has a fixed length of 5 bytes:
+/// one byte as a header to know what they want, 3 values, and one CRC-8 byte at the end to
+/// reject corrupted frames.
 /// The purpose for Chew is (Both sides read their buffer each n ms):
 ///     - Slave sends its pressed keys mask each n milliseconds
 ///     - Master applies the chew logic when the slave message is validated
@@ -99,7 +90,7 @@ pub struct Uart {
     receiver: Option<PioUartRx<Gpio11, PIO0, SM1, Running>>,
 
     // 9 bytes is the buffer's maximum
-    buffer: Vec<u8, 9>,
+    buffer: Vec<u8, MAX_MESSAGE_LENGTH>,
 
     counter_not_complete: u32,
 
@@ -143,26 +134,25 @@ impl Uart {
     }
 
     /// Switch in transmitter mode, send, and come back to receiver mode
-    pub fn send(&mut self, header: u8, values: &[u8], delay: &mut Delay) -> Result<(), UartError> {
+    pub fn send(
+        &mut self,
+        header: u8,
+        values: [u8; FRAME_VALUES],
+        delay: &mut Delay,
+    ) -> Result<(), UartError> {
         let ok;
         self.switch_to_transmitter();
 
         delay.delay_us(UART_SEND_DELAY);
         if let Some(transmiter) = &mut self.transmiter {
-            if values_len(header) == Some(values.len()) {
-                let mut to_send: Vec<u8, MAX_MESSAGE_LENGTH> = Vec::new();
-                to_send.push(header | (values.len() as u8)).ok();
-                values.iter().for_each(|v| to_send.push(*v).unwrap());
-                to_send.push(crc8(&to_send)).ok();
+            let mut frame = [header, values[0], values[1], values[2], 0];
+            frame[FRAME_LEN - 1] = crc8(&frame[..FRAME_LEN - 1]);
 
-                ok = transmiter.write_raw(&to_send).is_ok();
+            ok = transmiter.write_raw(&frame).is_ok();
 
-                // write_raw returns once the bytes are queued, wait until they are on the wire
-                // (10 bits per byte: start + 8 data + stop)
-                delay.delay_us(to_send.len() as u32 * 10 * 1_000_000 / UART_SPEED);
-            } else {
-                return Err(UartError::Capacity);
-            }
+            // write_raw returns once the bytes are queued, wait until they are on the wire
+            // (10 bits per byte: start + 8 data + stop)
+            delay.delay_us(FRAME_LEN as u32 * 10 * 1_000_000 / UART_SPEED);
         } else {
             return Err(UartError::NotTransmitter);
         }
@@ -180,44 +170,34 @@ impl Uart {
     pub fn receive(&mut self) -> Result<Mail, UartError> {
         if self.read_uart_buffer().is_err() {
             Err(UartError::Uart)
-        } else if let Some(&first) = self.buffer.first() {
-            let header = first & 0b11110000;
-            let l = (first & 0b00001111) as usize;
-
-            if values_len(header) == Some(l) {
-                // Header + values + CRC
-                let frame_len = l + 2;
-
-                if self.buffer.len() >= frame_len {
-                    // The CRC of a frame which includes its own CRC is 0
-                    let m = if crc8(&self.buffer[..frame_len]) == 0 {
-                        let m = Mail {
-                            header,
-                            values: self.buffer[1..=l].iter().cloned().collect(),
-                        };
-                        // Keep the start of the next frame
-                        self.buffer = self.buffer.iter().skip(frame_len).cloned().collect();
-                        Ok(m)
-                    } else {
-                        // Frame boundaries can't be trusted anymore
-                        self.buffer.clear();
-                        Err(UartError::Crc)
-                    };
-                    self.counter_not_complete = 0;
-
-                    m
-                } else if self.counter_not_complete > MAX_NOT_COMPLETE {
-                    self.counter_not_complete = 0;
-                    self.buffer.clear();
-                    Err(UartError::NothingToRead)
-                } else {
-                    self.counter_not_complete += 1;
-                    Err(UartError::NotComplete)
-                }
-            } else {
+        } else if let Some(&header) = self.buffer.first() {
+            if header != HR_KEYS && header != HR_STATUS {
                 self.buffer.clear();
                 self.counter_not_complete = 0;
                 Err(UartError::Header)
+            } else if self.buffer.len() >= FRAME_LEN {
+                self.counter_not_complete = 0;
+
+                // The CRC of a frame which includes its own CRC is 0
+                if crc8(&self.buffer[..FRAME_LEN]) == 0 {
+                    let mut values = [0; FRAME_VALUES];
+                    values.copy_from_slice(&self.buffer[1..=FRAME_VALUES]);
+
+                    // Keep the start of the next frame
+                    self.buffer = self.buffer.iter().skip(FRAME_LEN).cloned().collect();
+                    Ok(Mail { header, values })
+                } else {
+                    // Frame boundaries can't be trusted anymore
+                    self.buffer.clear();
+                    Err(UartError::Crc)
+                }
+            } else if self.counter_not_complete > MAX_NOT_COMPLETE {
+                self.counter_not_complete = 0;
+                self.buffer.clear();
+                Err(UartError::NothingToRead)
+            } else {
+                self.counter_not_complete += 1;
+                Err(UartError::NotComplete)
             }
         } else {
             Err(UartError::NothingToRead)
@@ -226,7 +206,7 @@ impl Uart {
 
     fn read_uart_buffer(&mut self) -> Result<(), UartError> {
         if let Some(receiver) = &mut self.receiver {
-            let mut temp_buffer = [0; 9];
+            let mut temp_buffer = [0; MAX_MESSAGE_LENGTH];
 
             match receiver.read_raw(&mut temp_buffer) {
                 Ok(n) => {
