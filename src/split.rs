@@ -14,11 +14,11 @@ use hardware::{
     led::{Led, LedColor},
     uart::{Uart, UartError, HR_KEYS, HR_STATUS, MAX_VALUES},
 };
-use options::{SERIAL_ON, TIMER_SPLIT_LOOP, TIMER_UART_LOOP, TIMER_USB_LOOP};
+use options::{SERIAL_ON, TIMER_LINK_REPORT, TIMER_SPLIT_LOOP, TIMER_UART_LOOP, TIMER_USB_LOOP};
 use software::{
     chew::Chew,
     keys::{BuffCase, Buffer},
-    serial_usb::{serial_write, serial_write_time, serial_write_values},
+    serial_usb::{serial_write, serial_write_time, serial_write_value, serial_write_values},
     status::{Status, Statuses},
 };
 use usbd_serial::SerialPort;
@@ -240,6 +240,13 @@ fn main() -> ! {
     let mut split_count_down = timer.count_down();
     split_count_down.start(TIMER_SPLIT_LOOP.millis());
 
+    let mut link_report_count_down = timer.count_down();
+    link_report_count_down.start(TIMER_LINK_REPORT.millis());
+
+    // Frames dropped by the master since the last report
+    let mut crc_errors: u32 = 0;
+    let mut bad_indexes: u32 = 0;
+
     // --
     let mut ticks: u32 = 0;
     let mut chew = Chew::new(ticks);
@@ -383,12 +390,17 @@ fn main() -> ! {
                             {
                                 serial_write_time(&mut serial, "STAT msg failed", ticks, " --\r\n");
                             }
+                        } else if mail.header == HR_KEYS {
+                            // Index outside the slave's half: corrupted frame, dropped
+                            bad_indexes += 1;
                         }
                     }
 
                     Err(e) => match e {
                         UartError::NothingToRead => {}
                         // UartError::Capacity => led.on(LedColor::Green),
+                        // A corrupted frame is only a lost cycle, the slave sends again in 5 ms
+                        UartError::Crc => crc_errors += 1,
                         UartError::Header => led.on(LedColor::Blue),
                         // UartError::NotReciever => led.on(LedColor::Purple),
                         // UartError::NotTransmitter => led.on(LedColor::Red),
@@ -400,6 +412,13 @@ fn main() -> ! {
                             led.on(LedColor::Red)
                         }
                     },
+                }
+
+                if link_report_count_down.wait().is_ok() {
+                    serial_write_value(&mut serial, "Dropped frames / s - CRC:", crc_errors, "");
+                    serial_write_value(&mut serial, "| Bad indexes:", bad_indexes, "\r\n");
+                    crc_errors = 0;
+                    bad_indexes = 0;
                 }
             } else {
                 // ----------------------------------------------------------------------
@@ -452,6 +471,8 @@ fn main() -> ! {
 
                     Err(UartError::NothingToRead) => {}
                     // Err(UartError::Capacity) => led.on(LedColor::Green),
+                    // The master sends its status again in the next cycle
+                    Err(UartError::Crc) => {}
                     Err(UartError::Header) => led.on(LedColor::Blue),
                     // Err(UartError::NotReciever) => led.on(LedColor::Purple),
                     // Err(UartError::NotTransmitter) => led.on(LedColor::Red),
