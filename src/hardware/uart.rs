@@ -5,16 +5,14 @@ use bsp::{
     hal::{
         gpio::bank0::Gpio11,
         gpio::{FunctionPio0, Pin, PullUp},
-        pio::{Running, SM1},
-        pio::{UninitStateMachine, PIO},
+        pio::{UninitStateMachine, PIO, SM1, SM2},
     },
     pac::PIO0,
 };
 use cortex_m::delay::Delay;
-use fugit::{HertzU32, RateExtU32};
-use pio_uart::{PioUartRx, PioUartTx, RxProgram, TxProgram};
-use usbd_human_interface_device::interface::ReportBuffer;
+use fugit::HertzU32;
 
+use crate::hardware::half_duplex::HalfDuplex;
 use crate::options::{MAX_MESSAGE_LENGTH, MAX_NOT_COMPLETE, UART_SEND_DELAY, UART_SPEED};
 
 // Values used as a header to validated a message
@@ -29,10 +27,7 @@ pub enum UartError {
     Crc,
     Header,
     NothingToRead,
-    NotReciever,
-    NotTransmitter,
     NotComplete,
-    Uart,
 }
 
 #[allow(dead_code)]
@@ -44,10 +39,7 @@ impl UartError {
                 UartError::Crc => "-- Error CRC --\r\n",
                 UartError::Header => "-- Error Header --\r\n",
                 UartError::NothingToRead => "-- Error Nothing to read --\r\n",
-                UartError::NotReciever => "-- Error Not reciever --\r\n",
-                UartError::NotTransmitter => "-- Error Not transmitter --\r\n",
                 UartError::NotComplete => "-- Error Not complete --\r\n",
-                UartError::Uart => "-- Error Uart --\r\n",
             })
             .ok();
         output
@@ -70,7 +62,7 @@ pub struct Mail {
     pub values: [u8; FRAME_VALUES],
 }
 
-/// Half-duplex uart, the system is on receiver mode all the time except to send a mail.
+/// Half-duplex uart (see half_duplex.rs), the line is released except to send a mail.
 /// The RP2040-zero board buffer is limited to 9 bytes, so a frame has a fixed length of 5 bytes:
 /// one byte as a header to know what they want, 3 values, and one CRC-8 byte at the end to
 /// reject corrupted frames.
@@ -83,94 +75,48 @@ pub struct Mail {
 /// In case of error, the buffer is emptied (the chew loop is lost).
 /// After a valid frame, the following bytes are kept for the next mail.
 pub struct Uart {
-    tx_program: TxProgram<PIO0>,
-    rx_program: RxProgram<PIO0>,
-
-    transmiter: Option<PioUartTx<Gpio11, PIO0, SM1, Running>>,
-    receiver: Option<PioUartRx<Gpio11, PIO0, SM1, Running>>,
+    line: HalfDuplex,
 
     // 9 bytes is the buffer's maximum
     buffer: Vec<u8, MAX_MESSAGE_LENGTH>,
 
     counter_not_complete: u32,
-
-    // System clock, the PIO clock divider is computed from it
-    sys_freq: HertzU32,
 }
 
 impl Uart {
     pub fn new(
         pio: &mut PIO<PIO0>,
         sm1: UninitStateMachine<(PIO0, SM1)>,
+        sm2: UninitStateMachine<(PIO0, SM2)>,
         gp11: Pin<Gpio11, FunctionPio0, PullUp>,
         sys_freq: HertzU32,
     ) -> Uart {
-        let mut uart = Uart {
-            tx_program: pio_uart::install_tx_program(pio).ok().unwrap(),
-            rx_program: pio_uart::install_rx_program(pio).ok().unwrap(),
-
-            transmiter: None,
-            receiver: None,
-
+        Uart {
+            line: HalfDuplex::new(pio, sm1, sm2, gp11, UART_SPEED, sys_freq),
             buffer: Vec::new(),
-
             counter_not_complete: 0,
-
-            sys_freq,
-        };
-
-        uart.receiver = Some(
-            pio_uart::PioUartRx::new(
-                gp11.reconfigure(),
-                sm1,
-                &mut uart.rx_program,
-                UART_SPEED.Hz(),
-                uart.sys_freq,
-            )
-            .enable(),
-        );
-
-        uart
+        }
     }
 
-    /// Switch in transmitter mode, send, and come back to receiver mode
-    pub fn send(
-        &mut self,
-        header: u8,
-        values: [u8; FRAME_VALUES],
-        delay: &mut Delay,
-    ) -> Result<(), UartError> {
-        let ok;
-        self.switch_to_transmitter();
+    /// Send a mail, return once it is on the wire
+    pub fn send(&mut self, header: u8, values: [u8; FRAME_VALUES], delay: &mut Delay) {
+        // Bytes already received are kept, the line only drops the echo of what is sent
+        self.read_uart_buffer();
 
+        // Short guard, the other side may still be ending its stop bit
         delay.delay_us(UART_SEND_DELAY);
-        if let Some(transmiter) = &mut self.transmiter {
-            let mut frame = [header, values[0], values[1], values[2], 0];
-            frame[FRAME_LEN - 1] = crc8(&frame[..FRAME_LEN - 1]);
 
-            ok = transmiter.write_raw(&frame).is_ok();
-
-            // write_raw returns once the bytes are queued, wait until they are on the wire
-            // (10 bits per byte: start + 8 data + stop)
-            delay.delay_us(FRAME_LEN as u32 * 10 * 1_000_000 / UART_SPEED);
-        } else {
-            return Err(UartError::NotTransmitter);
-        }
-        delay.delay_us(UART_SEND_DELAY);
-        self.switch_to_receiver();
-
-        match ok {
-            true => Ok(()),
-            false => Err(UartError::Uart),
-        }
+        let mut frame = [header, values[0], values[1], values[2], 0];
+        frame[FRAME_LEN - 1] = crc8(&frame[..FRAME_LEN - 1]);
+        self.line.write(&frame, delay);
     }
 
     /// Empty the uart buffer to fill the struct buffer.
     /// Proceede to checks and return a mail which contains the header & the values.
     pub fn receive(&mut self) -> Result<Mail, UartError> {
-        if self.read_uart_buffer().is_err() {
-            Err(UartError::Uart)
-        } else if let Some(&header) = self.buffer.first() {
+        self.read_uart_buffer();
+
+        if let Some(&header) = self.buffer.first() {
             if header != HR_KEYS && header != HR_STATUS {
                 self.buffer.clear();
                 self.counter_not_complete = 0;
@@ -204,55 +150,9 @@ impl Uart {
         }
     }
 
-    fn read_uart_buffer(&mut self) -> Result<(), UartError> {
-        if let Some(receiver) = &mut self.receiver {
-            let mut temp_buffer = [0; MAX_MESSAGE_LENGTH];
-
-            match receiver.read_raw(&mut temp_buffer) {
-                Ok(n) => {
-                    for v in temp_buffer.iter().take(n) {
-                        self.buffer.push(*v).ok();
-                    }
-                    Ok(())
-                }
-                Err(_) => Err(UartError::Uart),
-            }
-        } else {
-            Err(UartError::NotReciever)
-        }
-    }
-
-    fn switch_to_transmitter(&mut self) {
-        if let Some(receiver) = self.receiver.take() {
-            let (sm1, gp11) = receiver.stop().free();
-
-            self.transmiter = Some(
-                pio_uart::PioUartTx::new(
-                    gp11.reconfigure(),
-                    sm1,
-                    &mut self.tx_program,
-                    UART_SPEED.Hz(),
-                    self.sys_freq,
-                )
-                .enable(),
-            );
-        }
-    }
-
-    fn switch_to_receiver(&mut self) {
-        if let Some(transmiter) = self.transmiter.take() {
-            let (sm1, gp11) = transmiter.stop().free();
-
-            self.receiver = Some(
-                pio_uart::PioUartRx::new(
-                    gp11.reconfigure(),
-                    sm1,
-                    &mut self.rx_program,
-                    UART_SPEED.Hz(),
-                    self.sys_freq,
-                )
-                .enable(),
-            );
+    fn read_uart_buffer(&mut self) {
+        while let Some(v) = self.line.read() {
+            self.buffer.push(v).ok();
         }
     }
 }

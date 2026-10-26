@@ -15,7 +15,7 @@ use rusty_chew::options::{
 use rusty_chew::software::{
     chew::Chew,
     keys::{BuffCase, Buffer},
-    serial_usb::{serial_write, serial_write_time, serial_write_value, serial_write_values},
+    serial_usb::{serial_write_value, serial_write_values},
     split_mail::{
         changed_status_song, indexes_to_mask, is_buzzer_active, mask_to_indexes, show_status_led,
         sides, statuses_to_bits,
@@ -81,7 +81,7 @@ fn main() -> ! {
         &mut pac.RESETS,
     );
 
-    let (mut pio, sm0, sm1, _, _) = pac.PIO0.split(&mut pac.RESETS);
+    let (mut pio, sm0, sm1, sm2, _) = pac.PIO0.split(&mut pac.RESETS);
 
     // USB --
     let usb_bus = UsbBusAllocator::new(usb::UsbBus::new(
@@ -215,6 +215,7 @@ fn main() -> ! {
     let mut uart = Uart::new(
         &mut pio,
         sm1,
+        sm2,
         pins.gp11.reconfigure(),
         clocks.system_clock.freq(),
     );
@@ -374,15 +375,8 @@ fn main() -> ! {
                         // A corrupted frame is only a lost cycle, the next request comes in 5 ms
                         UartError::Crc => crc_errors += 1,
                         UartError::Header => led.on(LedColor::Blue),
-                        // UartError::NotReciever => led.on(LedColor::Purple),
-                        // UartError::NotTransmitter => led.on(LedColor::Red),
                         // UartError::NotComplete => led.on(LedColor::Orange),
                         UartError::NotComplete => {}
-                        // UartError::Uart => led.on(LedColor::Green),
-                        _ => {
-                            serial_write(&mut serial, &e.to_serial());
-                            led.on(LedColor::Red)
-                        }
                     },
                 }
 
@@ -393,12 +387,8 @@ fn main() -> ! {
                         no_answers += 1;
                     }
 
-                    waiting_answer = uart
-                        .send(HR_STATUS, [status_bits, 0, 0], &mut delay)
-                        .is_ok();
-                    if !waiting_answer {
-                        serial_write_time(&mut serial, "STAT msg failed", ticks, " --\r\n");
-                    }
+                    uart.send(HR_STATUS, [status_bits, 0, 0], &mut delay);
+                    waiting_answer = true;
                 }
 
                 if link_report_count_down.wait().is_ok() {
@@ -439,9 +429,7 @@ fn main() -> ! {
                             // Answer the request with the pressed keys, the slave only talks
                             // when the master asks
                             let mask = indexes_to_mask(&gpios.get_active_indexes(), own_side);
-                            if uart.send(HR_KEYS, mask, &mut delay).is_err() {
-                                led.on(LedColor::Red);
-                            }
+                            uart.send(HR_KEYS, mask, &mut delay);
                         }
                     }
 
@@ -449,12 +437,8 @@ fn main() -> ! {
                     // The master sends its status again in the next cycle
                     Err(UartError::Crc) => {}
                     Err(UartError::Header) => led.on(LedColor::Blue),
-                    // Err(UartError::NotReciever) => led.on(LedColor::Purple),
-                    // Err(UartError::NotTransmitter) => led.on(LedColor::Red),
                     // Err(UartError::NotComplete) => led.on(LedColor::Orange),
                     Err(UartError::NotComplete) => {}
-                    // Err(UartError::Uart) => led.on(LedColor::Green),
-                    _ => led.on(LedColor::Red),
                 }
             }
 
