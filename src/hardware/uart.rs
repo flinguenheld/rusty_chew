@@ -61,7 +61,7 @@ impl UartError {
 /// 1101 0000  ->  0000 0000 - 0000 0000 - 0000 0000  ->  0000 0000
 ///
 ///     HR_KEYS     Mask of the slave's pressed keys (17 bits)
-///     HR_STATUS   LED state, event, 0 (free)
+///     HR_STATUS   Status bits (LED + buzzer state), 0, 0 (free)
 ///
 /// The CRC is computed over the header and the values.
 /// Values can take any value (keys mask), so a header is only searched at the buffer start.

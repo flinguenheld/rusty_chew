@@ -53,16 +53,17 @@ use usbd_human_interface_device::device::mouse::{WheelMouse, WheelMouseReport};
 use usbd_human_interface_device::prelude::*;
 
 // Status --
-const STATUS_LAYOUT_FR: u8 = 1;
-const STATUS_LAYOUT_FN: u8 = 2;
-const STATUS_LEADER_KEY: u8 = 3;
-const STATUS_CAPLOCK: u8 = 4;
+// Bit of each status in the byte sent to the slave, the lowest bit set gives the LED
+const BIT_LAYOUT_FR: u8 = 0;
+const BIT_LAYOUT_FN: u8 = 1;
+const BIT_LEADER_KEY: u8 = 2;
+const BIT_CAPLOCK: u8 = 3;
 
-const STATUS_DYNMAC_REC: u8 = 5;
-const STATUS_DYNMAC_GO_WAIT: u8 = 6;
-const STATUS_DYNMAC_REC_WAIT: u8 = 7;
+const BIT_DYNMAC_GO_WAIT: u8 = 4;
+const BIT_DYNMAC_REC: u8 = 5;
+const BIT_DYNMAC_REC_WAIT: u8 = 6;
 
-const STATUS_TOGGLE_BUZZER: u8 = 8;
+const BIT_BUZZER: u8 = 7;
 
 // Keys mask --
 // Matrix indexes of each half, bit n of the mask is the key at position n
@@ -264,6 +265,9 @@ fn main() -> ! {
     let mut crc_errors: u32 = 0;
     let mut bad_masks: u32 = 0;
 
+    // Slave: last status bits received, None until the first STATUS frame
+    let mut last_status_bits: Option<u8> = None;
+
     // --
     let mut ticks: u32 = 0;
     let mut chew = Chew::new(ticks);
@@ -337,78 +341,49 @@ fn main() -> ! {
                                 };
                             }
 
-                            // Update LED & share its state to the slave --
-                            let led_status = if statuses.layout_fr == Status::On {
-                                led.on(LedColor::Aqua);
-                                STATUS_LAYOUT_FR
-                            } else if statuses.layout_fn == Status::On {
-                                led.on(LedColor::Fushia);
-                                STATUS_LAYOUT_FN
-                            } else if statuses.leader_key == Status::On {
-                                led.on(LedColor::Blue);
-                                STATUS_LEADER_KEY
-                            } else if statuses.caplock == Status::On {
-                                led.on(LedColor::Orange);
-                                STATUS_CAPLOCK
-                            } else if statuses.dynmac_go_waitkey == Status::On {
-                                led.blink(LedColor::Olive, 800, ticks);
-                                STATUS_DYNMAC_GO_WAIT
-                            } else if statuses.dynmac_rec_inprogess == Status::On {
-                                led.blink(LedColor::Red, 600, ticks);
-                                STATUS_DYNMAC_REC
-                            } else if statuses.dynmac_rec_waitkey == Status::On {
-                                led.blink(LedColor::Purple, 800, ticks);
-                                STATUS_DYNMAC_REC_WAIT
-                            } else {
-                                led.off();
-                                0
-                            };
+                            // Update LED & BUZZER, the slave gets the same state --
+                            let status_bits = statuses_to_bits(&statuses);
+                            let buzzer_active = status_bits & (1 << BIT_BUZZER) != 0;
+                            show_status_led(&mut led, status_bits, ticks);
 
-                            // Update BUZZER & share its state to the slave --
-                            let buzzer_status = if statuses.layout_fr == Status::SwitchOn {
+                            // Enabled before the songs and disabled after them, so the
+                            // buzzer toggle song can be heard
+                            if buzzer_active {
+                                active_buzzer(&mut buz_left, &mut buz_right, true);
+                            }
+
+                            if statuses.layout_fr == Status::SwitchOn {
                                 sing(&mut buz_left, &mut buz_right, Song::TwoDF, false);
-                                STATUS_LAYOUT_FR
                             } else if statuses.layout_fr == Status::SwitchOff {
                                 sing(&mut buz_left, &mut buz_right, Song::TwoDF, true);
-                                STATUS_LAYOUT_FR + 128
                             } else if statuses.layout_fn == Status::SwitchOn {
                                 sing(&mut buz_left, &mut buz_right, Song::NotifC, false);
-                                STATUS_LAYOUT_FN
                             } else if statuses.layout_fn == Status::SwitchOff {
                                 sing(&mut buz_left, &mut buz_right, Song::NotifC, true);
-                                STATUS_LAYOUT_FN + 128
                             } else if statuses.leader_key == Status::SwitchOn {
                                 sing(&mut buz_left, &mut buz_right, Song::NotifA, false);
-                                STATUS_LEADER_KEY
                             } else if statuses.caplock == Status::SwitchOn {
                                 sing(&mut buz_left, &mut buz_right, Song::StartupG, false);
-                                STATUS_CAPLOCK
                             } else if statuses.caplock == Status::SwitchOff {
                                 sing(&mut buz_left, &mut buz_right, Song::StartupG, true);
-                                STATUS_CAPLOCK + 128
                             } else if statuses.dynmac_go_waitkey == Status::SwitchOn {
                                 sing(&mut buz_left, &mut buz_right, Song::NotifF, false);
-                                STATUS_DYNMAC_GO_WAIT
                             } else if statuses.dynmac_rec_inprogess == Status::SwitchOn {
                                 sing(&mut buz_left, &mut buz_right, Song::AlertD, false);
-                                STATUS_DYNMAC_REC
                             } else if statuses.dynmac_rec_waitkey == Status::SwitchOn {
                                 sing(&mut buz_left, &mut buz_right, Song::AlertE, false);
-                                STATUS_DYNMAC_REC_WAIT
                             } else if statuses.buzzer_activation == Status::SwitchOn {
-                                active_buzzer(&mut buz_left, &mut buz_right, true);
                                 sing(&mut buz_left, &mut buz_right, Song::StartupA, false);
-                                STATUS_TOGGLE_BUZZER
                             } else if statuses.buzzer_activation == Status::SwitchOff {
                                 sing(&mut buz_left, &mut buz_right, Song::StartupA, true);
+                            }
+
+                            if !buzzer_active {
                                 active_buzzer(&mut buz_left, &mut buz_right, false);
-                                STATUS_TOGGLE_BUZZER + 128
-                            } else {
-                                0
-                            };
+                            }
 
                             if uart
-                                .send(HR_STATUS, [led_status, buzzer_status, 0], &mut delay)
+                                .send(HR_STATUS, [status_bits, 0, 0], &mut delay)
                                 .is_err()
                             {
                                 serial_write_time(&mut serial, "STAT msg failed", ticks, " --\r\n");
@@ -447,46 +422,32 @@ fn main() -> ! {
                 match uart.receive() {
                     Ok(mail) => {
                         if mail.header == HR_STATUS {
-                            match mail.values[0] {
-                                STATUS_LAYOUT_FR => led.on(LedColor::Aqua),
-                                STATUS_LAYOUT_FN => led.on(LedColor::Fushia),
-                                STATUS_LEADER_KEY => led.on(LedColor::Blue),
-                                STATUS_CAPLOCK => led.on(LedColor::Orange),
+                            let status_bits = mail.values[0];
+                            let buzzer_active = status_bits & (1 << BIT_BUZZER) != 0;
+                            show_status_led(&mut led, status_bits, ticks);
 
-                                STATUS_DYNMAC_GO_WAIT => led.blink(LedColor::Olive, 800, ticks),
-                                STATUS_DYNMAC_REC => led.blink(LedColor::Red, 600, ticks),
-                                STATUS_DYNMAC_REC_WAIT => led.blink(LedColor::Purple, 800, ticks),
-
-                                _ => led.off(),
+                            if buzzer_active {
+                                active_buzzer(&mut buz_left, &mut buz_right, true);
                             }
 
-                            if mail.values[1] == STATUS_LAYOUT_FR {
-                                sing(&mut buz_left, &mut buz_right, Song::StartupB, false);
-                            } else if mail.values[1] == STATUS_LAYOUT_FR + 128 {
-                                sing(&mut buz_left, &mut buz_right, Song::StartupB, true);
-                            } else if mail.values[1] == STATUS_LAYOUT_FN {
-                                sing(&mut buz_left, &mut buz_right, Song::NotifC, false);
-                            } else if mail.values[1] == STATUS_LAYOUT_FN + 128 {
-                                sing(&mut buz_left, &mut buz_right, Song::NotifC, true);
-                            } else if mail.values[1] == STATUS_LEADER_KEY {
-                                sing(&mut buz_left, &mut buz_right, Song::NotifA, false);
-                            } else if mail.values[1] == STATUS_CAPLOCK {
-                                sing(&mut buz_left, &mut buz_right, Song::StartupG, false);
-                            } else if mail.values[1] == STATUS_CAPLOCK + 128 {
-                                sing(&mut buz_left, &mut buz_right, Song::StartupG, true);
-                            } else if mail.values[1] == STATUS_DYNMAC_GO_WAIT {
-                                sing(&mut buz_left, &mut buz_right, Song::NotifF, false);
-                            } else if mail.values[1] == STATUS_DYNMAC_REC {
-                                sing(&mut buz_left, &mut buz_right, Song::AlertD, false);
-                            } else if mail.values[1] == STATUS_DYNMAC_REC_WAIT {
-                                sing(&mut buz_left, &mut buz_right, Song::AlertE, false);
-                            } else if mail.values[1] == STATUS_TOGGLE_BUZZER {
-                                active_buzzer(&mut buz_left, &mut buz_right, true);
-                                sing(&mut buz_left, &mut buz_right, Song::StartupA, false);
-                            } else if mail.values[1] == STATUS_TOGGLE_BUZZER + 128 {
-                                sing(&mut buz_left, &mut buz_right, Song::StartupA, true);
+                            // The changes are found by comparing with the last state, so a lost
+                            // frame only delays them. The first state is taken without songs.
+                            if let Some(last) = last_status_bits {
+                                let changed = last ^ status_bits;
+
+                                // One song per frame, the lowest bit first (same as the master)
+                                if let Some((song, reverse)) = (0..8)
+                                    .filter(|bit| changed & (1 << bit) != 0)
+                                    .find_map(|bit| status_song(bit, status_bits & (1 << bit) != 0))
+                                {
+                                    sing(&mut buz_left, &mut buz_right, song, reverse);
+                                }
+                            }
+
+                            if !buzzer_active {
                                 active_buzzer(&mut buz_left, &mut buz_right, false);
                             }
+                            last_status_bits = Some(status_bits);
                         }
                     }
 
@@ -638,4 +599,55 @@ fn mask_to_indexes(mask: &[u8; FRAME_VALUES], side: &[u8; 17]) -> Option<Vec<u8,
             .map(|(_, index)| *index)
             .collect(),
     )
+}
+
+/// Master's statuses -> one byte, a bit is set while its status is on.
+fn statuses_to_bits(statuses: &Statuses) -> u8 {
+    [
+        (BIT_LAYOUT_FR, &statuses.layout_fr),
+        (BIT_LAYOUT_FN, &statuses.layout_fn),
+        (BIT_LEADER_KEY, &statuses.leader_key),
+        (BIT_CAPLOCK, &statuses.caplock),
+        (BIT_DYNMAC_GO_WAIT, &statuses.dynmac_go_waitkey),
+        (BIT_DYNMAC_REC, &statuses.dynmac_rec_inprogess),
+        (BIT_DYNMAC_REC_WAIT, &statuses.dynmac_rec_waitkey),
+        (BIT_BUZZER, &statuses.buzzer_activation),
+    ]
+    .iter()
+    .filter(|(_, status)| matches!(status, Status::On | Status::SwitchOn))
+    .fold(0, |bits, (bit, _)| bits | (1 << bit))
+}
+
+/// LED of the lowest status bit set (the buzzer bit has no color).
+fn show_status_led(led: &mut Led, bits: u8, ticks: u32) {
+    // trailing_zeros gives 8 when no bit is set
+    match (bits & !(1 << BIT_BUZZER)).trailing_zeros() as u8 {
+        BIT_LAYOUT_FR => led.on(LedColor::Aqua),
+        BIT_LAYOUT_FN => led.on(LedColor::Fushia),
+        BIT_LEADER_KEY => led.on(LedColor::Blue),
+        BIT_CAPLOCK => led.on(LedColor::Orange),
+
+        BIT_DYNMAC_GO_WAIT => led.blink(LedColor::Olive, 800, ticks),
+        BIT_DYNMAC_REC => led.blink(LedColor::Red, 600, ticks),
+        BIT_DYNMAC_REC_WAIT => led.blink(LedColor::Purple, 800, ticks),
+
+        _ => led.off(),
+    }
+}
+
+/// Song played by the slave when a status bit changes (song, reverse), None for no song.
+fn status_song(bit: u8, switched_on: bool) -> Option<(Song, bool)> {
+    match (bit, switched_on) {
+        (BIT_LAYOUT_FR, on) => Some((Song::StartupB, !on)),
+        (BIT_LAYOUT_FN, on) => Some((Song::NotifC, !on)),
+        (BIT_LEADER_KEY, true) => Some((Song::NotifA, false)),
+        (BIT_CAPLOCK, on) => Some((Song::StartupG, !on)),
+
+        (BIT_DYNMAC_GO_WAIT, true) => Some((Song::NotifF, false)),
+        (BIT_DYNMAC_REC, true) => Some((Song::AlertD, false)),
+        (BIT_DYNMAC_REC_WAIT, true) => Some((Song::AlertE, false)),
+
+        (BIT_BUZZER, on) => Some((Song::StartupA, !on)),
+        _ => None,
+    }
 }
