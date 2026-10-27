@@ -39,6 +39,8 @@ It performs some cool hacks that keyboard enthusiasts love:
         - Press `KC::DynMacGo`
         - Then the key which was used to record the macro
 
+> 💡 How the keys become USB reports: [REPORTS.md](./docs/REPORTS.md)
+
 <div align="center">
     <img src="./images/prawns.png">
 </div>
@@ -130,7 +132,7 @@ Mount the controller's drive and use one of these commands:
   cargo run --release --bin split --features slave,zero
 ```
 
-> 💡 How both halves talk over their single wire: [SPLIT_LINK.md](./SPLIT_LINK.md)
+> 💡 How both halves talk over their single wire: [SPLIT_LINK.md](./docs/SPLIT_LINK.md)
 
 ##### Serial
 
