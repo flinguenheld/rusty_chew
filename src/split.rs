@@ -7,7 +7,7 @@ use rusty_chew::hardware::{
     buzzer::{Buzzer, Side, Song},
     gpios::GpiosDirectPin,
     led::{Led, LedColor},
-    uart::{Uart, UartError, HR_KEYS, HR_STATUS},
+    uart::{Uart, UartError, HEADER_MASTER, HEADER_SLAVE},
 };
 use heapless::Vec;
 use rusty_chew::options::{
@@ -287,7 +287,7 @@ fn main() -> ! {
                     Ok(mail) => {
                         // None when the mask has a bit without key (corrupted frame)
                         let slave_indexes = match mail.header {
-                            HR_KEYS => mask_to_indexes(&mail.values, slave_side),
+                            HEADER_SLAVE => mask_to_indexes(&mail.values, slave_side),
                             _ => None,
                         };
 
@@ -308,7 +308,7 @@ fn main() -> ! {
                                     .cloned()
                                     .collect(),
                             );
-                        } else if mail.header == HR_KEYS {
+                        } else if mail.header == HEADER_SLAVE {
                             bad_masks += 1;
                         }
                     }
@@ -417,7 +417,7 @@ fn main() -> ! {
                         no_answers += 1;
                     }
 
-                    uart.send(HR_STATUS, [status_bits, 0, 0], &mut delay);
+                    uart.send(HEADER_MASTER, [status_bits, 0, 0], &mut delay);
                     waiting_answer = true;
                 }
 
@@ -434,7 +434,7 @@ fn main() -> ! {
                 // -------------------------------------------------------- UART SLAVE --
                 match uart.receive() {
                     Ok(mail) => {
-                        if mail.header == HR_STATUS {
+                        if mail.header == HEADER_MASTER {
                             last_mail_ticks = ticks;
                             link_lost = false;
 
@@ -462,7 +462,7 @@ fn main() -> ! {
                             // Answer the request with the pressed keys, the slave only talks
                             // when the master asks
                             let mask = indexes_to_mask(&gpios.get_active_indexes(), own_side);
-                            uart.send(HR_KEYS, mask, &mut delay);
+                            uart.send(HEADER_SLAVE, mask, &mut delay);
                         }
                     }
 

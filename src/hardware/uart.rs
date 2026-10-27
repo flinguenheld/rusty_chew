@@ -15,9 +15,10 @@ use fugit::HertzU32;
 use crate::hardware::half_duplex::HalfDuplex;
 use crate::options::{MAX_MESSAGE_LENGTH, MAX_NOT_COMPLETE, UART_SEND_DELAY, UART_SPEED};
 
-// Values used as a header to validated a message
-pub const HR_KEYS: u8 = 0b11010000;
-pub const HR_STATUS: u8 = 0b10110000;
+// Header = who sends the frame. It marks the start of a frame, and a side reading its own
+// frame back (echo) rejects it. Both differ by all their bits, and are far from 0x00 / 0xFF.
+pub const HEADER_MASTER: u8 = 0b10100101;
+pub const HEADER_SLAVE: u8 = 0b01011010;
 
 // Every frame has the same length: header + values + CRC
 pub const FRAME_VALUES: usize = 3;
@@ -50,10 +51,10 @@ impl UartError {
 ///
 ///  Header            Values (3 bytes)                  CRC-8
 ///    /                    /                              /
-/// 1101 0000  ->  0000 0000 - 0000 0000 - 0000 0000  ->  0000 0000
+/// 1010 0101  ->  0000 0000 - 0000 0000 - 0000 0000  ->  0000 0000
 ///
-///     HR_KEYS     Mask of the slave's pressed keys (17 bits)
-///     HR_STATUS   Status bits (LED + buzzer state), 0, 0 (free)
+///     HEADER_MASTER   Status bits (LED + buzzer state), 0, 0 (free)
+///     HEADER_SLAVE    Mask of the slave's pressed keys (17 bits)
 ///
 /// The CRC is computed over the header and the values.
 /// Values can take any value (keys mask), so a header is only searched at the buffer start.
@@ -64,7 +65,7 @@ pub struct Mail {
 
 /// Half-duplex uart (see half_duplex.rs), the line is released except to send a mail.
 /// The RP2040-zero board buffer is limited to 9 bytes, so a frame has a fixed length of 5 bytes:
-/// one byte as a header to know what they want, 3 values, and one CRC-8 byte at the end to
+/// one byte as a header to know who sends it, 3 values, and one CRC-8 byte at the end to
 /// reject corrupted frames.
 /// The purpose for Chew is (Both sides read their buffer each n ms):
 ///     - Master sends its statuses each n milliseconds, as a request
@@ -117,7 +118,7 @@ impl Uart {
         self.read_uart_buffer();
 
         if let Some(&header) = self.buffer.first() {
-            if header != HR_KEYS && header != HR_STATUS {
+            if header != HEADER_MASTER && header != HEADER_SLAVE {
                 self.buffer.clear();
                 self.counter_not_complete = 0;
                 Err(UartError::Header)

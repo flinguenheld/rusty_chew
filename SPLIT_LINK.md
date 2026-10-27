@@ -42,10 +42,18 @@ Every frame is 5 bytes (`src/hardware/uart.rs`):
 
 ```
  header      values (3 bytes)                CRC-8
-1101 0000 -> 0000 0000 0000 0000 0000 0000 -> 0000 0000
+1010 0101 -> 0000 0000 0000 0000 0000 0000 -> 0000 0000
 ```
 
-- Header: `HR_KEYS` (`0xD0`) or `HR_STATUS` (`0xB0`).
+- Header: who sends the frame, `HEADER_MASTER` (`0xA5`, STATUS) or
+  `HEADER_SLAVE` (`0x5A`, KEYS). Each direction carries a single kind of mail,
+  so the header doesn't give a type. It has two other jobs:
+  - it marks the start of a frame, so a misaligned buffer is mostly caught
+    before the CRC,
+  - each side only accepts the other side's header, so a frame read back by
+    the side that sent it (echo) is rejected, even though its CRC is valid.
+- The two values differ by all 8 bits, and are 4 bits away from `0x00` and
+  `0xFF` (line stuck low or high).
 - CRC-8, poly 0x07, init 0, over the header and the values.
 - The values can be any byte (a key mask can look like a header), so a header
   is only looked for at the start of the buffer.
