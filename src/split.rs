@@ -9,8 +9,10 @@ use rusty_chew::hardware::{
     led::{Led, LedColor},
     uart::{Uart, UartError, HR_KEYS, HR_STATUS},
 };
+use heapless::Vec;
 use rusty_chew::options::{
-    SERIAL_ON, TIMER_LINK_REPORT, TIMER_SPLIT_LOOP, TIMER_UART_LOOP, TIMER_USB_LOOP,
+    LINK_TIMEOUT, SERIAL_ON, TIMER_LINK_REPORT, TIMER_SPLIT_LOOP, TIMER_UART_LOOP,
+    TIMER_USB_LOOP,
 };
 use rusty_chew::software::{
     chew::Chew,
@@ -247,6 +249,10 @@ fn main() -> ! {
     // Slave: last status bits received, None until the first STATUS frame
     let mut last_status_bits: Option<u8> = None;
 
+    // Both: tick of the last valid mail, the link is lost after LINK_TIMEOUT without one
+    let mut last_mail_ticks: u32 = 0;
+    let mut link_lost = false;
+
     // --
     let mut ticks: u32 = 0;
     let mut chew = Chew::new(ticks);
@@ -274,6 +280,9 @@ fn main() -> ! {
             // --------------------------------------------------------------------------
             // ----------------------------------------------------------- UART MASTER --
             if is_master {
+                // Pressed keys given to the chew logic, None when it has nothing to run
+                let mut active_indexes: Option<Vec<u8, 16>> = None;
+
                 match uart.receive() {
                     Ok(mail) => {
                         // None when the mask has a bit without key (corrupted frame)
@@ -284,11 +293,13 @@ fn main() -> ! {
 
                         if let Some(slave_indexes) = slave_indexes {
                             waiting_answer = false;
+                            last_mail_ticks = ticks;
+                            link_lost = false;
                             serial_write_values(&mut serial, "Indexes: ", &slave_indexes, "\r\n");
 
                             // Get active indexes & combine them with the other side
                             // (the chew logic handles 16 keys pressed at once)
-                            chew.update_matrix(
+                            active_indexes = Some(
                                 gpios
                                     .get_active_indexes()
                                     .iter()
@@ -296,75 +307,7 @@ fn main() -> ! {
                                     .take(16)
                                     .cloned()
                                     .collect(),
-                                ticks,
                             );
-
-                            (key_buffer, mouse_report, statuses) =
-                                chew.run(key_buffer, mouse_report, statuses, ticks);
-
-                            // Mouse report directly done here --------------------------
-                            // Keyboard has its own timer to allow combinations
-                            if mouse_report.buttons != last_mouse_buttons
-                                || mouse_report.x != 0
-                                || mouse_report.y != 0
-                                || mouse_report.vertical_wheel != 0
-                                || mouse_report.horizontal_wheel != 0
-                            {
-                                let mouse = rusty_chew.device::<WheelMouse<'_, _>, _>();
-                                match mouse.write_report(&mouse_report) {
-                                    Err(UsbHidError::WouldBlock) => {
-                                        led.on(LedColor::Red);
-                                    }
-                                    Ok(_) => {
-                                        last_mouse_buttons = mouse_report.buttons;
-                                        mouse_report = WheelMouseReport::default();
-                                    }
-                                    Err(e) => {
-                                        core::panic!("Failed to write mouse report: {:?}", e)
-                                    }
-                                };
-                            }
-
-                            // Update LED & BUZZER, the slave gets the same state --
-                            status_bits = statuses_to_bits(&statuses);
-                            let buzzer_active = is_buzzer_active(status_bits);
-                            show_status_led(&mut led, status_bits, ticks);
-
-                            // Enabled before the songs and disabled after them, so the
-                            // buzzer toggle song can be heard
-                            if buzzer_active {
-                                active_buzzer(&mut buz_left, &mut buz_right, true);
-                            }
-
-                            if statuses.layout_fr == Status::SwitchOn {
-                                sing(&mut buz_left, &mut buz_right, Song::TwoDF, false);
-                            } else if statuses.layout_fr == Status::SwitchOff {
-                                sing(&mut buz_left, &mut buz_right, Song::TwoDF, true);
-                            } else if statuses.layout_fn == Status::SwitchOn {
-                                sing(&mut buz_left, &mut buz_right, Song::NotifC, false);
-                            } else if statuses.layout_fn == Status::SwitchOff {
-                                sing(&mut buz_left, &mut buz_right, Song::NotifC, true);
-                            } else if statuses.leader_key == Status::SwitchOn {
-                                sing(&mut buz_left, &mut buz_right, Song::NotifA, false);
-                            } else if statuses.caplock == Status::SwitchOn {
-                                sing(&mut buz_left, &mut buz_right, Song::StartupG, false);
-                            } else if statuses.caplock == Status::SwitchOff {
-                                sing(&mut buz_left, &mut buz_right, Song::StartupG, true);
-                            } else if statuses.dynmac_go_waitkey == Status::SwitchOn {
-                                sing(&mut buz_left, &mut buz_right, Song::NotifF, false);
-                            } else if statuses.dynmac_rec_inprogess == Status::SwitchOn {
-                                sing(&mut buz_left, &mut buz_right, Song::AlertD, false);
-                            } else if statuses.dynmac_rec_waitkey == Status::SwitchOn {
-                                sing(&mut buz_left, &mut buz_right, Song::AlertE, false);
-                            } else if statuses.buzzer_activation == Status::SwitchOn {
-                                sing(&mut buz_left, &mut buz_right, Song::StartupA, false);
-                            } else if statuses.buzzer_activation == Status::SwitchOff {
-                                sing(&mut buz_left, &mut buz_right, Song::StartupA, true);
-                            }
-
-                            if !buzzer_active {
-                                active_buzzer(&mut buz_left, &mut buz_right, false);
-                            }
                         } else if mail.header == HR_KEYS {
                             bad_masks += 1;
                         }
@@ -380,8 +323,95 @@ fn main() -> ! {
                     },
                 }
 
+                // Lost link: every key is released once, so none stays stuck, then the logic
+                // waits for the slave. The master doesn't type alone, without the slave's
+                // layer keys & modifiers its own keys would give other characters.
+                if !link_lost && ticks.wrapping_sub(last_mail_ticks) > LINK_TIMEOUT {
+                    link_lost = true;
+                    active_indexes = Some(Vec::new());
+                    serial_write_value(&mut serial, "Link lost at tick:", ticks, "\r\n");
+                }
+
+                if let Some(active_indexes) = active_indexes {
+                    chew.update_matrix(active_indexes, ticks);
+
+                    (key_buffer, mouse_report, statuses) =
+                        chew.run(key_buffer, mouse_report, statuses, ticks);
+
+                    // Mouse report directly done here ----------------------------------
+                    // Keyboard has its own timer to allow combinations
+                    if mouse_report.buttons != last_mouse_buttons
+                        || mouse_report.x != 0
+                        || mouse_report.y != 0
+                        || mouse_report.vertical_wheel != 0
+                        || mouse_report.horizontal_wheel != 0
+                    {
+                        let mouse = rusty_chew.device::<WheelMouse<'_, _>, _>();
+                        match mouse.write_report(&mouse_report) {
+                            Err(UsbHidError::WouldBlock) => {
+                                led.on(LedColor::Red);
+                            }
+                            Ok(_) => {
+                                last_mouse_buttons = mouse_report.buttons;
+                                mouse_report = WheelMouseReport::default();
+                            }
+                            Err(e) => {
+                                core::panic!("Failed to write mouse report: {:?}", e)
+                            }
+                        };
+                    }
+
+                    // Update LED & BUZZER, the slave gets the same state --
+                    status_bits = statuses_to_bits(&statuses);
+                    let buzzer_active = is_buzzer_active(status_bits);
+
+                    // Red until the slave is back, the logic doesn't run in between
+                    if link_lost {
+                        led.on(LedColor::Red);
+                    } else {
+                        show_status_led(&mut led, status_bits, ticks);
+                    }
+
+                    // Enabled before the songs and disabled after them, so the
+                    // buzzer toggle song can be heard
+                    if buzzer_active {
+                        active_buzzer(&mut buz_left, &mut buz_right, true);
+                    }
+
+                    if statuses.layout_fr == Status::SwitchOn {
+                        sing(&mut buz_left, &mut buz_right, Song::TwoDF, false);
+                    } else if statuses.layout_fr == Status::SwitchOff {
+                        sing(&mut buz_left, &mut buz_right, Song::TwoDF, true);
+                    } else if statuses.layout_fn == Status::SwitchOn {
+                        sing(&mut buz_left, &mut buz_right, Song::NotifC, false);
+                    } else if statuses.layout_fn == Status::SwitchOff {
+                        sing(&mut buz_left, &mut buz_right, Song::NotifC, true);
+                    } else if statuses.leader_key == Status::SwitchOn {
+                        sing(&mut buz_left, &mut buz_right, Song::NotifA, false);
+                    } else if statuses.caplock == Status::SwitchOn {
+                        sing(&mut buz_left, &mut buz_right, Song::StartupG, false);
+                    } else if statuses.caplock == Status::SwitchOff {
+                        sing(&mut buz_left, &mut buz_right, Song::StartupG, true);
+                    } else if statuses.dynmac_go_waitkey == Status::SwitchOn {
+                        sing(&mut buz_left, &mut buz_right, Song::NotifF, false);
+                    } else if statuses.dynmac_rec_inprogess == Status::SwitchOn {
+                        sing(&mut buz_left, &mut buz_right, Song::AlertD, false);
+                    } else if statuses.dynmac_rec_waitkey == Status::SwitchOn {
+                        sing(&mut buz_left, &mut buz_right, Song::AlertE, false);
+                    } else if statuses.buzzer_activation == Status::SwitchOn {
+                        sing(&mut buz_left, &mut buz_right, Song::StartupA, false);
+                    } else if statuses.buzzer_activation == Status::SwitchOff {
+                        sing(&mut buz_left, &mut buz_right, Song::StartupA, true);
+                    }
+
+                    if !buzzer_active {
+                        active_buzzer(&mut buz_left, &mut buz_right, false);
+                    }
+                }
+
                 // The master is the only one to start an exchange: it sends its status as a
                 // request and the slave answers with its keys, so both never talk at once.
+                // Still sent while the link is lost, the slave only comes back by answering.
                 if split_count_down.wait().is_ok() {
                     if waiting_answer {
                         no_answers += 1;
@@ -405,6 +435,9 @@ fn main() -> ! {
                 match uart.receive() {
                     Ok(mail) => {
                         if mail.header == HR_STATUS {
+                            last_mail_ticks = ticks;
+                            link_lost = false;
+
                             let status_bits = mail.values[0];
                             let buzzer_active = is_buzzer_active(status_bits);
                             show_status_led(&mut led, status_bits, ticks);
@@ -439,6 +472,14 @@ fn main() -> ! {
                     Err(UartError::Header) => led.on(LedColor::Blue),
                     // Err(UartError::NotComplete) => led.on(LedColor::Orange),
                     Err(UartError::NotComplete) => {}
+                }
+
+                // Lost link: red until the master is back, its first state is then taken
+                // without songs (the changes in between are unknown)
+                if !link_lost && ticks.wrapping_sub(last_mail_ticks) > LINK_TIMEOUT {
+                    link_lost = true;
+                    last_status_bits = None;
+                    led.on(LedColor::Red);
                 }
             }
 
