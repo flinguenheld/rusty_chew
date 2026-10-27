@@ -130,6 +130,8 @@ Mount the controller's drive and use one of these commands:
   cargo run --release --bin split --features slave,zero
 ```
 
+> 💡 How both halves talk over their single wire: [SPLIT_LINK.md](./SPLIT_LINK.md)
+
 ##### Serial
 
 To do some tests and print text throught the [usb port](https://github.com/rust-embedded-community/usbd-serial), you can compile with the feature `serial`:  
