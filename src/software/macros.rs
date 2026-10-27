@@ -153,8 +153,8 @@ fn char_to_usb_code(symbol: char, buffer: Buffer) -> Buffer {
         // French --
         'ç' => KC::CCedilla.usb_code(buffer, &no_mod),
         'é' => KC::EAcute.usb_code(buffer, &no_mod),
-        'œ' => KC::CCedilla.usb_code(buffer, &no_mod),
-        'æ' => KC::CCedilla.usb_code(buffer, &no_mod),
+        'œ' => KC::OE.usb_code(buffer, &no_mod),
+        'æ' => KC::AE.usb_code(buffer, &no_mod),
 
         'â' => KC::ACircum.usb_code(buffer, &no_mod),
         'à' => KC::AGrave.usb_code(buffer, &no_mod),
@@ -177,8 +177,8 @@ fn char_to_usb_code(symbol: char, buffer: Buffer) -> Buffer {
 
         'Ç' => KC::CCedilla.usb_code(buffer, &shifted),
         'É' => KC::EAcute.usb_code(buffer, &shifted),
-        'Œ' => KC::CCedilla.usb_code(buffer, &shifted),
-        'Æ' => KC::CCedilla.usb_code(buffer, &shifted),
+        'Œ' => KC::OE.usb_code(buffer, &shifted),
+        'Æ' => KC::AE.usb_code(buffer, &shifted),
 
         'Â' => KC::ACircum.usb_code(buffer, &shifted),
         'À' => KC::AGrave.usb_code(buffer, &shifted),

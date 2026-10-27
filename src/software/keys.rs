@@ -181,7 +181,7 @@ pub enum KC {
         Half = 3037,
         ThreeQuarter = 3038,
          
-        Yen = 3039, // Keep this one last, it is use by chew as a limit
+        Yen = 3039,
 
     F1  = 4000,
     F2  = 4001,
