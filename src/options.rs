@@ -9,6 +9,7 @@ pub const SONG_MAX_LENGTH: usize = 50;
 
 pub const BUFFER_LENGTH: usize = 100;
 pub const BUFFER_CASE_LENGTH: usize = 10;
+pub const NKRO_MAX_KEYS: usize = 5; // Held together, + 5 mods <= BUFFER_CASE_LENGTH
 
 pub const NB_KEYS: usize = 34;
 pub const TEMPO_DEAD_KEY: u32 = 50;

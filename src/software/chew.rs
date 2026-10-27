@@ -6,6 +6,7 @@ use super::{
     keys::{Buffer, KC},
     modifiers::Modifiers,
     mouse::Mouse,
+    nkro::Nkro,
     status::Statuses,
 };
 use crate::{
@@ -60,7 +61,7 @@ pub struct Chew {
     pre_pressed_keys: Vec<Key, NB_KEYS>,
     pressed_keys: Vec<Key, NB_KEYS>,
     // released_keys: Vec<usize, NB_KEYS>,
-    last_key: Option<usize>,
+    nkro: Nkro,
     last_ticks: u32,
 }
 
@@ -90,7 +91,7 @@ impl Chew {
             pre_pressed_keys: Vec::new(),
             pressed_keys: Vec::new(),
             // released_keys: Vec::new(),
-            last_key: None,
+            nkro: Nkro::new(),
             last_ticks: ticks,
         }
     }
@@ -151,6 +152,9 @@ impl Chew {
         mut statuses: Statuses,
         ticks: u32,
     ) -> (Buffer, WheelMouseReport, Statuses) {
+        // To know if this run pushed cases (see Nkro::update)
+        let buffer_len = key_buffer.keys.len();
+
         // Set new keys with the current layout -----------------------------------------
         for key in self
             .pre_pressed_keys
@@ -325,7 +329,7 @@ impl Chew {
                             // Print home as Regular key if released
                             } else if !self.matrix.is_active(popped_key.index) {
                                 key_buffer = regular.usb_code(key_buffer, &self.mods);
-                                self.last_key = Some(popped_key.index);
+                                self.nkro.hold(&self.matrix, *regular, popped_key.index);
                                 self.dynmac.record(*regular, &self.mods);
                             } else {
                                 // Specific case with two homerow pressed consecutively
@@ -337,7 +341,8 @@ impl Chew {
                         _ => {
                             // Non Homerow key
                             key_buffer = popped_key.code.usb_code(key_buffer, &self.mods);
-                            self.last_key = Some(popped_key.index);
+                            self.nkro
+                                .hold(&self.matrix, popped_key.code, popped_key.index);
                             self.dynmac.record(popped_key.code, &self.mods);
                         }
                     }
@@ -347,7 +352,8 @@ impl Chew {
             } else if !self.matrix.is_active(key.index) {
                 while let Some(popped_key) = self.homerow.pop_front() {
                     key_buffer = popped_key.code.usb_code(key_buffer, &self.mods);
-                    self.last_key = Some(popped_key.index);
+                    self.nkro
+                        .hold(&self.matrix, popped_key.code, popped_key.index);
                     self.dynmac.record(popped_key.code, &self.mods);
                 }
             }
@@ -384,13 +390,9 @@ impl Chew {
                             self.homerow.push_back(*key).ok();
                         } else {
                             key_buffer = k.usb_code(key_buffer, &self.mods);
+                            self.nkro.hold(&self.matrix, k, key.index);
                             self.dynmac.record(k, &self.mods);
                         }
-                    }
-
-                    // No held with macros (They already add the NoEventIndicated)
-                    if k < KC::ACircum {
-                        self.last_key = Some(key.index);
                     }
 
                     key.code = KC::Done;
@@ -416,26 +418,10 @@ impl Chew {
             }
         }
 
-        // Repetition -------------------------------------------------------------------
-        if self.last_key.is_some_and(|index| {
-            !(self.matrix.is_active(index) || (index == usize::MAX && self.mods.caplock))
-        }) {
-            // The potential still active mod(s) will set the value again.
-            self.last_key = None;
-
-            // End --
-            if self.mods.active().is_empty() {
-                key_buffer = KC::None.usb_code(key_buffer, &self.mods);
-            }
-        }
-
-        // Add the active mods (useful for the real mouse) --
-        if self.last_key.is_none() && !self.mods.active().is_empty() {
-            for (key, index) in self.mods.active_kc().iter() {
-                key_buffer = key.usb_code(key_buffer, &self.mods);
-                self.last_key = Some(*index);
-            }
-        }
+        // NKRO --------------------------------------------------------------------------
+        key_buffer = self
+            .nkro
+            .update(key_buffer, buffer_len, &self.matrix, &self.mods);
 
         // --
         self.mouse.release(&self.matrix, &mut mouse_report);

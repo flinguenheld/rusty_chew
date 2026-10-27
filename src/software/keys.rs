@@ -49,6 +49,11 @@ impl Buffer {
     fn add_no_mods(self, keys: &[Keyboard], tempo: u32) -> Self {
         self.add(keys, &Modifiers::new(), &[], tempo)
     }
+
+    // Add the report state built by chew (mods + held keys), as it is.
+    pub fn add_state(self, codes: &[Keyboard]) -> Self {
+        self.add_no_mods(codes, 0)
+    }
 }
 
 // --------------------------------------------------------------------------------------
@@ -281,89 +286,6 @@ pub enum KC {
 }
 
 impl KC {
-    /// Keys with one code and no modifiers of their own, they can be held together (NKRO).
-    /// The enum order is used by other filters (leader, typed, held), so the gaps are handled here.
-    pub fn is_nkro_key(&self) -> bool {
-        (*self >= KC::A && *self <= KC::Z)
-            || (*self >= KC::Enter && *self <= KC::Right && *self != KC::STab)
-            || (*self >= KC::F1 && *self <= KC::F24)
-    }
-
-    /// USB code of an NKRO key (see is_nkro_key), NoEventIndicated for the others.
-    pub fn nkro_code(&self) -> Keyboard {
-        match *self {
-            KC::A => Keyboard::A,
-            KC::B => Keyboard::B,
-            KC::C => Keyboard::C,
-            KC::D => Keyboard::D,
-            KC::E => Keyboard::E,
-            KC::F => Keyboard::F,
-            KC::G => Keyboard::G,
-            KC::H => Keyboard::H,
-            KC::I => Keyboard::I,
-            KC::J => Keyboard::J,
-            KC::K => Keyboard::K,
-            KC::L => Keyboard::L,
-            KC::M => Keyboard::M,
-            KC::N => Keyboard::N,
-            KC::O => Keyboard::O,
-            KC::P => Keyboard::P,
-            KC::Q => Keyboard::Q,
-            KC::R => Keyboard::R,
-            KC::S => Keyboard::S,
-            KC::T => Keyboard::T,
-            KC::U => Keyboard::U,
-            KC::V => Keyboard::V,
-            KC::W => Keyboard::W,
-            KC::X => Keyboard::X,
-            KC::Y => Keyboard::Y,
-            KC::Z => Keyboard::Z,
-
-            KC::Enter     => Keyboard::ReturnEnter,
-            KC::Space     => Keyboard::Space,
-            KC::Esc       => Keyboard::Escape,
-            KC::Del       => Keyboard::DeleteBackspace,
-            KC::BackSpace => Keyboard::DeleteForward,
-            KC::Tab       => Keyboard::Tab,
-            KC::Home      => Keyboard::Home,
-            KC::End       => Keyboard::End,
-            KC::PageUp    => Keyboard::PageUp,
-            KC::PageDown  => Keyboard::PageDown,
-
-            KC::Left      => Keyboard::LeftArrow,
-            KC::Down      => Keyboard::DownArrow,
-            KC::Up        => Keyboard::UpArrow,
-            KC::Right     => Keyboard::RightArrow,
-
-            KC::F1  => Keyboard::F1,
-            KC::F2  => Keyboard::F2,
-            KC::F3  => Keyboard::F3,
-            KC::F4  => Keyboard::F4,
-            KC::F5  => Keyboard::F5,
-            KC::F6  => Keyboard::F6,
-            KC::F7  => Keyboard::F7,
-            KC::F8  => Keyboard::F8,
-            KC::F9  => Keyboard::F9,
-            KC::F10 => Keyboard::F10,
-            KC::F11 => Keyboard::F11,
-            KC::F12 => Keyboard::F12,
-            KC::F13 => Keyboard::F13,
-            KC::F14 => Keyboard::F14,
-            KC::F15 => Keyboard::F15,
-            KC::F16 => Keyboard::F16,
-            KC::F17 => Keyboard::F17,
-            KC::F18 => Keyboard::F18,
-            KC::F19 => Keyboard::F19,
-            KC::F20 => Keyboard::F20,
-            KC::F21 => Keyboard::F21,
-            KC::F22 => Keyboard::F22,
-            KC::F23 => Keyboard::F23,
-            KC::F24 => Keyboard::F24,
-
-            _ => Keyboard::NoEventIndicated,
-        }
-    }
-
     /// Convert a Chew keycode into an array of Keyboard page.
     pub fn usb_code(&self, buffer: Buffer, mods: &Modifiers) -> Buffer {
         if self.is_nkro_key() {

@@ -4,6 +4,7 @@ pub mod keys;
 pub mod macros;
 pub mod modifiers;
 pub mod mouse;
+pub mod nkro;
 pub mod serial_usb;
 pub mod split_mail;
 pub mod status;
