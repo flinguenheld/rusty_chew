@@ -18,11 +18,8 @@ use rusty_chew::software::{
     chew::Chew,
     keys::{BuffCase, Buffer},
     serial_usb::{serial_write_value, serial_write_values},
-    split_mail::{
-        changed_status_song, indexes_to_mask, is_buzzer_active, mask_to_indexes, show_status_led,
-        sides, statuses_to_bits,
-    },
-    status::{Status, Statuses},
+    split_mail::{indexes_to_mask, mask_to_indexes, sides},
+    status::{changed_status_song, is_buzzer_active, show_status_led, statuses_to_bits, Statuses},
 };
 use usbd_serial::SerialPort;
 
@@ -360,6 +357,7 @@ fn main() -> ! {
                     }
 
                     // Update LED & BUZZER, the slave gets the same state --
+                    let last_bits = status_bits;
                     status_bits = statuses_to_bits(&statuses);
                     let buzzer_active = is_buzzer_active(status_bits);
 
@@ -376,30 +374,8 @@ fn main() -> ! {
                         active_buzzer(&mut buz_left, &mut buz_right, true);
                     }
 
-                    if statuses.layout_fr == Status::SwitchOn {
-                        sing(&mut buz_left, &mut buz_right, Song::TwoDF, false);
-                    } else if statuses.layout_fr == Status::SwitchOff {
-                        sing(&mut buz_left, &mut buz_right, Song::TwoDF, true);
-                    } else if statuses.layout_fn == Status::SwitchOn {
-                        sing(&mut buz_left, &mut buz_right, Song::NotifC, false);
-                    } else if statuses.layout_fn == Status::SwitchOff {
-                        sing(&mut buz_left, &mut buz_right, Song::NotifC, true);
-                    } else if statuses.leader_key == Status::SwitchOn {
-                        sing(&mut buz_left, &mut buz_right, Song::NotifA, false);
-                    } else if statuses.caplock == Status::SwitchOn {
-                        sing(&mut buz_left, &mut buz_right, Song::StartupG, false);
-                    } else if statuses.caplock == Status::SwitchOff {
-                        sing(&mut buz_left, &mut buz_right, Song::StartupG, true);
-                    } else if statuses.dynmac_go_waitkey == Status::SwitchOn {
-                        sing(&mut buz_left, &mut buz_right, Song::NotifF, false);
-                    } else if statuses.dynmac_rec_inprogess == Status::SwitchOn {
-                        sing(&mut buz_left, &mut buz_right, Song::AlertD, false);
-                    } else if statuses.dynmac_rec_waitkey == Status::SwitchOn {
-                        sing(&mut buz_left, &mut buz_right, Song::AlertE, false);
-                    } else if statuses.buzzer_activation == Status::SwitchOn {
-                        sing(&mut buz_left, &mut buz_right, Song::StartupA, false);
-                    } else if statuses.buzzer_activation == Status::SwitchOff {
-                        sing(&mut buz_left, &mut buz_right, Song::StartupA, true);
+                    if let Some((song, reverse)) = changed_status_song(last_bits, status_bits) {
+                        sing(&mut buz_left, &mut buz_right, song, reverse);
                     }
 
                     if !buzzer_active {
@@ -510,8 +486,7 @@ fn main() -> ! {
                                 led.on(LedColor::Blue);
                             }
                             Ok(_) => {
-                                usb_next_ticks =
-                                    ticks.wrapping_add(TIMER_USB_LOOP);
+                                usb_next_ticks = ticks.wrapping_add(TIMER_USB_LOOP);
                                 last_printed_key = popped_key;
                             }
                             Err(e) => {

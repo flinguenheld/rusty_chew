@@ -10,7 +10,7 @@ use rusty_chew::options::{SERIAL_ON, TIMER_MONO_LOOP, TIMER_USB_LOOP};
 use rusty_chew::software::{
     chew::Chew,
     keys::{BuffCase, Buffer},
-    status::{Status, Statuses},
+    status::{changed_status_song, is_buzzer_active, show_status_led, statuses_to_bits, Statuses},
 };
 use usbd_serial::SerialPort;
 
@@ -149,6 +149,8 @@ fn main() -> ! {
     let mut ticks: u32 = 0;
     let mut chew = Chew::new(ticks);
     let mut statuses = Statuses::new();
+    // Status bits of the last run, the songs are played for their changes
+    let mut last_status_bits = statuses_to_bits(&statuses);
 
     let mut key_buffer = Buffer::new();
     let mut last_printed_key: BuffCase = BuffCase::default();
@@ -172,51 +174,23 @@ fn main() -> ! {
             (key_buffer, mouse_report, statuses) =
                 chew.run(key_buffer, mouse_report, statuses, ticks);
 
-            if statuses.layout_fr == Status::On {
-                led.on(LedColor::Aqua);
-            } else if statuses.layout_fn == Status::On {
-                led.on(LedColor::Fushia);
-            } else if statuses.leader_key == Status::On {
-                led.on(LedColor::Blue);
-            } else if statuses.caplock == Status::On {
-                led.on(LedColor::Orange);
-            } else if statuses.dynmac_go_waitkey == Status::On {
-                led.blink(LedColor::Olive, 800, ticks);
-            } else if statuses.dynmac_rec_inprogess == Status::On {
-                led.blink(LedColor::Red, 600, ticks);
-            } else if statuses.dynmac_rec_waitkey == Status::On {
-                led.blink(LedColor::Purple, 800, ticks);
-            } else {
-                led.off();
-            }
+            // LED & buzzer, from the statuses' changes since the last run --
+            let bits = statuses_to_bits(&statuses);
+            let buzzer_active = is_buzzer_active(bits);
+            show_status_led(&mut led, bits, ticks);
 
-            if statuses.layout_fr == Status::SwitchOn {
-                buzzer.add_song(Song::TwoDF, Side::Both, false);
-            } else if statuses.layout_fr == Status::SwitchOff {
-                buzzer.add_song(Song::TwoDF, Side::Both, true);
-            } else if statuses.layout_fn == Status::SwitchOn {
-                buzzer.add_song(Song::NotifC, Side::Both, false);
-            } else if statuses.layout_fn == Status::SwitchOff {
-                buzzer.add_song(Song::NotifC, Side::Both, true);
-            } else if statuses.leader_key == Status::SwitchOn {
-                buzzer.add_song(Song::NotifA, Side::Both, false);
-            } else if statuses.caplock == Status::SwitchOn {
-                buzzer.add_song(Song::StartupG, Side::Both, false);
-            } else if statuses.caplock == Status::SwitchOff {
-                buzzer.add_song(Song::StartupG, Side::Both, true);
-            } else if statuses.dynmac_go_waitkey == Status::SwitchOn {
-                buzzer.add_song(Song::NotifF, Side::Both, false);
-            } else if statuses.dynmac_rec_inprogess == Status::SwitchOn {
-                buzzer.add_song(Song::AlertD, Side::Both, false);
-            } else if statuses.dynmac_rec_waitkey == Status::SwitchOn {
-                buzzer.add_song(Song::AlertE, Side::Both, false);
-            } else if statuses.buzzer_activation == Status::SwitchOn {
+            // Enabled before the songs and disabled after them, so the buzzer toggle song
+            // can be heard
+            if buzzer_active {
                 buzzer.set_active(true);
-                buzzer.add_song(Song::StartupA, Side::Both, false);
-            } else if statuses.buzzer_activation == Status::SwitchOff {
-                buzzer.add_song(Song::StartupA, Side::Both, true);
+            }
+            if let Some((song, reverse)) = changed_status_song(last_status_bits, bits) {
+                buzzer.add_song(song, Side::Both, reverse);
+            }
+            if !buzzer_active {
                 buzzer.set_active(false);
             }
+            last_status_bits = bits;
 
             // Mouse report directly done here ------------------------------------------
             // Keyboard has its own timer two allow combinations
@@ -264,8 +238,7 @@ fn main() -> ! {
                             led.on(LedColor::Blue);
                         }
                         Ok(_) => {
-                            usb_next_ticks =
-                                ticks.wrapping_add(TIMER_USB_LOOP);
+                            usb_next_ticks = ticks.wrapping_add(TIMER_USB_LOOP);
                             last_printed_key = popped_key;
                         }
                         Err(e) => {

@@ -79,8 +79,9 @@ Every frame is 5 bytes (`src/hardware/uart.rs`):
 
 ### Mails
 
-The mails are built in `src/software/split_mail.rs`. Both carry a full state,
-not an event, so a lost frame only delays a change, it never loses one.
+The mails are built in `src/software/split_mail.rs`, the status bits in
+`src/software/status.rs`. Both carry a full state, not an event, so a lost
+frame only delays a change, it never loses one.
 
 #### STATUS (master → slave): `[status bits, 0, 0]`
 
@@ -96,10 +97,12 @@ not an event, so a lost frame only delays a change, it never loses one.
 | 7   | Buzzer active   |
 
 - LED: the lowest bit set gives the color (the buzzer bit has none), same on
-  both halves.
-- Songs: the slave compares the bits with the last ones it received
-  (`last ^ new`) and plays the song of the lowest changed bit. The first state
-  after startup, or after a lost link, is taken without songs.
+  both halves and on mono (`show_status_led`).
+- Songs: each side compares the bits with the last ones (`last ^ new`) and
+  plays the song of the lowest changed bit, from one table (`status_song`)
+  shared by mono, the master and the slave. Both halves play the same song,
+  each one its own side of it: that's the stereo. The slave takes its first
+  state after startup, or after a lost link, without songs.
 
 #### KEYS (slave → master): 17-bit mask on 3 bytes
 
