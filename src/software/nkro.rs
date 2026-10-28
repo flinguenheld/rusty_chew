@@ -40,8 +40,9 @@ impl Nkro {
     }
 
     /// Type a key: an NKRO key still down joins the held keys and the new state is pushed,
-    /// anything else goes through usb_code. A one-case hack or a sequence empties the held
-    /// keys first (they would share its mods), they stay out until typed again.
+    /// a released one (tap) is pushed with the held keys then left. Anything else goes
+    /// through usb_code: a one-case hack or a sequence empties the held keys first (they
+    /// would share its mods), they stay out until typed again.
     /// A one-case hack still down keeps its report until its release.
     pub fn type_key(
         &mut self,
@@ -58,29 +59,41 @@ impl Nkro {
         let down = matrix.is_active(index);
         self.solo_key = None;
 
-        // Held with the others, the new key comes last in a case of its own
-        if down && code.is_nkro_key() {
+        if code.is_nkro_key() {
             let nkro_code = code.nkro_code();
-            self.held.retain(|(_, c)| *c != nkro_code);
-            if self.held.is_full() {
-                self.held.remove(0);
-            }
-            self.held.push((index, nkro_code)).ok();
 
-            let report = self.report(mods);
-            self.last_report = report.clone();
-            return key_buffer.add_state(&report);
+            // Held with the others, the new key comes last in a case of its own
+            if down {
+                self.held.retain(|(_, c)| *c != nkro_code);
+                if self.held.is_full() {
+                    self.held.remove(0);
+                }
+                self.held.push((index, nkro_code)).ok();
+                return self.push_state(key_buffer, mods);
+            }
+
+            // Tap (released key, leader result...): state + key, then state.
+            // A key already held is released instead, then pressed again by the state.
+            let tap = if self.held.iter().any(|(_, c)| *c == nkro_code) {
+                self.report_with(mods, Some(nkro_code), None)
+            } else {
+                self.report_with(mods, None, Some(nkro_code))
+            };
+            return self.push_state(key_buffer.add_state(&tap), mods);
         }
 
-        // Tap (released key, leader result...): as before, see docs/NKRO_PLAN.md step 4
-        if !code.is_nkro_key() {
-            self.held.clear();
-            if down && code < KC::ACircum {
-                self.solo_key = Some(index);
-            }
+        self.held.clear();
+        if down && code < KC::ACircum {
+            self.solo_key = Some(index);
         }
 
         code.usb_code(key_buffer, mods)
+    }
+
+    /// Forget the held keys, for cases pushed without type_key (dynamic macro replay).
+    pub fn clear(&mut self) {
+        self.held.clear();
+        self.solo_key = None;
     }
 
     /// End of the chew run: released keys leave, the report is pushed if it changed.
@@ -118,10 +131,32 @@ impl Nkro {
         key_buffer
     }
 
+    /// Push the state (mods + held keys) as the last report.
+    fn push_state(&mut self, key_buffer: Buffer, mods: &Modifiers) -> Buffer {
+        let report = self.report(mods);
+        self.last_report = report.clone();
+        key_buffer.add_state(&report)
+    }
+
     /// Mods + held keys, NoEventIndicated when nothing is pressed.
     fn report(&self, mods: &Modifiers) -> Vec<Keyboard, BUFFER_CASE_LENGTH> {
+        self.report_with(mods, None, None)
+    }
+
+    /// Mods + held keys without `skip`, `extra` last. NoEventIndicated when nothing is pressed.
+    fn report_with(
+        &self,
+        mods: &Modifiers,
+        skip: Option<Keyboard>,
+        extra: Option<Keyboard>,
+    ) -> Vec<Keyboard, BUFFER_CASE_LENGTH> {
         let mut report = Vec::new();
-        for code in mods.active().iter().chain(self.held.iter().map(|(_, c)| c)) {
+        for code in mods
+            .active()
+            .iter()
+            .chain(self.held.iter().map(|(_, c)| c).filter(|c| Some(**c) != skip))
+            .chain(extra.iter())
+        {
             report.push(*code).ok();
         }
         if report.is_empty() {

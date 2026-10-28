@@ -284,7 +284,12 @@ impl Chew {
         }
 
         // Dynamic macros ---------------------------------------------------------------
+        // A replay is a sequence, its cases drop the held keys
+        let replay_len = key_buffer.keys.len();
         key_buffer = self.dynmac.run(&mut self.pressed_keys, key_buffer);
+        if key_buffer.keys.len() > replay_len {
+            self.nkro.clear();
+        }
 
         // Modifiers --------------------------------------------------------------------
         // Regulars --
