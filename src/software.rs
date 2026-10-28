@@ -8,3 +8,4 @@ pub mod nkro;
 pub mod serial_usb;
 pub mod split_mail;
 pub mod status;
+pub mod usb_reports;

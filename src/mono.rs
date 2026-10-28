@@ -6,11 +6,12 @@ use rusty_chew::hardware::{
     gpios::GpiosMono,
     led::{Led, LedColor},
 };
-use rusty_chew::options::{SERIAL_ON, TIMER_MONO_LOOP, TIMER_USB_LOOP};
+use rusty_chew::options::{SERIAL_ON, TIMER_MONO_LOOP};
 use rusty_chew::software::{
     chew::Chew,
-    keys::{BuffCase, Buffer},
+    keys::Buffer,
     status::{changed_status_song, is_buzzer_active, show_status_led, statuses_to_bits, Statuses},
+    usb_reports::UsbReports,
 };
 use usbd_serial::SerialPort;
 
@@ -153,12 +154,8 @@ fn main() -> ! {
     let mut last_status_bits = statuses_to_bits(&statuses);
 
     let mut key_buffer = Buffer::new();
-    let mut last_printed_key: BuffCase = BuffCase::default();
-    // Tick from which the next report can be written (TIMER_USB_LOOP after the last one)
-    let mut usb_next_ticks: u32 = 0;
-
     let mut mouse_report = WheelMouseReport::default();
-    let mut last_mouse_buttons = 0;
+    let mut usb_reports = UsbReports::new();
 
     loop {
         if SERIAL_ON && !usb_dev.poll(&mut [&mut serial]) {
@@ -192,61 +189,25 @@ fn main() -> ! {
             }
             last_status_bits = bits;
 
-            // Mouse report directly done here ------------------------------------------
-            // Keyboard has its own timer two allow combinations
-            if mouse_report.buttons != last_mouse_buttons
-                || mouse_report.x != 0
-                || mouse_report.y != 0
-                || mouse_report.vertical_wheel != 0
-                || mouse_report.horizontal_wheel != 0
-            {
-                let mouse = rusty_chew.device::<WheelMouse<'_, _>, _>();
-                match mouse.write_report(&mouse_report) {
-                    Err(UsbHidError::WouldBlock) => {
-                        led.on(LedColor::Red);
-                    }
-                    Ok(_) => {
-                        last_mouse_buttons = mouse_report.buttons;
-                        mouse_report = WheelMouseReport::default();
-                    }
-                    Err(e) => {
-                        core::panic!("Failed to write mouse report: {:?}", e)
-                    }
-                };
-            }
+            // Mouse report directly done here, the keyboard goes through the queue --
+            usb_reports.write_mouse(
+                rusty_chew.device::<WheelMouse<'_, _>, _>(),
+                &mut mouse_report,
+                &mut led,
+            );
 
             buzzer.sing(ticks);
         }
 
         // USB --------------------------------------------------------------------------
-        if !SERIAL_ON && (ticks.wrapping_sub(usb_next_ticks) as i32) >= 0 {
-            if let Some(popped_key) = key_buffer.keys.pop_front() {
-                if popped_key != last_printed_key {
-                    let keyboard = rusty_chew.device::<NKROBootKeyboard<'_, _>, _>();
-                    match keyboard.write_report(popped_key.key_code.clone()) {
-                        Err(UsbHidError::WouldBlock) => {
-                            // Wake up --
-                            if usb_dev.state() == UsbDeviceState::Suspend {
-                                usb_dev.bus().remote_wakeup();
-                                key_buffer.keys.clear();
-                            } else {
-                                led.on(LedColor::Red);
-                                key_buffer.keys.push_front(popped_key).ok();
-                            }
-                        }
-                        Err(UsbHidError::Duplicate) => {
-                            led.on(LedColor::Blue);
-                        }
-                        Ok(_) => {
-                            usb_next_ticks = ticks.wrapping_add(TIMER_USB_LOOP);
-                            last_printed_key = popped_key;
-                        }
-                        Err(e) => {
-                            core::panic!("Failed to write keyboard report: {:?}", e)
-                        }
-                    }
-                }
-            }
+        if !SERIAL_ON {
+            usb_reports.write_keyboard(
+                rusty_chew.device::<NKROBootKeyboard<'_, _>, _>(),
+                &usb_dev,
+                &mut key_buffer,
+                &mut led,
+                ticks,
+            );
         }
 
         // Tick once per ms -------------------------------------------------------------

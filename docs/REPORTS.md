@@ -221,22 +221,23 @@ runs `update_matrix` + `run` every 5 ms:
 
 ### 5. Sending
 
-USB loop in `src/split.rs` (master) and `src/mono.rs`:
+`UsbReports` (`src/software/usb_reports.rs`), called by the main loop of
+`src/mono.rs` and of the split master (`src/split.rs`):
 
 ```rust
-if ticks reached usb_next_ticks {
+write_keyboard: if ticks reached next_ticks {
     pop the first case
     if it differs from last_printed_key → write_report
 ```
 
 | Result                        | What happens |
 |-------------------------------|--------------|
-| `Ok`                          | `usb_next_ticks = ticks + TIMER_USB_LOOP`, `last_printed_key = case` |
+| `Ok`                          | `next_ticks = ticks + TIMER_USB_LOOP`, `last_printed_key = case` |
 | `WouldBlock`, USB suspended   | remote wakeup, **queue emptied** (keys pressed to wake the PC are dropped) |
 | `WouldBlock`                  | case put back at the front, tried again at the next loop pass |
 | `Duplicate`                   | blue LED, case dropped |
 
-- **Mouse:** written straight away in the run, not through the queue.
+- **Mouse:** `write_mouse`, straight away after the run, not through the queue. Red LED on `WouldBlock`.
 - **`rusty_chew.tick()`:** every 1 ms, for the HID crate's own timing.
 - **`SERIAL_ON`:** with the `serial` feature, no keyboard report is sent.
 
