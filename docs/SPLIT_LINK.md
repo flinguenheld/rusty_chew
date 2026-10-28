@@ -1,8 +1,17 @@
-# Split link
+<div align="center">
+    <img src="../images/crab_angry.png">
+</div>
 
 How the two halves talk over their single data wire.
 
-## Wire
+### Wire
+
+```
+        master                                   slave
+   SM2 TX ──►──┐            GP11            ┌──◄── SM2 TX
+               ├──────── one wire ──────────┤
+   SM1 RX ◄────┘  (pull-up: high when idle) └────► SM1 RX
+```
 
 - One pin (GP11), half duplex: both halves use the same wire, one at a time.
   The pull-up keeps the line high while nobody sends.
@@ -18,16 +27,27 @@ How the two halves talk over their single data wire.
   can finish its stop bit, then returns once the frame is on the wire.
 - The RX FIFO holds 9 bytes (8 + the shift register), so a frame is kept short.
 
-## Exchange
+### Exchange
 
 Only the master starts an exchange, so the two halves never send at the same
 time:
 
-```
-master                                  slave
-  |-- STATUS (request, every 5 ms) -->    |  updates LED & buzzer
-  |<-- KEYS (answer, right away) ------   |
-  |  runs the chew logic
+```mermaid
+%%{init: {"sequence": {"mirrorActors": false, "actorMargin": 30, "messageMargin": 20, "boxMargin": 5}}}%%
+sequenceDiagram
+    participant M as Master
+    participant S as Slave
+    loop every 5 ms (TIMER_SPLIT_LOOP)
+        M->>S: STATUS (request)
+        Note right of S: updates LED & buzzer
+        alt answer received
+            S->>M: KEYS (right away)
+            Note left of M: runs the chew logic
+        else answer lost or corrupted
+            S--xM: KEYS
+            Note left of M: counted as "No answer"<br>at the next request, the retry
+        end
+    end
 ```
 
 - `TIMER_SPLIT_LOOP` = 5 ms between requests, both sides read their buffer
@@ -36,7 +56,11 @@ master                                  slave
   request is the retry.
 - The slave never talks on its own, it only answers.
 
-## Frame
+<div align="center">
+    <img src="../images/prawns.png">
+</div>
+
+### Frame
 
 Every frame is 5 bytes (`src/hardware/uart.rs`):
 
@@ -61,12 +85,12 @@ Every frame is 5 bytes (`src/hardware/uart.rs`):
   bad header or a bad CRC the buffer is emptied, because the frame boundaries
   can't be trusted anymore.
 
-## Mails
+### Mails
 
 The mails are built in `src/software/split_mail.rs`. Both carry a full state,
 not an event, so a lost frame only delays a change, it never loses one.
 
-### STATUS (master → slave): `[status bits, 0, 0]`
+#### STATUS (master → slave): `[status bits, 0, 0]`
 
 | Bit | Status          |
 |-----|-----------------|
@@ -85,13 +109,36 @@ not an event, so a lost frame only delays a change, it never loses one.
   (`last ^ new`) and plays the song of the lowest changed bit. The first state
   after startup, or after a lost link, is taken without songs.
 
-### KEYS (slave → master): 17-bit mask on 3 bytes
+#### KEYS (slave → master): 17-bit mask on 3 bytes
 
 - Bit n = key at position n of `LEFT_INDEXES` / `RIGHT_INDEXES`.
 - Any number of keys fits. The chew logic itself takes 16 pressed keys at
   most.
 
-## Errors
+<div align="center">
+    <img src="../images/prawns.png">
+</div>
+
+### Errors
+
+What `receive()` does with the bytes read, every 1 ms (`src/hardware/uart.rs`):
+
+```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 30, "rankSpacing": 30}}}%%
+flowchart TD
+    B["bytes read into the buffer"] --> H{"first byte<br>is a header?"}
+    H -- no --> EH["buffer emptied<br>blue LED"]
+    H -- yes --> L{"5 bytes?"}
+    L -- no --> W{"still incomplete after<br>MAX_NOT_COMPLETE (3) reads?"}
+    W -- no --> NC["wait for the next read"]
+    W -- yes --> E0["buffer emptied"]
+    L -- yes --> C{"CRC ok?"}
+    C -- no --> EC["buffer emptied<br>CRC +1"]
+    C -- yes --> OK["mail<br>following bytes kept"]
+    OK --> MK{"master: only bits<br>of real keys?"}
+    MK -- no --> BM["Bad masks +1"]
+    MK -- yes --> RUN["chew logic"]
+```
 
 | Problem | Caught by | What happens |
 |---|---|---|
@@ -101,7 +148,7 @@ not an event, so a lost frame only delays a change, it never loses one.
 | No answer | `waiting_answer` | Counted, next request is the retry |
 | Link lost | `LINK_TIMEOUT` (100 ms) | See below |
 
-### Lost link
+#### Lost link
 
 After `LINK_TIMEOUT` without a valid mail:
 
@@ -115,7 +162,31 @@ After `LINK_TIMEOUT` without a valid mail:
   - keeps sending requests, since the slave only comes back by answering one.
 - Slave: LED red, its last status bits go back to `None`.
 
-## Serial debug
+Unplugged, then plugged back:
+
+```mermaid
+%%{init: {"sequence": {"mirrorActors": false, "actorMargin": 30, "messageMargin": 20, "boxMargin": 5}}}%%
+sequenceDiagram
+    participant M as Master
+    participant S as Slave
+    S->>M: KEYS (last valid mail)
+    Note over M,S: wire unplugged
+    M--xS: STATUS, every 5 ms
+    Note left of M: after 100 ms (LINK_TIMEOUT)<br>keys released once, LED red
+    Note right of S: after 100 ms<br>LED red, status reset
+    M--xS: STATUS, still sent
+    Note over M,S: wire plugged back
+    M->>S: STATUS
+    Note right of S: state taken without songs
+    S->>M: KEYS
+    Note left of M: link back, keys still held<br>are seen as new presses
+```
+
+<div align="center">
+    <img src="../images/prawns.png">
+</div>
+
+### Serial debug
 
 Built with the `serial` feature, the master prints every second:
 
@@ -126,7 +197,7 @@ Dropped frames / s - CRC: 0 | Bad masks: 0 | No answer: 0
 All three should stay at 0 on a good link. While the link is lost, "No answer"
 goes up to 200 (one per request).
 
-## Limits and open points
+### Limits and open points
 
 - Keys still held when the link comes back are seen as new presses.
 - A key not yet resolved when the link drops (home row, combo) is released as
@@ -139,3 +210,7 @@ goes up to 200 (one per request).
   holding a key).
 - Both halves must always be flashed with the same version, since the frame
   format is shared.
+
+<div align="center">
+    <img src="../images/crab_back.png">
+</div>

@@ -1,17 +1,15 @@
-# Keyboard reports
+<div align="center">
+    <img src="../images/crab_coffee.png">
+</div>
 
 How a pressed key becomes a USB report.
 
-## Overview
+### Overview
 
-```mermaid
-flowchart LR
-    M["Matrix<br>(keys)"] --> U["update_matrix<br>pre-pressed → pressed"]
-    U --> R["run()<br>hacks"]
-    R --> N["Nkro<br>held keys"]
-    N --> Q[("key_buffer<br>queue of BuffCase")]
-    Q --> L["USB loop<br>1 report every ≥ 15 ms"]
-    L --> C["Computer"]
+```
+ matrix ──► update_matrix ──► run() ──► Nkro ──────► key_buffer (queue) ──► USB loop ──► computer
+ (keys)     pre-pressed →      hacks     held keys   BuffCase, BuffCase…    1 report
+            pressed                                                         every ≥15 ms
 ```
 
 The firmware does two things with the same queue:
@@ -29,7 +27,11 @@ Two rhythms:
 - **Send:** the USB loop **pops** one case every `TIMER_USB_LOOP` (15 ms) at
   most.
 
-## 1. From the matrix to `pressed_keys`
+<div align="center">
+    <img src="../images/prawns.png">
+</div>
+
+### 1. From the matrix to `pressed_keys`
 
 `Chew::update_matrix` (`src/software/chew.rs`):
 
@@ -42,7 +44,7 @@ Two rhythms:
    (layer keys, mouse speed: they matter as long as they're held).
 5. `mods.update_state` drops the modifiers whose key is released.
 
-## 2. The hacks
+### 2. The hacks
 
 `Chew::run`, in this order:
 
@@ -71,7 +73,7 @@ Two rhythms:
 9. **NKRO:** `nkro.update` removes the released keys and pushes the state if
    it changed.
 
-## 3. Building a report
+### 3. Building a report
 
 `KC::usb_code` → `Buffer::add` (`src/software/keys.rs`).
 
@@ -94,12 +96,16 @@ key_code = mods.active() - excluded_mods  +  the key's own codes
 | Text macro          | one case per character, `[NoEvent]` between two identical letters, a final `[NoEvent]` (`src/software/macros.rs`) |
 | `KC::None`          | `[NoEventIndicated]` = everything released |
 
-## 4. Held keys (NKRO)
+<div align="center">
+    <img src="../images/prawns.png">
+</div>
+
+### 4. Held keys (NKRO)
 
 A report is **a state**, not an event: the computer keeps the last one until
 the next one. `Nkro` (`src/software/nkro.rs`) decides which state it sees.
 
-### Three kinds of keys
+#### Three kinds of keys
 
 A report has **one modifier byte for all its keys**. A key with its own
 modifiers can't share a report: `!` = `[LShift, 1]` would turn a held `a`
@@ -114,9 +120,10 @@ into `A`.
 The modifiers held by the user are not a problem: Ctrl + `a` + `s` =
 `[LCtrl, A, S]`, the modifier is meant for all the keys.
 
-### `type_key`: when a key is typed
+#### `type_key`: when a key is typed
 
 ```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 30, "rankSpacing": 30}}}%%
 flowchart TD
     K["type_key(code, index)"] --> N{"NKRO key?"}
     N -- yes --> D{"still down?"}
@@ -146,7 +153,7 @@ flowchart TD
 - **NKRO key while a one-case hack is held:** it replaces the hack
   (`solo_key = None`).
 
-### `update`: end of each run
+#### `update`: end of each run
 
 1. The last case pushed by this run is what the computer has now
    (`last_report`).
@@ -159,15 +166,16 @@ flowchart TD
 The modifiers are in the state, so pressing or releasing one pushes a report
 too. The mods stay without key: Ctrl + click with the real mouse works.
 
-### Examples
+#### Examples
 
 Hold `a`, then `s`:
 
 ```mermaid
+%%{init: {"sequence": {"mirrorActors": false, "actorMargin": 30, "messageMargin": 20, "boxMargin": 5}}}%%
 sequenceDiagram
     participant K as Keys
-    participant F as Firmware
-    participant C as Computer
+    participant F as Chew
+    participant C as PC
     K->>F: a down
     F->>C: [A]
     Note right of C: a a a a…
@@ -183,10 +191,11 @@ sequenceDiagram
 Hold `w`, tap `e` (home row, resolved on release):
 
 ```mermaid
+%%{init: {"sequence": {"mirrorActors": false, "actorMargin": 30, "messageMargin": 20, "boxMargin": 5}}}%%
 sequenceDiagram
     participant K as Keys
-    participant F as Firmware
-    participant C as Computer
+    participant F as Chew
+    participant C as PC
     K->>F: w down
     F->>C: [W]
     K->>F: e down, e up
@@ -200,10 +209,11 @@ sequenceDiagram
 Hold `w`, then `!` (a sequence like `ê` works the same way):
 
 ```mermaid
+%%{init: {"sequence": {"mirrorActors": false, "actorMargin": 30, "messageMargin": 20, "boxMargin": 5}}}%%
 sequenceDiagram
     participant K as Keys
-    participant F as Firmware
-    participant C as Computer
+    participant F as Chew
+    participant C as PC
     K->>F: w down
     F->>C: [W]
     K->>F: ! down
@@ -229,7 +239,11 @@ runs `update_matrix` + `run` every 5 ms:
 | 70 | s | | | S | `[S]` |
 | 90 | | | | | `[NoEvent]` |
 
-## 5. Sending
+<div align="center">
+    <img src="../images/prawns.png">
+</div>
+
+### 5. Sending
 
 USB loop in `src/split.rs` (master) and `src/mono.rs`:
 
@@ -250,13 +264,14 @@ if usb_count_down.wait().is_ok() && key_buffer_tempo <= ticks {
 - **`rusty_chew.tick()`:** every 1 ms, for the HID crate's own timing.
 - **`SERIAL_ON`:** with the `serial` feature, no keyboard report is sent.
 
-## Example: Shift held, then `ê`
+### Example: Shift held, then `ê`
 
 ```mermaid
+%%{init: {"sequence": {"mirrorActors": false, "actorMargin": 30, "messageMargin": 20, "boxMargin": 5}}}%%
 sequenceDiagram
-    participant F as Firmware (queue)
-    participant U as USB loop
-    participant C as Computer
+    participant F as Queue
+    participant U as USB
+    participant C as PC
     Note over F: Shift in pressed_keys
     F->>U: [LShift] (state)
     U->>C: [LShift]
@@ -273,7 +288,11 @@ sequenceDiagram
     U->>C: [LShift]
 ```
 
-## Limits
+<div align="center">
+    <img src="../images/prawns.png">
+</div>
+
+### Limits
 
 - **Numbers and symbols** stay "one held key at a time" (they exclude or add
   Shift). Fine for typing, a limit for games that use numbers while moving.
@@ -290,7 +309,7 @@ sequenceDiagram
   and stops when it's released, even if the other is still down. Games read
   the keys down / up, not the repeat, so they see both.
 
-## Points to keep in mind
+### Points to keep in mind
 
 Observations, not confirmed bugs.
 
@@ -315,3 +334,7 @@ Observations, not confirmed bugs.
   `BUFFER_LENGTH` (100).
 - **Tick wrap:** `key_buffer_tempo <= ticks` doesn't handle the `ticks` wrap
   (after about 49 days on), unlike the rest of the code (`wrapping_*`).
+
+<div align="center">
+    <img src="../images/crab_back.png">
+</div>

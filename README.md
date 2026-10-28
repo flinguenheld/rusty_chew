@@ -38,8 +38,8 @@ It performs some cool hacks that keyboard enthusiasts love:
     - Launch
         - Press `KC::DynMacGo`
         - Then the key which was used to record the macro
-
-> 💡 How the keys become USB reports: [REPORTS.md](./docs/REPORTS.md)
+- Nkro
+    - Can hold several keys at the same time (useful in games)
 
 <div align="center">
     <img src="./images/prawns.png">
@@ -132,8 +132,6 @@ Mount the controller's drive and use one of these commands:
   cargo run --release --bin split --features slave,zero
 ```
 
-> 💡 How both halves talk over their single wire: [SPLIT_LINK.md](./docs/SPLIT_LINK.md)
-
 ##### Serial
 
 To do some tests and print text throught the [usb port](https://github.com/rust-embedded-community/usbd-serial), you can compile with the feature `serial`:  
@@ -151,6 +149,11 @@ And connect to it (for instance with minicom or picocom. *Ctrl-A X to exit* )
 <div align="center">
     <img src="./images/prawns.png">
 </div>
+
+### Docs
+
+- How the keys become USB reports: [REPORTS.md](./docs/REPORTS.md)
+- How both halves talk over their single wire: [SPLIT_LINK.md](./docs/SPLIT_LINK.md)
 
 ### Thanks
 
