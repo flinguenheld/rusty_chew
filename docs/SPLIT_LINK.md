@@ -140,8 +140,8 @@ flowchart TD
 | Flipped bit | CRC | Frame dropped, next request in 5 ms |
 | Bit set above the 17 keys | Mask check | Frame dropped ("Bad masks") |
 | Unknown header | Header check | Buffer emptied, blue LED |
-| No answer | `waiting_answer` | Counted, next request is the retry |
-| Link lost | `LINK_TIMEOUT` (100 ms) | See below |
+| No answer | `DroppedFrames::request_sent` | Counted, next request is the retry |
+| Link lost | `Link::just_lost`, `LINK_TIMEOUT` (100 ms) | See below |
 
 #### Lost link
 

@@ -3,21 +3,19 @@
 
 use cfg_if::cfg_if;
 use embedded_hal::digital::InputPin;
+use heapless::Vec;
 use rusty_chew::hardware::{
     buzzer::{Buzzer, Side, Song},
     gpios::GpiosDirectPin,
     led::{Led, LedColor},
     uart::{Uart, UartError, HEADER_MASTER, HEADER_SLAVE},
 };
-use heapless::Vec;
-use rusty_chew::options::{
-    LINK_TIMEOUT, SERIAL_ON, TIMER_LINK_REPORT, TIMER_SPLIT_LOOP, TIMER_UART_LOOP,
-};
+use rusty_chew::options::{SERIAL_ON, TIMER_LINK_REPORT, TIMER_SPLIT_LOOP, TIMER_UART_LOOP};
 use rusty_chew::software::{
     chew::Chew,
     keys::Buffer,
     serial_usb::{serial_write_value, serial_write_values},
-    split_mail::{indexes_to_mask, mask_to_indexes, sides},
+    split_mail::{indexes_to_mask, mask_to_indexes, sides, DroppedFrames, Link},
     status::{changed_status_song, is_buzzer_active, show_status_led, statuses_to_bits, Statuses},
     usb_reports::UsbReports,
 };
@@ -232,20 +230,13 @@ fn main() -> ! {
     let mut link_report_count_down = timer.count_down();
     link_report_count_down.start(TIMER_LINK_REPORT.millis());
 
-    // Frames dropped by the master since the last report
-    let mut crc_errors: u32 = 0;
-    let mut bad_masks: u32 = 0;
-    let mut no_answers: u32 = 0;
-
-    // Master: whether the slave answered the last request
-    let mut waiting_answer = false;
+    // Both: lost after LINK_TIMEOUT without a valid mail
+    let mut link = Link::new();
+    // Master: frames dropped since the last serial report
+    let mut dropped = DroppedFrames::new();
 
     // Slave: last status bits received, None until the first STATUS frame
     let mut last_status_bits: Option<u8> = None;
-
-    // Both: tick of the last valid mail, the link is lost after LINK_TIMEOUT without one
-    let mut last_mail_ticks: u32 = 0;
-    let mut link_lost = false;
 
     // --
     let mut ticks: u32 = 0;
@@ -265,12 +256,10 @@ fn main() -> ! {
             continue;
         }
 
-        if uart_count_down.wait().is_ok() {
-            // serial_write_time(&mut serial, "Uart loop -- ", ticks, " --\r\n");
-
+        if is_master {
             // --------------------------------------------------------------------------
-            // ----------------------------------------------------------- UART MASTER --
-            if is_master {
+            // ---------------------------------------------------------------- MASTER --
+            if uart_count_down.wait().is_ok() {
                 // Pressed keys given to the chew logic, None when it has nothing to run
                 let mut active_indexes: Option<Vec<u8, 16>> = None;
 
@@ -283,9 +272,8 @@ fn main() -> ! {
                         };
 
                         if let Some(slave_indexes) = slave_indexes {
-                            waiting_answer = false;
-                            last_mail_ticks = ticks;
-                            link_lost = false;
+                            link.received(ticks);
+                            dropped.answer_received();
                             serial_write_values(&mut serial, "Indexes: ", &slave_indexes, "\r\n");
 
                             // Get active indexes & combine them with the other side
@@ -300,14 +288,14 @@ fn main() -> ! {
                                     .collect(),
                             );
                         } else if mail.header == HEADER_SLAVE {
-                            bad_masks += 1;
+                            dropped.bad_masks += 1;
                         }
                     }
 
                     Err(e) => match e {
                         UartError::NothingToRead => {}
                         // A corrupted frame is only a lost cycle, the next request comes in 5 ms
-                        UartError::Crc => crc_errors += 1,
+                        UartError::Crc => dropped.crc += 1,
                         UartError::Header => led.on(LedColor::Blue),
                         // UartError::NotComplete => led.on(LedColor::Orange),
                         UartError::NotComplete => {}
@@ -317,8 +305,7 @@ fn main() -> ! {
                 // Lost link: every key is released once, so none stays stuck, then the logic
                 // waits for the slave. The master doesn't type alone, without the slave's
                 // layer keys & modifiers its own keys would give other characters.
-                if !link_lost && ticks.wrapping_sub(last_mail_ticks) > LINK_TIMEOUT {
-                    link_lost = true;
+                if link.just_lost(ticks) {
                     active_indexes = Some(Vec::new());
                     serial_write_value(&mut serial, "Link lost at tick:", ticks, "\r\n");
                 }
@@ -336,117 +323,34 @@ fn main() -> ! {
                         &mut led,
                     );
 
-                    // Update LED & BUZZER, the slave gets the same state --
+                    // LED & songs, the slave gets the same state with the next request --
                     let last_bits = status_bits;
                     status_bits = statuses_to_bits(&statuses);
-                    let buzzer_active = is_buzzer_active(status_bits);
 
                     // Red until the slave is back, the logic doesn't run in between
-                    if link_lost {
+                    if link.is_lost() {
                         led.on(LedColor::Red);
                     } else {
                         show_status_led(&mut led, status_bits, ticks);
                     }
-
-                    // Enabled before the songs and disabled after them, so the
-                    // buzzer toggle song can be heard
-                    if buzzer_active {
-                        active_buzzer(&mut buz_left, &mut buz_right, true);
-                    }
-
-                    if let Some((song, reverse)) = changed_status_song(last_bits, status_bits) {
-                        sing(&mut buz_left, &mut buz_right, song, reverse);
-                    }
-
-                    if !buzzer_active {
-                        active_buzzer(&mut buz_left, &mut buz_right, false);
-                    }
+                    play_status_songs(&mut buz_left, &mut buz_right, Some(last_bits), status_bits);
                 }
 
                 // The master is the only one to start an exchange: it sends its status as a
                 // request and the slave answers with its keys, so both never talk at once.
                 // Still sent while the link is lost, the slave only comes back by answering.
                 if split_count_down.wait().is_ok() {
-                    if waiting_answer {
-                        no_answers += 1;
-                    }
-
+                    dropped.request_sent();
                     uart.send(HEADER_MASTER, [status_bits, 0, 0], &mut delay);
-                    waiting_answer = true;
                 }
 
                 if link_report_count_down.wait().is_ok() {
-                    serial_write_value(&mut serial, "Dropped frames / s - CRC:", crc_errors, "");
-                    serial_write_value(&mut serial, "| Bad masks:", bad_masks, "");
-                    serial_write_value(&mut serial, "| No answer:", no_answers, "\r\n");
-                    crc_errors = 0;
-                    bad_masks = 0;
-                    no_answers = 0;
-                }
-            } else {
-                // ----------------------------------------------------------------------
-                // -------------------------------------------------------- UART SLAVE --
-                match uart.receive() {
-                    Ok(mail) => {
-                        if mail.header == HEADER_MASTER {
-                            last_mail_ticks = ticks;
-                            link_lost = false;
-
-                            let status_bits = mail.values[0];
-                            let buzzer_active = is_buzzer_active(status_bits);
-                            show_status_led(&mut led, status_bits, ticks);
-
-                            if buzzer_active {
-                                active_buzzer(&mut buz_left, &mut buz_right, true);
-                            }
-
-                            // The changes are found by comparing with the last state, so a lost
-                            // frame only delays them. The first state is taken without songs.
-                            if let Some((song, reverse)) = last_status_bits
-                                .and_then(|last| changed_status_song(last, status_bits))
-                            {
-                                sing(&mut buz_left, &mut buz_right, song, reverse);
-                            }
-
-                            if !buzzer_active {
-                                active_buzzer(&mut buz_left, &mut buz_right, false);
-                            }
-                            last_status_bits = Some(status_bits);
-
-                            // Answer the request with the pressed keys, the slave only talks
-                            // when the master asks
-                            let mask = indexes_to_mask(&gpios.get_active_indexes(), own_side);
-                            uart.send(HEADER_SLAVE, mask, &mut delay);
-                        }
-                    }
-
-                    Err(UartError::NothingToRead) => {}
-                    // The master sends its status again in the next cycle
-                    Err(UartError::Crc) => {}
-                    Err(UartError::Header) => led.on(LedColor::Blue),
-                    // Err(UartError::NotComplete) => led.on(LedColor::Orange),
-                    Err(UartError::NotComplete) => {}
+                    dropped.report(&mut serial);
                 }
 
-                // Lost link: red until the master is back, its first state is then taken
-                // without songs (the changes in between are unknown)
-                if !link_lost && ticks.wrapping_sub(last_mail_ticks) > LINK_TIMEOUT {
-                    link_lost = true;
-                    last_status_bits = None;
-                    led.on(LedColor::Red);
-                }
+                play_buzzer(&mut buz_left, &mut buz_right, ticks);
             }
 
-            if let Some(ref mut buzzer) = buz_left {
-                buzzer.sing(ticks);
-            } else if let Some(ref mut buzzer) = buz_right {
-                buzzer.sing(ticks);
-            }
-        }
-
-        // ------------------------------------------------------------------------------
-        // -------------------------------------------------------------------- MASTER --
-        if is_master {
             // USB --
             if !SERIAL_ON {
                 usb_reports.write_keyboard(
@@ -483,11 +387,88 @@ fn main() -> ! {
         } else {
             // --------------------------------------------------------------------------
             // ----------------------------------------------------------------- SLAVE --
+            if uart_count_down.wait().is_ok() {
+                match uart.receive() {
+                    Ok(mail) => {
+                        if mail.header == HEADER_MASTER {
+                            link.received(ticks);
+
+                            // The changes are found by comparing with the last state, so a lost
+                            // frame only delays them. The first state is taken without songs.
+                            let status_bits = mail.values[0];
+                            show_status_led(&mut led, status_bits, ticks);
+                            play_status_songs(
+                                &mut buz_left,
+                                &mut buz_right,
+                                last_status_bits,
+                                status_bits,
+                            );
+                            last_status_bits = Some(status_bits);
+
+                            // Answer the request with the pressed keys, the slave only talks
+                            // when the master asks
+                            let mask = indexes_to_mask(&gpios.get_active_indexes(), own_side);
+                            uart.send(HEADER_SLAVE, mask, &mut delay);
+                        }
+                    }
+
+                    Err(UartError::NothingToRead) => {}
+                    // The master sends its status again in the next cycle
+                    Err(UartError::Crc) => {}
+                    Err(UartError::Header) => led.on(LedColor::Blue),
+                    // Err(UartError::NotComplete) => led.on(LedColor::Orange),
+                    Err(UartError::NotComplete) => {}
+                }
+
+                // Lost link: red until the master is back, its first state is then taken
+                // without songs (the changes in between are unknown)
+                if link.just_lost(ticks) {
+                    last_status_bits = None;
+                    led.on(LedColor::Red);
+                }
+
+                play_buzzer(&mut buz_left, &mut buz_right, ticks);
+            }
+
             // Ticks used to blink the LED
             if tick_count_down.wait().is_ok() {
                 ticks = ticks.wrapping_add(1);
             }
         }
+    }
+}
+
+/// Songs for the status changes since the last state (none without a last state).
+/// The buzzer is enabled before them and disabled after, so the buzzer toggle song can be heard.
+fn play_status_songs<IL: SliceId, IR: SliceId>(
+    buzzer_left: &mut Option<Buzzer<IL>>,
+    buzzer_right: &mut Option<Buzzer<IR>>,
+    last: Option<u8>,
+    bits: u8,
+) {
+    let buzzer_active = is_buzzer_active(bits);
+
+    if buzzer_active {
+        active_buzzer(buzzer_left, buzzer_right, true);
+    }
+    if let Some((song, reverse)) = last.and_then(|last| changed_status_song(last, bits)) {
+        sing(buzzer_left, buzzer_right, song, reverse);
+    }
+    if !buzzer_active {
+        active_buzzer(buzzer_left, buzzer_right, false);
+    }
+}
+
+/// Play the current note of this side's buzzer.
+fn play_buzzer<IL: SliceId, IR: SliceId>(
+    buzzer_left: &mut Option<Buzzer<IL>>,
+    buzzer_right: &mut Option<Buzzer<IR>>,
+    ticks: u32,
+) {
+    if let Some(buzz) = buzzer_left {
+        buzz.sing(ticks);
+    } else if let Some(buzz) = buzzer_right {
+        buzz.sing(ticks);
     }
 }
 
