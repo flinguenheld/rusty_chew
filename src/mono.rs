@@ -145,9 +145,6 @@ fn main() -> ! {
     let mut mono_count_down = timer.count_down();
     mono_count_down.start(TIMER_MONO_LOOP.millis());
 
-    let mut usb_count_down = timer.count_down();
-    usb_count_down.start(TIMER_USB_LOOP.millis());
-
     // --
     let mut ticks: u32 = 0;
     let mut chew = Chew::new(ticks);
@@ -155,7 +152,8 @@ fn main() -> ! {
 
     let mut key_buffer = Buffer::new();
     let mut last_printed_key: BuffCase = BuffCase::default();
-    let mut key_buffer_tempo = 0;
+    // Tick from which the next report can be written (TIMER_USB_LOOP or the case's tempo)
+    let mut usb_next_ticks: u32 = 0;
 
     let mut mouse_report = WheelMouseReport::default();
     let mut last_mouse_buttons = 0;
@@ -247,7 +245,7 @@ fn main() -> ! {
         }
 
         // USB --------------------------------------------------------------------------
-        if !SERIAL_ON && usb_count_down.wait().is_ok() && key_buffer_tempo <= ticks {
+        if !SERIAL_ON && (ticks.wrapping_sub(usb_next_ticks) as i32) >= 0 {
             if let Some(popped_key) = key_buffer.keys.pop_front() {
                 if popped_key != last_printed_key {
                     let keyboard = rusty_chew.device::<NKROBootKeyboard<'_, _>, _>();
@@ -266,7 +264,8 @@ fn main() -> ! {
                             led.on(LedColor::Blue);
                         }
                         Ok(_) => {
-                            key_buffer_tempo = ticks.wrapping_add(popped_key.tempo);
+                            usb_next_ticks =
+                                ticks.wrapping_add(TIMER_USB_LOOP.max(popped_key.tempo));
                             last_printed_key = popped_key;
                         }
                         Err(e) => {

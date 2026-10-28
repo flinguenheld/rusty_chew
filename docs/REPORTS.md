@@ -9,7 +9,7 @@ How a pressed key becomes a USB report.
 ```
  matrix ──► update_matrix ──► run() ──► Nkro ──────► key_buffer (queue) ──► USB loop ──► computer
  (keys)     pre-pressed →      hacks     held keys   BuffCase, BuffCase…    1 report
-            pressed                                                         every ≥15 ms
+            pressed                                                         ≥15 ms apart
 ```
 
 The firmware does two things with the same queue:
@@ -24,8 +24,8 @@ Two rhythms:
 
 - **Produce:** `chew.run` runs at each matrix update (every 5 ms on split,
   when the slave's keys arrive). It **pushes** cases into the queue.
-- **Send:** the USB loop **pops** one case every `TIMER_USB_LOOP` (15 ms) at
-  most.
+- **Send:** the USB loop **pops** one case as soon as the last one is
+  `TIMER_USB_LOOP` (15 ms) old, or its `tempo` if longer.
 
 <div align="center">
     <img src="../images/prawns.png">
@@ -43,6 +43,29 @@ Two rhythms:
 4. Released keys and `KC::Done` keys are removed. `KC::DoneButKeep` stays
    (layer keys, mouse speed: they matter as long as they're held).
 5. `mods.update_state` drops the modifiers whose key is released.
+
+#### The 5 ms samples
+
+The matrix is read every 5 ms (`TIMER_MONO_LOOP` on mono, each exchange with
+the slave on split), so `ticks` jump by 5 between two updates. The thresholds
+keep their real duration, rounded up to the next sample:
+
+```
+ sample           1     2     3     4     5        one every 5 ms
+ first key ticks  1     6     11    16    21 > 20 → pressed_keys
+ second key       ✔     ✔     ✔     ✔     ✘        too late for a combo
+```
+
+- A key resolves 20-25 ms after its press: up to 5 ms before it's seen, then
+  `COMBO_TIME`.
+- **The combo window is 4 samples:** the second key must be seen while the
+  first is at 16 at most. That's 15 ms between samples, so 10 to 20 ms between
+  the two presses, depending on where they fall between samples. A combo that
+  sometimes doesn't trigger can come from there.
+- Only multiples of 5 change something: `COMBO_TIME` = 22 behaves like 25.
+- Keys first seen in the same sample lose their real order: they come in the
+  order of the matrix (on split, the master's keys first, then the slave's).
+- `HOLD_TIME` (150 ms) moves by 5 ms at most, too little to feel.
 
 ### 2. The hacks
 
@@ -248,21 +271,50 @@ runs `update_matrix` + `run` every 5 ms:
 USB loop in `src/split.rs` (master) and `src/mono.rs`:
 
 ```rust
-if usb_count_down.wait().is_ok() && key_buffer_tempo <= ticks {
+if ticks reached usb_next_ticks {
     pop the first case
     if it differs from last_printed_key → write_report
 ```
 
 | Result                        | What happens |
 |-------------------------------|--------------|
-| `Ok`                          | `key_buffer_tempo = ticks + tempo`, `last_printed_key = case` |
+| `Ok`                          | `usb_next_ticks = ticks + max(TIMER_USB_LOOP, tempo)`, `last_printed_key = case` |
 | `WouldBlock`, USB suspended   | remote wakeup, **queue emptied** (keys pressed to wake the PC are dropped) |
-| `WouldBlock`                  | case put back at the front, next slot |
+| `WouldBlock`                  | case put back at the front, tried again at the next loop pass |
 | `Duplicate`                   | blue LED, case dropped |
 
 - **Mouse:** written straight away in the run, not through the queue.
 - **`rusty_chew.tick()`:** every 1 ms, for the HID crate's own timing.
 - **`SERIAL_ON`:** with the `serial` feature, no keyboard report is sent.
+
+#### Minimum gap
+
+There's no USB clock: a report is written as soon as it's allowed, at least
+`TIMER_USB_LOOP` (15 ms) after the last one, or the last case's `tempo` if
+longer. On the master, over 30 ms (one character = 0.5 ms), `a` then `b`
+pressed quickly:
+
+```
+ms            0         5         10        15        20        25        30
+              |·········|·········|·········|·········|·········|·········|
+split request ▼         ▼         ▼         ▼         ▼         ▼         ▼
+chew run          ●         ●         ●         ●         ●         ●
+pushed            [A]       [A, B]
+written           ▲─────────────────────────────▲
+                  [A]          15 ms gap        [A, B]
+```
+
+- **▼ split request** (`TIMER_SPLIT_LOOP`, 5 ms): STATUS sent, on a 1 ms UART
+  tick.
+- **● chew run:** about 1-3 ms after the request, when the slave's KEYS mail
+  is read. `update_matrix` + `run` push the new cases.
+- **▲ written:** `[A]` goes out in the same loop pass as its run, the queue
+  was empty and the gap long past. `[A, B]` waits for the 15 ms gap.
+
+So a lone key isn't delayed at all, and the reports of a sequence or a fast
+roll stay 15 ms apart (or their `tempo`). Before, the USB loop ran on its own
+15 ms clock: a lone key waited for the next slot, 3, 8 or 13 ms on split
+(always the same three, since 15 = 3 × 5).
 
 ### Example: Shift held, then `ê`
 
@@ -283,7 +335,7 @@ sequenceDiagram
     U->>C: [RAlt, 6]
     Note over U: waits 50 ms (tempo)
     U->>C: [LShift, E] → Ê
-    Note over U: next 15 ms slot
+    Note over U: 15 ms gap
     U->>C: [NoEvent]
     U->>C: [LShift]
 ```
@@ -313,14 +365,28 @@ sequenceDiagram
 
 Observations, not confirmed bugs.
 
-- **Latency:**
-  - a key waits more than `COMBO_TIME` before it resolves (about 25 ms on
-    split, since `ticks` only move at each 5 ms exchange),
-  - then up to `TIMER_USB_LOOP` for its USB slot,
-  - so about 25-45 ms from press to report, + `HOLD_TIME` for home-row keys.
-    HID allows a report every 1 ms, the 15 ms slot is a choice of this
-    firmware.
-- **Throughput:** one report per 15 ms is about 66 reports/s. `MacroNixOS`
+- **Latency**, from the press to the computer (+ `HOLD_TIME` for home-row
+  keys):
+
+  | Stage | Cost |
+  |---|---|
+  | Matrix sample | 0-5 ms |
+  | Split exchange (split only) | ~1-3 ms |
+  | `COMBO_TIME` | 20 ms |
+  | USB gap (`TIMER_USB_LOOP`) | 0 ms alone, up to 15 ms behind another report |
+  | Host poll | 0-10 ms |
+  | **Total** | **about 21-38 ms** for a lone key |
+
+  - **Host poll:** the default `NKROBootKeyboardConfig` of the HID crate sets
+    the IN endpoint to 10 ms (`in_endpoint(10.millis())`), so the computer
+    reads a report every 10 ms. It can be set with a custom config instead of
+    `default()`.
+  - HID allows a report every 1 ms, the 15 ms gap is a choice of this
+    firmware. Below the host poll (10 ms), the writes would mostly return
+    `WouldBlock`.
+  - `COMBO_TIME`, `TIMER_USB_LOOP` and the host poll weigh more than the 5 ms
+    samples. Each change is a separate test.
+- **Throughput:** one report per 15 ms at most is about 66 reports/s. `MacroNixOS`
   (≈ 45 reports) takes about 0.7 s, and keys typed meanwhile wait behind it.
   NKRO pushes one report per change (press, release, modifier), so rolls with
   several keys held can queue up a little. Lowering `TIMER_USB_LOOP` would be
@@ -332,8 +398,9 @@ Observations, not confirmed bugs.
   same run (two `!` queued behind a home-row key) would.
 - **Silent drops:** `push_back(...).ok()` drops cases once the queue holds
   `BUFFER_LENGTH` (100).
-- **Tick wrap:** `key_buffer_tempo <= ticks` doesn't handle the `ticks` wrap
-  (after about 49 days on), unlike the rest of the code (`wrapping_*`).
+- **Tick wrap:** the mouse tempos (`ticks >= self.move_tempo`) don't handle
+  the `ticks` wrap (after about 49 days on), unlike the USB gap and the rest
+  of the code (`wrapping_*`).
 
 <div align="center">
     <img src="../images/crab_back.png">

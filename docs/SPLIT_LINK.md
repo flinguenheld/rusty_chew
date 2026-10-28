@@ -32,22 +32,11 @@ How the two halves talk over their single data wire.
 Only the master starts an exchange, so the two halves never send at the same
 time:
 
-```mermaid
-%%{init: {"sequence": {"mirrorActors": false, "actorMargin": 30, "messageMargin": 20, "boxMargin": 5}}}%%
-sequenceDiagram
-    participant M as Master
-    participant S as Slave
-    loop every 5 ms (TIMER_SPLIT_LOOP)
-        M->>S: STATUS (request)
-        Note right of S: updates LED & buzzer
-        alt answer received
-            S->>M: KEYS (right away)
-            Note left of M: runs the chew logic
-        else answer lost or corrupted
-            S--xM: KEYS
-            Note left of M: counted as "No answer"<br>at the next request, the retry
-        end
-    end
+```
+master                                  slave
+  |-- STATUS (request, every 5 ms) -->    |  updates LED & buzzer
+  |<-- KEYS (answer, right away) ------   |
+  |  runs the chew logic
 ```
 
 - `TIMER_SPLIT_LOOP` = 5 ms between requests, both sides read their buffer
@@ -55,6 +44,20 @@ sequenceDiagram
 - A request that gets no answer is counted ("No answer" on serial). The next
   request is the retry.
 - The slave never talks on its own, it only answers.
+
+Round trip, from the request to the chew logic:
+
+| Step | At 115200 |
+|---|---|
+| Master sends (100 µs guard + 5 bytes) | 0.53 ms |
+| Slave reads its buffer | 0-1 ms |
+| Slave answers | 0.53 ms |
+| Master reads its buffer | 0-1 ms |
+| **Total** | **1.1-3.1 ms** |
+
+The two 1 ms reads weigh more than the wire: at 921600 the total would still
+be 0.3-2.3 ms. A faster UART mainly shortens `send()`, which blocks the master
+loop while the frame goes out (about 0.5 ms every 5 ms at 115200).
 
 <div align="center">
     <img src="../images/prawns.png">
