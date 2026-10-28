@@ -18,7 +18,7 @@ use crate::{
 ///     release b  ->  [A]
 ///     release a  ->  [NoEvent]
 ///
-/// Keys with their own modifiers (symbols, é...) can't share a report, see docs/NKRO_PLAN.md.
+/// Keys with their own modifiers (symbols, é...) can't share a report, see docs/REPORTS.md.
 pub struct Nkro {
     // NKRO keys typed and still down: matrix index + USB code
     held: Vec<(usize, Keyboard), NKRO_MAX_KEYS>,
