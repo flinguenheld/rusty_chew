@@ -152,7 +152,7 @@ fn main() -> ! {
 
     let mut key_buffer = Buffer::new();
     let mut last_printed_key: BuffCase = BuffCase::default();
-    // Tick from which the next report can be written (TIMER_USB_LOOP or the case's tempo)
+    // Tick from which the next report can be written (TIMER_USB_LOOP after the last one)
     let mut usb_next_ticks: u32 = 0;
 
     let mut mouse_report = WheelMouseReport::default();
@@ -265,7 +265,7 @@ fn main() -> ! {
                         }
                         Ok(_) => {
                             usb_next_ticks =
-                                ticks.wrapping_add(TIMER_USB_LOOP.max(popped_key.tempo));
+                                ticks.wrapping_add(TIMER_USB_LOOP);
                             last_printed_key = popped_key;
                         }
                         Err(e) => {

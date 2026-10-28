@@ -9,23 +9,25 @@ How a pressed key becomes a USB report.
 ```
  matrix ──► update_matrix ──► run() ──► Nkro ──────► key_buffer (queue) ──► USB loop ──► computer
  (keys)     pre-pressed →      hacks     held keys   BuffCase, BuffCase…    1 report
-            pressed                                                         ≥15 ms apart
+            pressed                                                         ≥10 ms apart
 ```
 
 The firmware does two things with the same queue:
 
 - it **types**: a hack (accent, symbol, macro…) pushes one or more reports,
-  each with its own pause, and the USB loop sends them one by one,
+  and the USB loop sends them one by one,
 - it **holds**: `Nkro` keeps the plain keys still down (letters, arrows,
   Enter…) and pushes the state (mods + held keys) each time it changes, so
   several keys can be held together (see [4](#4-held-keys-nkro)).
 
 Two rhythms:
 
-- **Produce:** `chew.run` runs at each matrix update (every 5 ms on split,
-  when the slave's keys arrive). It **pushes** cases into the queue.
+- **Produce:** `chew.run` runs at each matrix update (every 5 ms). It
+  **pushes** cases into the queue.
 - **Send:** the USB loop **pops** one case as soon as the last one is
-  `TIMER_USB_LOOP` (15 ms) old, or its `tempo` if longer.
+  `TIMER_USB_LOOP` (10 ms) old.
+
+> 💡 When all this happens, and what each timer costs: [TIMING.md](./TIMING.md)
 
 <div align="center">
     <img src="../images/prawns.png">
@@ -44,28 +46,8 @@ Two rhythms:
    (layer keys, mouse speed: they matter as long as they're held).
 5. `mods.update_state` drops the modifiers whose key is released.
 
-#### The 5 ms samples
-
-The matrix is read every 5 ms (`TIMER_MONO_LOOP` on mono, each exchange with
-the slave on split), so `ticks` jump by 5 between two updates. The thresholds
-keep their real duration, rounded up to the next sample:
-
-```
- sample           1     2     3     4     5        one every 5 ms
- first key ticks  1     6     11    16    21 > 20 → pressed_keys
- second key       ✔     ✔     ✔     ✔     ✘        too late for a combo
-```
-
-- A key resolves 20-25 ms after its press: up to 5 ms before it's seen, then
-  `COMBO_TIME`.
-- **The combo window is 4 samples:** the second key must be seen while the
-  first is at 16 at most. That's 15 ms between samples, so 10 to 20 ms between
-  the two presses, depending on where they fall between samples. A combo that
-  sometimes doesn't trigger can come from there.
-- Only multiples of 5 change something: `COMBO_TIME` = 22 behaves like 25.
-- Keys first seen in the same sample lose their real order: they come in the
-  order of the matrix (on split, the master's keys first, then the slave's).
-- `HOLD_TIME` (150 ms) moves by 5 ms at most, too little to feel.
+> 💡 The matrix is read every 5 ms, what it means for `COMBO_TIME` and the
+> combo window: [TIMING.md](./TIMING.md#the-5-ms-samples)
 
 ### 2. The hacks
 
@@ -101,8 +83,7 @@ keep their real duration, rounded up to the next sample:
 `KC::usb_code` → `Buffer::add` (`src/software/keys.rs`).
 
 One `BuffCase` = **one full HID report** (`key_code`, up to
-`BUFFER_CASE_LENGTH` = 16 codes) **+ a `tempo`**, the pause to wait *after*
-sending it.
+`BUFFER_CASE_LENGTH` = 16 codes).
 
 ```rust
 key_code = mods.active() - excluded_mods  +  the key's own codes
@@ -114,7 +95,7 @@ key_code = mods.active() - excluded_mods  +  the key's own codes
 | `Num1`              | `[1]`, Shift excluded |
 | `Exclaim`           | `[LShift, 1]` |
 | `EAcute`            | `[RAlt, E]`, RAlt excluded from the mods and given explicitly |
-| `ECircum` (ê)       | `[RAlt, 6]` + `TEMPO_DEAD_KEY` (50 ms) → `[mods, E]` → `[NoEvent]` |
+| `ECircum` (ê)       | `[RAlt, 6]` (dead key) → `[mods, E]` → `[NoEvent]` |
 | `Tion`              | `[T]` → `[I]` → `[O]` → `[N]` → `[NoEvent]`, Alt / Ctrl / Gui excluded so the letters can't become shortcuts |
 | Text macro          | one case per character, `[NoEvent]` between two identical letters, a final `[NoEvent]` (`src/software/macros.rs`) |
 | `KC::None`          | `[NoEventIndicated]` = everything released |
@@ -193,59 +174,31 @@ too. The mods stay without key: Ctrl + click with the real mouse works.
 
 Hold `a`, then `s`:
 
-```mermaid
-%%{init: {"sequence": {"mirrorActors": false, "actorMargin": 30, "messageMargin": 20, "boxMargin": 5}}}%%
-sequenceDiagram
-    participant K as Keys
-    participant F as Chew
-    participant C as PC
-    K->>F: a down
-    F->>C: [A]
-    Note right of C: a a a a…
-    K->>F: s down
-    F->>C: [A, S]
-    Note right of C: s s s… (the OS repeats the last key)
-    K->>F: a up
-    F->>C: [S]
-    K->>F: s up
-    F->>C: [NoEvent]
+```
+ keys       reports       PC
+ a down  →  [A]           a a a a…
+ s down  →  [A, S]        s s s…  (the OS repeats the last key)
+ a up    →  [S]
+ s up    →  [NoEvent]
 ```
 
 Hold `w`, tap `e` (home row, resolved on release):
 
-```mermaid
-%%{init: {"sequence": {"mirrorActors": false, "actorMargin": 30, "messageMargin": 20, "boxMargin": 5}}}%%
-sequenceDiagram
-    participant K as Keys
-    participant F as Chew
-    participant C as PC
-    K->>F: w down
-    F->>C: [W]
-    K->>F: e down, e up
-    F->>C: [W, E]
-    F->>C: [W]
-    Note right of C: e typed, w still held
-    K->>F: w up
-    F->>C: [NoEvent]
+```
+ keys            reports         PC
+ w down       →  [W]
+ e down, up   →  [W, E], [W]     e typed, w still held
+ w up         →  [NoEvent]
 ```
 
 Hold `w`, then `!` (a sequence like `ê` works the same way):
 
-```mermaid
-%%{init: {"sequence": {"mirrorActors": false, "actorMargin": 30, "messageMargin": 20, "boxMargin": 5}}}%%
-sequenceDiagram
-    participant K as Keys
-    participant F as Chew
-    participant C as PC
-    K->>F: w down
-    F->>C: [W]
-    K->>F: ! down
-    Note over F: held emptied
-    F->>C: [LShift, 1]
-    K->>F: ! up
-    F->>C: [NoEvent]
-    K->>F: w up
-    Note over F,C: nothing, w is already out
+```
+ keys       reports          PC
+ w down  →  [W]
+ ! down  →  [LShift, 1]      held emptied: w released, ! typed
+ ! up    →  [NoEvent]
+ w up    →  nothing          w is already out
 ```
 
 On split, `a` then `s`, both NKRO keys, no combo between them. The master
@@ -278,7 +231,7 @@ if ticks reached usb_next_ticks {
 
 | Result                        | What happens |
 |-------------------------------|--------------|
-| `Ok`                          | `usb_next_ticks = ticks + max(TIMER_USB_LOOP, tempo)`, `last_printed_key = case` |
+| `Ok`                          | `usb_next_ticks = ticks + TIMER_USB_LOOP`, `last_printed_key = case` |
 | `WouldBlock`, USB suspended   | remote wakeup, **queue emptied** (keys pressed to wake the PC are dropped) |
 | `WouldBlock`                  | case put back at the front, tried again at the next loop pass |
 | `Duplicate`                   | blue LED, case dropped |
@@ -287,58 +240,29 @@ if ticks reached usb_next_ticks {
 - **`rusty_chew.tick()`:** every 1 ms, for the HID crate's own timing.
 - **`SERIAL_ON`:** with the `serial` feature, no keyboard report is sent.
 
-#### Minimum gap
-
-There's no USB clock: a report is written as soon as it's allowed, at least
-`TIMER_USB_LOOP` (15 ms) after the last one, or the last case's `tempo` if
-longer. On the master, over 30 ms (one character = 0.5 ms), `a` then `b`
-pressed quickly:
-
-```
-ms            0         5         10        15        20        25        30
-              |·········|·········|·········|·········|·········|·········|
-split request ▼         ▼         ▼         ▼         ▼         ▼         ▼
-chew run          ●         ●         ●         ●         ●         ●
-pushed            [A]       [A, B]
-written           ▲─────────────────────────────▲
-                  [A]          15 ms gap        [A, B]
-```
-
-- **▼ split request** (`TIMER_SPLIT_LOOP`, 5 ms): STATUS sent, on a 1 ms UART
-  tick.
-- **● chew run:** about 1-3 ms after the request, when the slave's KEYS mail
-  is read. `update_matrix` + `run` push the new cases.
-- **▲ written:** `[A]` goes out in the same loop pass as its run, the queue
-  was empty and the gap long past. `[A, B]` waits for the 15 ms gap.
-
-So a lone key isn't delayed at all, and the reports of a sequence or a fast
-roll stay 15 ms apart (or their `tempo`). Before, the USB loop ran on its own
-15 ms clock: a lone key waited for the next slot, 3, 8 or 13 ms on split
-(always the same three, since 15 = 3 × 5).
+> 💡 A lone report goes out at once, the next ones wait for the gap:
+> [TIMING.md](./TIMING.md#minimum-gap)
 
 ### Example: Shift held, then `ê`
 
-```mermaid
-%%{init: {"sequence": {"mirrorActors": false, "actorMargin": 30, "messageMargin": 20, "boxMargin": 5}}}%%
-sequenceDiagram
-    participant F as Queue
-    participant U as USB
-    participant C as PC
-    Note over F: Shift in pressed_keys
-    F->>U: [LShift] (state)
-    U->>C: [LShift]
-    Note over F: ê resolved
-    F->>U: [RAlt, 6] +50 ms
-    F->>U: [LShift, E]
-    F->>U: [NoEvent]
-    F->>U: [LShift] (state, Shift still held)
-    U->>C: [RAlt, 6]
-    Note over U: waits 50 ms (tempo)
-    U->>C: [LShift, E] → Ê
-    Note over U: 15 ms gap
-    U->>C: [NoEvent]
-    U->>C: [LShift]
 ```
+ pushed in one run               written     PC
+ [RAlt, 6]                       t           dead key ^, waits for a letter
+ [LShift, E]                     t + 10      Ê
+ [NoEvent]                       t + 20      everything released
+ [LShift]      state, Shift held t + 30      Shift held again
+```
+
+Shift was already held, so `[LShift]` went out before. Each case waits the
+10 ms gap.
+
+**No pause after the dead key:** the OS composes the accent from the *order*
+of the events, not their timing (`^` then `e` works however fast or slow it's
+typed). What matters is that the computer reads the dead key's case on its
+own, and the gap guarantees it: at most one report per host poll, and a
+`WouldBlock` waits instead of being lost. A 50 ms `TEMPO_DEAD_KEY` was used
+when the USB loop ran every 2 ms, faster than the host poll, and was removed
+once tested useless.
 
 <div align="center">
     <img src="../images/prawns.png">
@@ -365,32 +289,7 @@ sequenceDiagram
 
 Observations, not confirmed bugs.
 
-- **Latency**, from the press to the computer (+ `HOLD_TIME` for home-row
-  keys):
-
-  | Stage | Cost |
-  |---|---|
-  | Matrix sample | 0-5 ms |
-  | Split exchange (split only) | ~1-3 ms |
-  | `COMBO_TIME` | 20 ms |
-  | USB gap (`TIMER_USB_LOOP`) | 0 ms alone, up to 15 ms behind another report |
-  | Host poll | 0-10 ms |
-  | **Total** | **about 21-38 ms** for a lone key |
-
-  - **Host poll:** the default `NKROBootKeyboardConfig` of the HID crate sets
-    the IN endpoint to 10 ms (`in_endpoint(10.millis())`), so the computer
-    reads a report every 10 ms. It can be set with a custom config instead of
-    `default()`.
-  - HID allows a report every 1 ms, the 15 ms gap is a choice of this
-    firmware. Below the host poll (10 ms), the writes would mostly return
-    `WouldBlock`.
-  - `COMBO_TIME`, `TIMER_USB_LOOP` and the host poll weigh more than the 5 ms
-    samples. Each change is a separate test.
-- **Throughput:** one report per 15 ms at most is about 66 reports/s. `MacroNixOS`
-  (≈ 45 reports) takes about 0.7 s, and keys typed meanwhile wait behind it.
-  NKRO pushes one report per change (press, release, modifier), so rolls with
-  several keys held can queue up a little. Lowering `TIMER_USB_LOOP` would be
-  a separate test.
+- **Latency, throughput, timers:** see [TIMING.md](./TIMING.md#latency).
 - **Duplicate check:** `popped_key != last_printed_key` silently skips a case
   identical to the last one sent. That's why macros put `[NoEvent]` between
   two identical letters. NKRO states are only pushed on change and taps end
@@ -398,9 +297,6 @@ Observations, not confirmed bugs.
   same run (two `!` queued behind a home-row key) would.
 - **Silent drops:** `push_back(...).ok()` drops cases once the queue holds
   `BUFFER_LENGTH` (100).
-- **Tick wrap:** the mouse tempos (`ticks >= self.move_tempo`) don't handle
-  the `ticks` wrap (after about 49 days on), unlike the USB gap and the rest
-  of the code (`wrapping_*`).
 
 <div align="center">
     <img src="../images/crab_back.png">

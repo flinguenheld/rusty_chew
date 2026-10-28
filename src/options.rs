@@ -12,11 +12,10 @@ pub const BUFFER_CASE_LENGTH: usize = 16;
 pub const NKRO_MAX_KEYS: usize = 11; // Held together, + 5 mods <= BUFFER_CASE_LENGTH
 
 pub const NB_KEYS: usize = 34;
-pub const TEMPO_DEAD_KEY: u32 = 50;
 
 // Milliseconds
 pub const TIMER_MONO_LOOP: u32 = 5;
-pub const TIMER_USB_LOOP: u32 = 15; // Minimum gap between two reports, a lone key goes out at once
+pub const TIMER_USB_LOOP: u32 = 10; // Minimum gap between two reports (>= host poll), a lone key goes out at once
 pub const TIMER_UART_LOOP: u32 = 1;
 pub const TIMER_SPLIT_LOOP: u32 = 5; // Master asks the slave for its keys
 pub const TIMER_LINK_REPORT: u32 = 1000; // Master prints the dropped frames on serial

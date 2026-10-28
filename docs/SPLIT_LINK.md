@@ -45,19 +45,8 @@ master                                  slave
   request is the retry.
 - The slave never talks on its own, it only answers.
 
-Round trip, from the request to the chew logic:
-
-| Step | At 115200 |
-|---|---|
-| Master sends (100 µs guard + 5 bytes) | 0.53 ms |
-| Slave reads its buffer | 0-1 ms |
-| Slave answers | 0.53 ms |
-| Master reads its buffer | 0-1 ms |
-| **Total** | **1.1-3.1 ms** |
-
-The two 1 ms reads weigh more than the wire: at 921600 the total would still
-be 0.3-2.3 ms. A faster UART mainly shortens `send()`, which blocks the master
-loop while the frame goes out (about 0.5 ms every 5 ms at 115200).
+> 💡 The timing of a cycle (round trip, when the chew logic runs):
+> [TIMING.md](./TIMING.md#one-split-cycle)
 
 <div align="center">
     <img src="../images/prawns.png">
@@ -167,22 +156,19 @@ After `LINK_TIMEOUT` without a valid mail:
 
 Unplugged, then plugged back:
 
-```mermaid
-%%{init: {"sequence": {"mirrorActors": false, "actorMargin": 30, "messageMargin": 20, "boxMargin": 5}}}%%
-sequenceDiagram
-    participant M as Master
-    participant S as Slave
-    S->>M: KEYS (last valid mail)
-    Note over M,S: wire unplugged
-    M--xS: STATUS, every 5 ms
-    Note left of M: after 100 ms (LINK_TIMEOUT)<br>keys released once, LED red
-    Note right of S: after 100 ms<br>LED red, status reset
-    M--xS: STATUS, still sent
-    Note over M,S: wire plugged back
-    M->>S: STATUS
-    Note right of S: state taken without songs
-    S->>M: KEYS
-    Note left of M: link back, keys still held<br>are seen as new presses
+```
+master                                  slave
+  |<-- KEYS (last valid mail) ---------   |
+  ~~~~~~~~~~~~~~ wire unplugged ~~~~~~~~~~~~
+  |-- STATUS --X  every 5 ms              |
+  |                                       |
+  after 100 ms (LINK_TIMEOUT):            after 100 ms:
+  keys released once, LED red             LED red, status reset
+  |-- STATUS --X  still sent              |
+  ~~~~~~~~~~~~~ wire plugged back ~~~~~~~~~~
+  |-- STATUS ------------------------->   |  state taken without songs
+  |<-- KEYS ---------------------------   |
+  link back
 ```
 
 <div align="center">
