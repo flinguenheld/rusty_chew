@@ -14,7 +14,7 @@ use crate::{
 /// The report (mods + held keys) is pushed only when it changes:
 ///
 ///     press   b  ->  [B]
-///     press   a  ->  [B, A]     (one key at a time for now, the new one replaces the others)
+///     press   a  ->  [B, A]
 ///     release b  ->  [A]
 ///     release a  ->  [NoEvent]
 ///
@@ -39,25 +39,48 @@ impl Nkro {
         }
     }
 
-    /// Called right after a key is typed: an NKRO key still down is kept, a one-case hack
-    /// still down keeps its report, anything else (released, sequence, leader result) is a tap.
-    pub fn hold(&mut self, matrix: &Matrix, code: KC, index: usize) {
+    /// Type a key: an NKRO key still down joins the held keys and the new state is pushed,
+    /// anything else goes through usb_code. A one-case hack or a sequence empties the held
+    /// keys first (they would share its mods), they stay out until typed again.
+    /// A one-case hack still down keeps its report until its release.
+    pub fn type_key(
+        &mut self,
+        key_buffer: Buffer,
+        matrix: &Matrix,
+        mods: &Modifiers,
+        code: KC,
+        index: usize,
+    ) -> Buffer {
         let code = match code {
             KC::HomeRow(_, k) => *k,
             c => c,
         };
-
-        // One key at a time, the new one replaces the others
-        self.held.clear();
+        let down = matrix.is_active(index);
         self.solo_key = None;
 
-        if matrix.is_active(index) {
-            if code.is_nkro_key() {
-                self.held.push((index, code.nkro_code())).ok();
-            } else if code < KC::ACircum {
+        // Held with the others, the new key comes last in a case of its own
+        if down && code.is_nkro_key() {
+            let nkro_code = code.nkro_code();
+            self.held.retain(|(_, c)| *c != nkro_code);
+            if self.held.is_full() {
+                self.held.remove(0);
+            }
+            self.held.push((index, nkro_code)).ok();
+
+            let report = self.report(mods);
+            self.last_report = report.clone();
+            return key_buffer.add_state(&report);
+        }
+
+        // Tap (released key, leader result...): as before, see docs/NKRO_PLAN.md step 4
+        if !code.is_nkro_key() {
+            self.held.clear();
+            if down && code < KC::ACircum {
                 self.solo_key = Some(index);
             }
         }
+
+        code.usb_code(key_buffer, mods)
     }
 
     /// End of the chew run: released keys leave, the report is pushed if it changed.

@@ -328,8 +328,13 @@ impl Chew {
 
                             // Print home as Regular key if released
                             } else if !self.matrix.is_active(popped_key.index) {
-                                key_buffer = regular.usb_code(key_buffer, &self.mods);
-                                self.nkro.hold(&self.matrix, *regular, popped_key.index);
+                                key_buffer = self.nkro.type_key(
+                                    key_buffer,
+                                    &self.matrix,
+                                    &self.mods,
+                                    *regular,
+                                    popped_key.index,
+                                );
                                 self.dynmac.record(*regular, &self.mods);
                             } else {
                                 // Specific case with two homerow pressed consecutively
@@ -340,9 +345,13 @@ impl Chew {
                         }
                         _ => {
                             // Non Homerow key
-                            key_buffer = popped_key.code.usb_code(key_buffer, &self.mods);
-                            self.nkro
-                                .hold(&self.matrix, popped_key.code, popped_key.index);
+                            key_buffer = self.nkro.type_key(
+                                key_buffer,
+                                &self.matrix,
+                                &self.mods,
+                                popped_key.code,
+                                popped_key.index,
+                            );
                             self.dynmac.record(popped_key.code, &self.mods);
                         }
                     }
@@ -351,9 +360,13 @@ impl Chew {
             // Print all of them with homerow pressed status
             } else if !self.matrix.is_active(key.index) {
                 while let Some(popped_key) = self.homerow.pop_front() {
-                    key_buffer = popped_key.code.usb_code(key_buffer, &self.mods);
-                    self.nkro
-                        .hold(&self.matrix, popped_key.code, popped_key.index);
+                    key_buffer = self.nkro.type_key(
+                        key_buffer,
+                        &self.matrix,
+                        &self.mods,
+                        popped_key.code,
+                        popped_key.index,
+                    );
                     self.dynmac.record(popped_key.code, &self.mods);
                 }
             }
@@ -389,8 +402,13 @@ impl Chew {
                         if !self.homerow.is_empty() {
                             self.homerow.push_back(*key).ok();
                         } else {
-                            key_buffer = k.usb_code(key_buffer, &self.mods);
-                            self.nkro.hold(&self.matrix, k, key.index);
+                            key_buffer = self.nkro.type_key(
+                                key_buffer,
+                                &self.matrix,
+                                &self.mods,
+                                k,
+                                key.index,
+                            );
                             self.dynmac.record(k, &self.mods);
                         }
                     }
