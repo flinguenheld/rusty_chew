@@ -3,16 +3,31 @@ use heapless::Vec;
 use usbd_serial::SerialPort;
 use waveshare_rp2040_zero::hal::usb::UsbBus;
 
-use crate::software::serial_usb::serial_write_value;
+use crate::software::{serial_usb::serial_write_value, status::StatusBits};
 use crate::{hardware::uart::FRAME_VALUES, options::LINK_TIMEOUT};
 
 /// Content of the mails exchanged by the two halves (the frame itself is in uart.rs).
 ///
-///     STATUS  (master -> slave)  Status bits, 0, 0              Request, every 5 ms
+///     STATUS  (master -> slave)  Status bits (2 bytes), 0       Request, every 5 ms
 ///     KEYS    (slave -> master)  Mask of the slave's pressed keys    Answer (17 bits, on 3 bytes)
 ///
 /// Both are states sent every cycle, a lost frame is caught up by the next one.
-/// The status bits are built in status.rs, they also drive the LED and the songs.
+/// The status bits are built by Chew::status_bits (bits in status.rs), they also drive the
+/// LED and the songs.
+
+// --------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------ STATUS BITS --
+
+/// Master's status bits -> STATUS mail, low byte first, the last byte is free.
+pub fn status_to_mail(bits: StatusBits) -> [u8; FRAME_VALUES] {
+    let [low, high] = bits.to_le_bytes();
+    [low, high, 0]
+}
+
+/// STATUS mail -> status bits.
+pub fn mail_to_status(values: &[u8; FRAME_VALUES]) -> StatusBits {
+    StatusBits::from_le_bytes([values[0], values[1]])
+}
 
 // --------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------- KEYS MASK --

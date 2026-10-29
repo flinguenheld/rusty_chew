@@ -83,7 +83,7 @@ The mails are built in `src/software/split_mail.rs`, the status bits in
 `src/software/status.rs`. Both carry a full state, not an event, so a lost
 frame only delays a change, it never loses one.
 
-#### STATUS (master → slave): `[status bits, 0, 0]`
+#### STATUS (master → slave): `[status bits low, status bits high, 0]`
 
 | Bit | Status          |
 |-----|-----------------|
@@ -95,7 +95,10 @@ frame only delays a change, it never loses one.
 | 5   | Dyn. macro recording |
 | 6   | Dyn. macro rec, waiting for a key |
 | 7   | Buzzer active   |
+| 8–15 | Free           |
 
+- `StatusBits` is a `u16`, sent low byte first (`status_to_mail` /
+  `mail_to_status`). The last byte of the mail is still free.
 - LED: the lowest bit set gives the color (the buzzer bit has none), same on
   both halves and on mono (`show_status_led`).
 - Songs: each side compares the bits with the last ones (`last ^ new`) and
@@ -103,6 +106,9 @@ frame only delays a change, it never loses one.
   shared by mono, the master and the slave. Both halves play the same song,
   each one its own side of it: that's the stereo. The slave takes its first
   state after startup, or after a lost link, without songs.
+
+> 💡 How the statuses are built, the LED and the songs:
+> [STATUS.md](./STATUS.md)
 
 #### KEYS (slave → master): 17-bit mask on 3 bytes
 

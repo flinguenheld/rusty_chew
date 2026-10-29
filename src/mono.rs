@@ -10,7 +10,7 @@ use rusty_chew::options::{SERIAL_ON, TIMER_MONO_LOOP};
 use rusty_chew::software::{
     chew::Chew,
     keys::Buffer,
-    status::{play_status_songs, show_status_led, statuses_to_bits, Statuses},
+    status::{play_status_songs, show_status_led},
     usb_reports::{read_keyboard, tick_hid, UsbReports},
 };
 use usbd_serial::SerialPort;
@@ -149,9 +149,8 @@ fn main() -> ! {
     // --
     let mut ticks: u32 = 0;
     let mut chew = Chew::new(ticks);
-    let mut statuses = Statuses::new();
     // Status bits of the last run, the songs are played for their changes
-    let mut last_status_bits = statuses_to_bits(&statuses);
+    let mut last_status_bits = chew.status_bits();
 
     let mut key_buffer = Buffer::new();
     let mut mouse_report = WheelMouseReport::default();
@@ -168,11 +167,10 @@ fn main() -> ! {
 
             let active_indexes = gpios.get_active_indexes(&mut delay);
             chew.update_matrix(active_indexes, ticks);
-            (key_buffer, mouse_report, statuses) =
-                chew.run(key_buffer, mouse_report, statuses, ticks);
+            (key_buffer, mouse_report) = chew.run(key_buffer, mouse_report, ticks);
 
             // LED & buzzer, from the statuses' changes since the last run --
-            let bits = statuses_to_bits(&statuses);
+            let bits = chew.status_bits();
             show_status_led(&mut led, bits, ticks);
             play_status_songs(&mut buzzer, Some(last_status_bits), bits);
             last_status_bits = bits;

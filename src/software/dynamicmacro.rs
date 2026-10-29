@@ -4,7 +4,7 @@ use super::{
     chew::Key,
     keys::{Buffer, KC},
     modifiers::Modifiers,
-    status::Statuses,
+    status::{to_bits, StatusBits, BIT_DYNMAC_GO_WAIT, BIT_DYNMAC_REC, BIT_DYNMAC_REC_WAIT},
 };
 use crate::options::NB_KEYS;
 
@@ -119,10 +119,11 @@ impl DynMac {
         }
     }
 
-    pub fn up_statuses(&self, mut statuses: Statuses) -> Statuses {
-        statuses.up("DN_REC_WAIT", self.state == State::RecordWaitKey);
-        statuses.up("DN_REC_PROG", self.state == State::RecordInProgress);
-        statuses.up("DN_GO_WAIT", self.state == State::GoWaitKey);
-        statuses
+    pub fn status_bits(&self) -> StatusBits {
+        to_bits(&[
+            (BIT_DYNMAC_REC_WAIT, self.state == State::RecordWaitKey),
+            (BIT_DYNMAC_REC, self.state == State::RecordInProgress),
+            (BIT_DYNMAC_GO_WAIT, self.state == State::GoWaitKey),
+        ])
     }
 }

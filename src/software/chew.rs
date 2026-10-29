@@ -7,7 +7,10 @@ use super::{
     modifiers::Modifiers,
     mouse::Mouse,
     nkro::Nkro,
-    status::Statuses,
+    status::{
+        to_bits, StatusBits, BIT_BUZZER, BIT_CAPLOCK, BIT_LAYOUT_FN, BIT_LAYOUT_FR,
+        BIT_LEADER_KEY,
+    },
 };
 use crate::{
     hardware::matrix::Matrix,
@@ -149,9 +152,8 @@ impl Chew {
         &mut self,
         mut key_buffer: Buffer,
         mut mouse_report: WheelMouseReport,
-        mut statuses: Statuses,
         ticks: u32,
-    ) -> (Buffer, WheelMouseReport, Statuses) {
+    ) -> (Buffer, WheelMouseReport) {
         // To know if this run pushed cases (see Nkro::update)
         let buffer_len = key_buffer.keys.len();
 
@@ -449,16 +451,17 @@ impl Chew {
         // --
         self.mouse.release(&self.matrix, &mut mouse_report);
 
-        // --
-        statuses.up("FR", self.layout.number == 4);
-        statuses.up("FN", self.layout.number == 5);
+        (key_buffer, mouse_report)
+    }
 
-        statuses.up("LEADER", self.leader.active);
-        statuses.up("CAPLOCK", self.mods.caplock);
-        statuses.up("BUZZER", self.buzzer_activation);
-
-        statuses = self.dynmac.up_statuses(statuses);
-
-        (key_buffer, mouse_report, statuses)
+    /// Status bits of the current state, for the LED & the songs (see status.rs).
+    pub fn status_bits(&self) -> StatusBits {
+        to_bits(&[
+            (BIT_LAYOUT_FR, self.layout.number == 4),
+            (BIT_LAYOUT_FN, self.layout.number == 5),
+            (BIT_LEADER_KEY, self.leader.active),
+            (BIT_CAPLOCK, self.mods.caplock),
+            (BIT_BUZZER, self.buzzer_activation),
+        ]) | self.dynmac.status_bits()
     }
 }

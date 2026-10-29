@@ -155,6 +155,7 @@ And connect to it (for instance with minicom or picocom. *Ctrl-A X to exit* )
 - How the keys become USB reports: [REPORTS.md](./docs/REPORTS.md)
 - How both halves talk over their single wire: [SPLIT_LINK.md](./docs/SPLIT_LINK.md)
 - When things happen and what each timer costs: [TIMING.md](./docs/TIMING.md)
+- How the LED and the buzzer show the keyboard's state: [STATUS.md](./docs/STATUS.md)
 
 ### Thanks
 

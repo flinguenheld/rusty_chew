@@ -15,8 +15,11 @@ use rusty_chew::software::{
     chew::Chew,
     keys::Buffer,
     serial_usb::{serial_write_value, serial_write_values},
-    split_mail::{indexes_to_mask, mask_to_indexes, sides, DroppedFrames, Link},
-    status::{play_status_songs, show_status_led, statuses_to_bits, Statuses},
+    split_mail::{
+        indexes_to_mask, mail_to_status, mask_to_indexes, sides, status_to_mail, DroppedFrames,
+        Link,
+    },
+    status::{play_status_songs, show_status_led, StatusBits},
     usb_reports::{read_keyboard, tick_hid, UsbReports},
 };
 use usbd_serial::SerialPort;
@@ -229,16 +232,15 @@ fn main() -> ! {
     let mut dropped = DroppedFrames::new();
 
     // Slave: last status bits received, None until the first STATUS frame
-    let mut last_status_bits: Option<u8> = None;
+    let mut last_status_bits: Option<StatusBits> = None;
 
     // --
     let mut ticks: u32 = 0;
     let mut chew = Chew::new(ticks);
-    let mut statuses = Statuses::new();
 
     // Master: status sent with the next request, it comes from the last chew.run.
     // Starts from the initial statuses (not 0), the buzzer can be active at startup.
-    let mut status_bits = statuses_to_bits(&statuses);
+    let mut status_bits = chew.status_bits();
 
     let mut key_buffer = Buffer::new();
     let mut mouse_report = WheelMouseReport::default();
@@ -306,8 +308,7 @@ fn main() -> ! {
                 if let Some(active_indexes) = active_indexes {
                     chew.update_matrix(active_indexes, ticks);
 
-                    (key_buffer, mouse_report, statuses) =
-                        chew.run(key_buffer, mouse_report, statuses, ticks);
+                    (key_buffer, mouse_report) = chew.run(key_buffer, mouse_report, ticks);
 
                     // Mouse report directly done here, the keyboard goes through the queue --
                     usb_reports.write_mouse(
@@ -318,7 +319,7 @@ fn main() -> ! {
 
                     // LED & songs, the slave gets the same state with the next request --
                     let last_bits = status_bits;
-                    status_bits = statuses_to_bits(&statuses);
+                    status_bits = chew.status_bits();
 
                     // Red until the slave is back, the logic doesn't run in between
                     if link.is_lost() {
@@ -334,7 +335,7 @@ fn main() -> ! {
                 // Still sent while the link is lost, the slave only comes back by answering.
                 if split_count_down.wait().is_ok() {
                     dropped.request_sent();
-                    uart.send(HEADER_MASTER, [status_bits, 0, 0], &mut delay);
+                    uart.send(HEADER_MASTER, status_to_mail(status_bits), &mut delay);
                 }
 
                 if link_report_count_down.wait().is_ok() {
@@ -375,7 +376,7 @@ fn main() -> ! {
 
                             // The changes are found by comparing with the last state, so a lost
                             // frame only delays them. The first state is taken without songs.
-                            let status_bits = mail.values[0];
+                            let status_bits = mail_to_status(&mail.values);
                             show_status_led(&mut led, status_bits, ticks);
                             play_status_songs(&mut buzzer, last_status_bits, status_bits);
                             last_status_bits = Some(status_bits);

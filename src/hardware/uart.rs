@@ -53,7 +53,7 @@ impl UartError {
 ///    /                    /                              /
 /// 1010 0101  ->  0000 0000 - 0000 0000 - 0000 0000  ->  0000 0000
 ///
-///     HEADER_MASTER   Status bits (LED + buzzer state), 0, 0 (free)
+///     HEADER_MASTER   Status bits (LED + buzzer state, 2 bytes), 0 (free)
 ///     HEADER_SLAVE    Mask of the slave's pressed keys (17 bits)
 ///
 /// The CRC is computed over the header and the values.
