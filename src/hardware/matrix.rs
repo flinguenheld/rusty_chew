@@ -36,13 +36,6 @@ impl Matrix {
             .copied()
             .collect()
     }
-    // pub fn freshly_released(&self) -> Vec<usize, 16> {
-    //     self.previous
-    //         .iter()
-    //         .filter(|index| !self.current.contains(index))
-    //         .copied()
-    //         .collect()
-    // }
 
     pub fn is_active(&self, index: usize) -> bool {
         self.current.contains(&index)

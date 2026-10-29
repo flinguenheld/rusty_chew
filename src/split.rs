@@ -292,7 +292,6 @@ fn main() -> ! {
                         // A corrupted frame is only a lost cycle, the next request comes in 5 ms
                         UartError::Crc => dropped.crc += 1,
                         UartError::Header => led.on(LedColor::Blue),
-                        // UartError::NotComplete => led.on(LedColor::Orange),
                         UartError::NotComplete => {}
                     },
                 }
@@ -392,7 +391,6 @@ fn main() -> ! {
                     // The master sends its status again in the next cycle
                     Err(UartError::Crc) => {}
                     Err(UartError::Header) => led.on(LedColor::Blue),
-                    // Err(UartError::NotComplete) => led.on(LedColor::Orange),
                     Err(UartError::NotComplete) => {}
                 }
 

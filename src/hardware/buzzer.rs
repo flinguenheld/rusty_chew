@@ -252,14 +252,14 @@ impl<'a> Buzzer<'a> {
                     new_sheet_music .push_back((Note::new(D4          , TIME / 4 ), Side::Left  )).ok();
                     new_sheet_music .push_back((Note::new(F4_SHARP    , TIME / 4 ), Side::Right )).ok();
                 }
-                
+
                 Song::WelcomeC => {
                     new_sheet_music .push_back((Note::new(C4          , TIME / 2 ), Side::Left  )).ok();
                     new_sheet_music .push_back((Note::new(E4          , TIME / 2 ), Side::Right )).ok();
                     new_sheet_music .push_back((Note::new(G4          , TIME / 2 ), Side::Left  )).ok();
                     new_sheet_music .push_back((Note::new(C4 / 2      , TIME     ), Side::Both  )).ok();
                 }
-                
+
                 Song::StartupC => {
                     new_sheet_music .push_back((Note::new(C4          , TIME / 3 ), Side::Left  )).ok();
                     new_sheet_music .push_back((Note::new(E4          , TIME / 6 ), Side::Right )).ok();

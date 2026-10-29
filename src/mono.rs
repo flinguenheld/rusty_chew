@@ -163,8 +163,6 @@ fn main() -> ! {
         }
 
         if mono_count_down.wait().is_ok() {
-            // serial_write_value(&mut serial, "max duty: ", max_duty, " <-");
-
             let active_indexes = gpios.get_active_indexes(&mut delay);
             chew.update_matrix(active_indexes, ticks);
             (key_buffer, mouse_report) = chew.run(key_buffer, mouse_report, ticks);
@@ -201,10 +199,6 @@ fn main() -> ! {
             ticks = ticks.wrapping_add(1);
             tick_hid(&mut rusty_chew);
         }
-
-        // if !usb_dev.poll(&mut [&mut _serial]) {
-        //     continue;
-        // }
 
         if !SERIAL_ON && usb_dev.poll(&mut [&mut rusty_chew]) {
             read_keyboard(rusty_chew.device::<NKROBootKeyboard<'_, _>, _>());

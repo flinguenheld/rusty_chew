@@ -6,14 +6,14 @@ use waveshare_rp2040_zero::hal::usb::UsbBus;
 use crate::software::{serial_usb::serial_write_value, status::StatusBits};
 use crate::{hardware::uart::FRAME_VALUES, options::LINK_TIMEOUT};
 
-/// Content of the mails exchanged by the two halves (the frame itself is in uart.rs).
-///
-///     STATUS  (master -> slave)  Status bits (2 bytes), 0       Request, every 5 ms
-///     KEYS    (slave -> master)  Mask of the slave's pressed keys    Answer (17 bits, on 3 bytes)
-///
-/// Both are states sent every cycle, a lost frame is caught up by the next one.
-/// The status bits are built by Chew::status_bits (bits in status.rs), they also drive the
-/// LED and the songs.
+// Content of the mails exchanged by the two halves (the frame itself is in uart.rs).
+//
+//     STATUS  (master -> slave)  Status bits (2 bytes), 0       Request, every 5 ms
+//     KEYS    (slave -> master)  Mask of the slave's pressed keys    Answer (17 bits, on 3 bytes)
+//
+// Both are states sent every cycle, a lost frame is caught up by the next one.
+// The status bits are built by Chew::status_bits (bits in status.rs), they also drive the
+// LED and the songs.
 
 // --------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------ STATUS BITS --

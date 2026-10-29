@@ -8,8 +8,7 @@ use super::{
     mouse::Mouse,
     nkro::Nkro,
     status::{
-        to_bits, StatusBits, BIT_BUZZER, BIT_CAPLOCK, BIT_LAYOUT_FN, BIT_LAYOUT_FR,
-        BIT_LEADER_KEY,
+        to_bits, StatusBits, BIT_BUZZER, BIT_CAPLOCK, BIT_LAYOUT_FN, BIT_LAYOUT_FR, BIT_LEADER_KEY,
     },
 };
 use crate::{
@@ -63,7 +62,6 @@ pub struct Chew {
 
     pre_pressed_keys: Vec<Key, NB_KEYS>,
     pressed_keys: Vec<Key, NB_KEYS>,
-    // released_keys: Vec<usize, NB_KEYS>,
     nkro: Nkro,
     last_ticks: u32,
 }
@@ -93,7 +91,6 @@ impl Chew {
 
             pre_pressed_keys: Vec::new(),
             pressed_keys: Vec::new(),
-            // released_keys: Vec::new(),
             nkro: Nkro::new(),
             last_ticks: ticks,
         }

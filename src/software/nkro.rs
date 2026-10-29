@@ -154,7 +154,12 @@ impl Nkro {
         for code in mods
             .active()
             .iter()
-            .chain(self.held.iter().map(|(_, c)| c).filter(|c| Some(**c) != skip))
+            .chain(
+                self.held
+                    .iter()
+                    .map(|(_, c)| c)
+                    .filter(|c| Some(**c) != skip),
+            )
             .chain(extra.iter())
         {
             report.push(*code).ok();
