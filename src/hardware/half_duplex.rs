@@ -3,7 +3,7 @@ use waveshare_rp2040_zero as bsp;
 use bsp::{
     hal::{
         gpio::bank0::Gpio11,
-        gpio::{FunctionPio0, Pin, PullUp},
+        gpio::{FunctionPio0, OutputDriveStrength, Pin, PullUp},
         pio::{
             PIOBuilder, PinDir, PinState, Running, Rx, ShiftDirection, StateMachine, Tx,
             UninitStateMachine, PIO, SM1, SM2,
@@ -42,11 +42,16 @@ impl HalfDuplex {
         pio: &mut PIO<PIO0>,
         sm1: UninitStateMachine<(PIO0, SM1)>,
         sm2: UninitStateMachine<(PIO0, SM2)>,
-        pin: Pin<Gpio11, FunctionPio0, PullUp>,
+        mut pin: Pin<Gpio11, FunctionPio0, PullUp>,
         baud: u32,
         sys_freq: HertzU32,
     ) -> HalfDuplex {
         let pin_id = pin.id().num;
+
+        // Weakest output: if both sides send at once (collision), less current flows between
+        // the two pins. The edges stay far quicker than a bit. A series resistor on the line
+        // is the real protection (see docs/SPLIT_LINK.md).
+        pin.set_drive_strength(OutputDriveStrength::TwoMilliAmps);
 
         // Both programs run at 8 PIO cycles per bit
         let (div_int, div_frac) = clock_divisor(sys_freq.to_Hz(), baud);

@@ -21,6 +21,9 @@ How the two halves talk over their single data wire.
   - SM2 transmits. It sets the level before taking the pin, so switching to
     transmit can't make a false start bit, and releases the pin after each
     stop bit.
+- GP11 drives at 2 mA (the weakest), so a collision (both sides sending at
+  once) makes less current flow between the two pins. Still far quicker than
+  a bit at `UART_SPEED`.
 - The receiver also hears what its own side sends. This echo is dropped at the
   end of `write`.
 - `send()` waits `UART_SEND_DELAY` (100 µs) before a frame, so the other side
@@ -200,9 +203,10 @@ goes up to 200 (one per request).
 - Keys still held when the link comes back are seen as new presses.
 - A key not yet resolved when the link drops (home row, combo) is released as
   a tap.
-- Hardware: a series resistor (~330 Ω - 1 kΩ) on the data line is still to be
-  added, so a collision would only garble a frame instead of making two
-  outputs fight.
+- Hardware: a series resistor (~330 Ω - 1 kΩ, e.g. 470 Ω on each side) on the
+  data line is still to be added. The pins have no current limit, the 2 mA
+  drive only reduces the current of a collision, the resistor would keep it
+  to a few mA: the frame is garbled, the CRC rejects it.
 - Still to check on the keyboard: the counters at 0 at the chosen
   `UART_SPEED`, a lower `UART_SEND_DELAY`, and the lost link (unplug while
   holding a key).
