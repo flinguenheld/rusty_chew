@@ -16,15 +16,12 @@ use rusty_chew::software::{
     keys::Buffer,
     serial_usb::{serial_write_value, serial_write_values},
     split_mail::{indexes_to_mask, mask_to_indexes, sides, DroppedFrames, Link},
-    status::{changed_status_song, is_buzzer_active, show_status_led, statuses_to_bits, Statuses},
+    status::{play_status_songs, show_status_led, statuses_to_bits, Statuses},
     usb_reports::{read_keyboard, tick_hid, UsbReports},
 };
 use usbd_serial::SerialPort;
 
-use waveshare_rp2040_zero::{
-    self as bsp,
-    hal::pwm::{SliceId, Slices},
-};
+use waveshare_rp2040_zero::{self as bsp, hal::pwm::Slices};
 
 use bsp::hal::{
     clocks::{init_clocks_and_plls, Clock},
@@ -180,22 +177,18 @@ fn main() -> ! {
     // Buzzer (Check doc to see the assignment pin/pwm/channel)
     let pwm_slices = Slices::new(pac.PWM, &mut pac.RESETS);
 
-    let mut buz_left = if is_left {
-        let mut pwm = pwm_slices.pwm6;
-        pwm.channel_a.output_to(pins.gp12);
-        Some(Buzzer::new(pwm))
+    let mut pwm_left = pwm_slices.pwm6;
+    let mut pwm_right = pwm_slices.pwm5;
+
+    let mut buzzer = if is_left {
+        pwm_left.channel_a.output_to(pins.gp12);
+        Buzzer::new(&mut pwm_left, Side::Left)
     } else {
-        None
-    };
-    let mut buz_right = if !is_left {
-        let mut pwm = pwm_slices.pwm5;
-        pwm.channel_a.output_to(pin10);
-        Some(Buzzer::new(pwm))
-    } else {
-        None
+        pwm_right.channel_a.output_to(pin10);
+        Buzzer::new(&mut pwm_right, Side::Right)
     };
 
-    sing(&mut buz_left, &mut buz_right, Song::WelcomeC, false);
+    buzzer.add_song(Song::WelcomeC, false);
 
     // Led --
     let mut neopixel = Ws2812::new(
@@ -333,7 +326,7 @@ fn main() -> ! {
                     } else {
                         show_status_led(&mut led, status_bits, ticks);
                     }
-                    play_status_songs(&mut buz_left, &mut buz_right, Some(last_bits), status_bits);
+                    play_status_songs(&mut buzzer, Some(last_bits), status_bits);
                 }
 
                 // The master is the only one to start an exchange: it sends its status as a
@@ -348,7 +341,7 @@ fn main() -> ! {
                     dropped.report(&mut serial);
                 }
 
-                play_buzzer(&mut buz_left, &mut buz_right, ticks);
+                buzzer.sing(ticks);
             }
 
             // USB --
@@ -384,12 +377,7 @@ fn main() -> ! {
                             // frame only delays them. The first state is taken without songs.
                             let status_bits = mail.values[0];
                             show_status_led(&mut led, status_bits, ticks);
-                            play_status_songs(
-                                &mut buz_left,
-                                &mut buz_right,
-                                last_status_bits,
-                                status_bits,
-                            );
+                            play_status_songs(&mut buzzer, last_status_bits, status_bits);
                             last_status_bits = Some(status_bits);
 
                             // Answer the request with the pressed keys, the slave only talks
@@ -414,7 +402,7 @@ fn main() -> ! {
                     led.on(LedColor::Red);
                 }
 
-                play_buzzer(&mut buz_left, &mut buz_right, ticks);
+                buzzer.sing(ticks);
             }
 
             // Ticks used to blink the LED
@@ -422,64 +410,5 @@ fn main() -> ! {
                 ticks = ticks.wrapping_add(1);
             }
         }
-    }
-}
-
-/// Songs for the status changes since the last state (none without a last state).
-/// The buzzer is enabled before them and disabled after, so the buzzer toggle song can be heard.
-fn play_status_songs<IL: SliceId, IR: SliceId>(
-    buzzer_left: &mut Option<Buzzer<IL>>,
-    buzzer_right: &mut Option<Buzzer<IR>>,
-    last: Option<u8>,
-    bits: u8,
-) {
-    let buzzer_active = is_buzzer_active(bits);
-
-    if buzzer_active {
-        active_buzzer(buzzer_left, buzzer_right, true);
-    }
-    if let Some((song, reverse)) = last.and_then(|last| changed_status_song(last, bits)) {
-        sing(buzzer_left, buzzer_right, song, reverse);
-    }
-    if !buzzer_active {
-        active_buzzer(buzzer_left, buzzer_right, false);
-    }
-}
-
-/// Play the current note of this side's buzzer.
-fn play_buzzer<IL: SliceId, IR: SliceId>(
-    buzzer_left: &mut Option<Buzzer<IL>>,
-    buzzer_right: &mut Option<Buzzer<IR>>,
-    ticks: u32,
-) {
-    if let Some(buzz) = buzzer_left {
-        buzz.sing(ticks);
-    } else if let Some(buzz) = buzzer_right {
-        buzz.sing(ticks);
-    }
-}
-
-fn sing<IL: SliceId, IR: SliceId>(
-    buzzer_left: &mut Option<Buzzer<IL>>,
-    buzzer_right: &mut Option<Buzzer<IR>>,
-    song: Song,
-    reverse: bool,
-) {
-    if let Some(buzz) = buzzer_left {
-        buzz.add_song(song, Side::Left, reverse);
-    } else if let Some(buzz) = buzzer_right {
-        buzz.add_song(song, Side::Right, reverse);
-    }
-}
-
-fn active_buzzer<IL: SliceId, IR: SliceId>(
-    buzzer_left: &mut Option<Buzzer<IL>>,
-    buzzer_right: &mut Option<Buzzer<IR>>,
-    active: bool,
-) {
-    if let Some(buzz) = buzzer_left {
-        buzz.set_active(active);
-    } else if let Some(buzz) = buzzer_right {
-        buzz.set_active(active);
     }
 }

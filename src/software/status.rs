@@ -1,5 +1,5 @@
 use crate::hardware::{
-    buzzer::Song,
+    buzzer::{Buzzer, Song},
     led::{Led, LedColor},
 };
 use crate::options::BUZZER_STARTUP_ACTIVATION;
@@ -153,5 +153,21 @@ fn status_song(bit: u8, switched_on: bool) -> Option<(Song, bool)> {
 
         (BIT_BUZZER, on) => Some((Song::StartupA, !on)),
         _ => None,
+    }
+}
+
+/// Songs for the status changes since the last state (none without a last state).
+/// The buzzer is enabled before them and disabled after, so the buzzer toggle song can be heard.
+pub fn play_status_songs(buzzer: &mut Buzzer, last: Option<u8>, bits: u8) {
+    let buzzer_active = is_buzzer_active(bits);
+
+    if buzzer_active {
+        buzzer.set_active(true);
+    }
+    if let Some((song, reverse)) = last.and_then(|last| changed_status_song(last, bits)) {
+        buzzer.add_song(song, reverse);
+    }
+    if !buzzer_active {
+        buzzer.set_active(false);
     }
 }

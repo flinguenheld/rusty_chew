@@ -10,7 +10,7 @@ use rusty_chew::options::{SERIAL_ON, TIMER_MONO_LOOP};
 use rusty_chew::software::{
     chew::Chew,
     keys::Buffer,
-    status::{changed_status_song, is_buzzer_active, show_status_led, statuses_to_bits, Statuses},
+    status::{play_status_songs, show_status_led, statuses_to_bits, Statuses},
     usb_reports::{read_keyboard, tick_hid, UsbReports},
 };
 use usbd_serial::SerialPort;
@@ -124,9 +124,9 @@ fn main() -> ! {
     let pwm_slices = Slices::new(pac.PWM, &mut pac.RESETS);
     let mut pwm = pwm_slices.pwm6;
     pwm.channel_b.output_to(pins.gp29);
-    let mut buzzer = Buzzer::new(pwm);
+    let mut buzzer = Buzzer::new(&mut pwm, Side::Both);
 
-    buzzer.add_song(Song::WelcomeC, Side::Both, false);
+    buzzer.add_song(Song::WelcomeC, false);
 
     // Led --
     let mut neopixel = Ws2812::new(
@@ -173,20 +173,8 @@ fn main() -> ! {
 
             // LED & buzzer, from the statuses' changes since the last run --
             let bits = statuses_to_bits(&statuses);
-            let buzzer_active = is_buzzer_active(bits);
             show_status_led(&mut led, bits, ticks);
-
-            // Enabled before the songs and disabled after them, so the buzzer toggle song
-            // can be heard
-            if buzzer_active {
-                buzzer.set_active(true);
-            }
-            if let Some((song, reverse)) = changed_status_song(last_status_bits, bits) {
-                buzzer.add_song(song, Side::Both, reverse);
-            }
-            if !buzzer_active {
-                buzzer.set_active(false);
-            }
+            play_status_songs(&mut buzzer, Some(last_status_bits), bits);
             last_status_bits = bits;
 
             // Mouse report directly done here, the keyboard goes through the queue --
