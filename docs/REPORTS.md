@@ -97,7 +97,7 @@ key_code = mods.active() - excluded_mods  +  the key's own codes
 | `EAcute`            | `[RAlt, E]`, RAlt excluded from the mods and given explicitly |
 | `ECircum` (ê)       | `[RAlt, 6]` (dead key) → `[mods, E]` → `[NoEvent]` |
 | `Tion`              | `[T]` → `[I]` → `[O]` → `[N]` → `[NoEvent]`, Alt / Ctrl / Gui excluded so the letters can't become shortcuts |
-| Text macro          | one case per character, `[NoEvent]` between two identical letters, a final `[NoEvent]` (`src/software/macros.rs`) |
+| Text macro          | one case per character, a final `[NoEvent]` (`src/software/macros.rs`) |
 | `KC::None`          | `[NoEventIndicated]` = everything released |
 
 <div align="center">
@@ -293,10 +293,12 @@ Observations, not confirmed bugs.
 
 - **Latency, throughput, timers:** see [TIMING.md](./TIMING.md#latency).
 - **Duplicate check:** `popped_key != last_printed_key` silently skips a case
-  identical to the last one sent. That's why macros put `[NoEvent]` between
-  two identical letters. NKRO states are only pushed on change and taps end
-  with the state, so they don't hit it. A one-case hack typed twice in the
-  same run (two `!` queued behind a home-row key) would.
+  identical to the last one sent (the HID crate refuses it too). So
+  `Buffer::add` puts a `[NoEvent]` before a case identical to the last one
+  queued: `[!] [NoEvent] [!]`. It covers two identical letters in a macro or a
+  dynamic macro, and two `!` queued behind a home-row key and typed in the
+  same run. NKRO states (`add_state`) skip it: a same state means the keys are
+  still held.
 - **Silent drops:** `push_back(...).ok()` drops cases once the queue holds
   `BUFFER_LENGTH` (100).
 

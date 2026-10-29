@@ -3,16 +3,10 @@ use super::{
     modifiers::Modifiers,
 };
 
-/// Fill the buffer with all letters.
+/// Fill the buffer with all letters (Buffer::add puts a release between two identical ones).
 /// Check the letter list below.
 pub fn str_to_usb_code(text: &str, mut buffer: Buffer) -> Buffer {
-    let mut last = ' ';
     for c in text.chars() {
-        if c == last {
-            buffer = KC::None.usb_code(buffer, &Modifiers::new())
-        }
-        last = c;
-
         buffer = char_to_usb_code(c, buffer);
     }
 

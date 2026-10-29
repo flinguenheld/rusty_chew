@@ -87,16 +87,11 @@ impl DynMac {
                     .iter_mut()
                     .find(|k| k.code > KC::DoneButKeep && k.code < KC::MouseBtLeft)
                 {
-                    // Then launch it by filling the key buffer --
+                    // Then launch it by filling the key buffer (Buffer::add puts a release
+                    // between two identical keys) --
                     if let Some(list) = self.macros.get(&key.code) {
-                        let mut previous = KC::None;
                         for (k, m) in list.iter() {
-                            if previous == *k {
-                                // Add a break to allow twice same key
-                                key_buffer = KC::None.usb_code(key_buffer, &Modifiers::new());
-                            }
                             key_buffer = k.usb_code(key_buffer, m);
-                            previous = *k;
                         }
                         key_buffer = KC::None.usb_code(key_buffer, &Modifiers::new());
                     }

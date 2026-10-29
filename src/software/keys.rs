@@ -29,6 +29,8 @@ impl Buffer {
     }
 
     // Add a new entry in the Deque with active mods (without excluded) and the keys.
+    // The same case as the last one queued gets a release before it, else the second would
+    // be dropped as a duplicate (see UsbReports::write_keyboard): "!!", "ss" in a macro...
     fn add(mut self, keys: &[Keyboard], mods: &Modifiers, excluded_mods: &[Keyboard]) -> Self {
         let mut key_code = Vec::new();
         key_code.extend(mods.active()
@@ -37,7 +39,12 @@ impl Buffer {
                          .copied());
         key_code.extend(keys.iter().copied());
 
-        self.keys.push_back(BuffCase {key_code}).ok();
+        let case = BuffCase {key_code};
+        if self.keys.back() == Some(&case) && case.key_code != [Keyboard::NoEventIndicated] {
+            self = self.add_no_mods(&[Keyboard::NoEventIndicated]);
+        }
+
+        self.keys.push_back(case).ok();
         self
     }
 
@@ -50,8 +57,13 @@ impl Buffer {
     }
 
     // Add the report state built by chew (mods + held keys), as it is.
-    pub fn add_state(self, codes: &[Keyboard]) -> Self {
-        self.add_no_mods(codes)
+    // No release before a same state: it means the keys are still held.
+    pub fn add_state(mut self, codes: &[Keyboard]) -> Self {
+        let mut key_code = Vec::new();
+        key_code.extend(codes.iter().copied());
+
+        self.keys.push_back(BuffCase {key_code}).ok();
+        self
     }
 }
 
