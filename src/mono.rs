@@ -131,7 +131,7 @@ fn main() -> ! {
     mono_count_down.start(TIMER_MONO_LOOP.millis());
 
     // --
-    let mut ticks: u32 = 0;
+    let mut ticks: u64 = 0;
     let mut chew = Chew::new(ticks);
     // Status bits of the last run, the songs are played for their changes
     let mut last_status_bits = chew.status_bits();
@@ -180,7 +180,7 @@ fn main() -> ! {
 
         // Tick once per ms -------------------------------------------------------------
         if tick_count_down.wait().is_ok() {
-            ticks = ticks.wrapping_add(1);
+            ticks += 1;
             tick_hid(&mut rusty_chew);
         }
 

@@ -180,9 +180,10 @@ By gain for the effort, one at a time:
 
 ### Points to keep in mind
 
-- **Tick wrap:** the mouse tempos (`ticks >= self.move_tempo`) don't handle
-  the `ticks` wrap (after about 49 days on), unlike the USB gap and the rest
-  of the code (`wrapping_*`).
+- **No tick wrap:** `ticks` is a `u64`, it would only wrap after about 584
+  million years. Times are compared directly (`ticks >= next`), no
+  `wrapping_*` needed. A `u32` wrapped after 49 days and froze the mouse and
+  the LED blink.
 
 <div align="center">
     <img src="../images/crab_back.png">

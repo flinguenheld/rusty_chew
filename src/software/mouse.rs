@@ -10,8 +10,8 @@ use crate::{
     },
 };
 
-// Move i8 each u32 ms
-type Speed = (i8, u32);
+// Move i8 each u64 ms
+type Speed = (i8, u64);
 
 /// Allows Chew to emulate the mouse.
 /// Speeds are saved by pressing order and have to be maintained to be effective.
@@ -19,11 +19,11 @@ pub struct Mouse {
     buttons: Vec<(usize, u8), 3>,
     speeds: Vec<(usize, Speed, Speed), 4>,
 
-    move_tempo: u32,
-    move_ok: u32,
+    move_tempo: u64,
+    move_ok: u64,
 
-    scroll_tempo: u32,
-    scroll_ok: u32,
+    scroll_tempo: u64,
+    scroll_ok: u64,
 }
 
 impl Mouse {
@@ -52,12 +52,12 @@ impl Mouse {
         self.scroll_tempo = 0;
     }
 
-    pub fn movement(&mut self, report: &mut WheelMouseReport, key: KC, ticks: u32) {
+    pub fn movement(&mut self, report: &mut WheelMouseReport, key: KC, ticks: u64) {
         let (speed, tempo) = self.speeds.last().map_or(MOUSE_SPEED_DEFAULT, |s| s.1);
 
         // Move_ok is saved to allow several moves in the same chew loop.
         if ticks >= self.move_tempo || self.move_ok == ticks {
-            self.move_tempo = ticks.wrapping_add(tempo);
+            self.move_tempo = ticks + tempo;
             self.move_ok = ticks;
 
             match key {
@@ -70,11 +70,11 @@ impl Mouse {
         }
     }
 
-    pub fn scroll(&mut self, report: &mut WheelMouseReport, key: KC, ticks: u32) {
+    pub fn scroll(&mut self, report: &mut WheelMouseReport, key: KC, ticks: u64) {
         let (speed, tempo) = self.speeds.last().map_or(SCROLL_SPEED_DEFAULT, |s| s.2);
 
         if ticks >= self.scroll_tempo || self.scroll_ok == ticks {
-            self.scroll_tempo = ticks.wrapping_add(tempo);
+            self.scroll_tempo = ticks + tempo;
             self.scroll_ok = ticks;
 
             match key {

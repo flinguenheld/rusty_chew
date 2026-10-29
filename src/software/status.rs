@@ -34,7 +34,7 @@ pub fn is_buzzer_active(bits: StatusBits) -> bool {
 }
 
 /// LED of the lowest status bit set (the buzzer bit has no color).
-pub fn show_status_led(led: &mut Led, bits: StatusBits, ticks: u32) {
+pub fn show_status_led(led: &mut Led, bits: StatusBits, ticks: u64) {
     // trailing_zeros gives 16 when no bit is set
     match (bits & !(1 << BIT_BUZZER)).trailing_zeros() as u8 {
         BIT_LAYOUT_FR => led.on(LedColor::Aqua),

@@ -19,7 +19,7 @@ const A4_FLAT: u16 = (XOSC_CRYSTAL_FREQ as f32 / 415.0) as u16;
 const A4: u16 = (XOSC_CRYSTAL_FREQ as f32 / 440.0) as u16;
 const B4_FLAT: u16 = (XOSC_CRYSTAL_FREQ as f32 / 466.0) as u16;
 const B4: u16 = (XOSC_CRYSTAL_FREQ as f32 / 494.0) as u16;
-const TIME: u32 = 100;
+const TIME: u64 = 100;
 
 #[allow(dead_code)]
 pub enum Song {
@@ -66,11 +66,11 @@ pub enum Side {
 
 pub struct Note {
     frequency: u16,
-    ticks_length: u32,
-    ticks_start: Option<u32>,
+    ticks_length: u64,
+    ticks_start: Option<u64>,
 }
 impl Note {
-    pub fn new(frequency: u16, ticks_length: u32) -> Note {
+    pub fn new(frequency: u16, ticks_length: u64) -> Note {
         Note {
             frequency,
             ticks_length,
@@ -132,7 +132,7 @@ impl<'a> Buzzer<'a> {
         self.active = active;
     }
 
-    pub fn sing(&mut self, ticks: u32) {
+    pub fn sing(&mut self, ticks: u64) {
         if let Some(note) = self.sheet_music.front_mut() {
             if note.ticks_start.is_none() {
                 note.ticks_start = Some(ticks);

@@ -60,7 +60,7 @@ pub struct UsbReports {
     // Last keyboard case written, an identical one is skipped
     last_printed_key: BuffCase,
     // Tick from which the next keyboard case can be written (TIMER_USB_LOOP after the last one)
-    next_ticks: u32,
+    next_ticks: u64,
     // Mouse buttons of the last report, a change is written even without a move
     last_mouse_buttons: u8,
 }
@@ -83,9 +83,9 @@ impl UsbReports {
         usb_dev: &UsbDevice<'_, UsbBus>,
         key_buffer: &mut Buffer,
         led: &mut Led,
-        ticks: u32,
+        ticks: u64,
     ) {
-        if (ticks.wrapping_sub(self.next_ticks) as i32) < 0 {
+        if ticks < self.next_ticks {
             return;
         }
 
@@ -105,7 +105,7 @@ impl UsbReports {
                         led.on(LedColor::Blue);
                     }
                     Ok(_) => {
-                        self.next_ticks = ticks.wrapping_add(TIMER_USB_LOOP);
+                        self.next_ticks = ticks + TIMER_USB_LOOP;
                         self.last_printed_key = popped_key;
                     }
                     Err(e) => {

@@ -83,7 +83,7 @@ pub fn mask_to_indexes(mask: &[u8; FRAME_VALUES], side: &[u8; 17]) -> Option<Vec
 /// State of the link, the same on both halves: lost after LINK_TIMEOUT without a valid mail.
 pub struct Link {
     // Tick of the last valid mail
-    last_mail_ticks: u32,
+    last_mail_ticks: u64,
     lost: bool,
 }
 
@@ -96,14 +96,14 @@ impl Link {
     }
 
     /// A valid mail arrived, the link is (back) up.
-    pub fn received(&mut self, ticks: u32) {
+    pub fn received(&mut self, ticks: u64) {
         self.last_mail_ticks = ticks;
         self.lost = false;
     }
 
     /// True once, at the moment LINK_TIMEOUT has passed without a valid mail.
-    pub fn just_lost(&mut self, ticks: u32) -> bool {
-        if !self.lost && ticks.wrapping_sub(self.last_mail_ticks) > LINK_TIMEOUT {
+    pub fn just_lost(&mut self, ticks: u64) -> bool {
+        if !self.lost && ticks - self.last_mail_ticks > LINK_TIMEOUT {
             self.lost = true;
             return true;
         }

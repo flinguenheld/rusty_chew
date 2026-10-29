@@ -48,7 +48,7 @@ pub fn serial_write_values<T: Display>(
 pub fn serial_write_time(
     serial: &mut SerialPort<'_, UsbBus>,
     before: &str,
-    ticks: u32,
+    ticks: u64,
     after: &str,
 ) {
     let mut l: String<70> = String::new();

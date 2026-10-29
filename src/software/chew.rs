@@ -22,7 +22,7 @@ use crate::{
 pub struct Key {
     pub index: usize,
     pub code: KC,
-    pub ticks: u32,
+    pub ticks: u64,
 }
 impl Key {
     fn default() -> Self {
@@ -63,11 +63,11 @@ pub struct Chew {
     pre_pressed_keys: Vec<Key, NB_KEYS>,
     pressed_keys: Vec<Key, NB_KEYS>,
     nkro: Nkro,
-    last_ticks: u32,
+    last_ticks: u64,
 }
 
 impl Chew {
-    pub fn new(ticks: u32) -> Self {
+    pub fn new(ticks: u64) -> Self {
         Chew {
             layout: Layout {
                 number: 0,
@@ -96,7 +96,7 @@ impl Chew {
         }
     }
 
-    pub fn update_matrix(&mut self, active_indexes: Vec<u8, 16>, ticks: u32) {
+    pub fn update_matrix(&mut self, active_indexes: Vec<u8, 16>, ticks: u64) {
         self.matrix.update(active_indexes);
 
         // Clean --
@@ -110,12 +110,7 @@ impl Chew {
             .iter_mut()
             .chain(self.pressed_keys.iter_mut())
             .chain(self.homerow.iter_mut())
-            .for_each(|key| {
-                key.ticks += match self.last_ticks <= ticks {
-                    true => ticks - self.last_ticks,
-                    false => ticks + (u32::MAX - self.last_ticks),
-                }
-            });
+            .for_each(|key| key.ticks += ticks - self.last_ticks);
 
         self.pre_pressed_keys.extend(
             self.matrix
@@ -149,7 +144,7 @@ impl Chew {
         &mut self,
         mut key_buffer: Buffer,
         mut mouse_report: WheelMouseReport,
-        ticks: u32,
+        ticks: u64,
     ) -> (Buffer, WheelMouseReport) {
         // To know if this run pushed cases (see Nkro::update)
         let buffer_len = key_buffer.keys.len();

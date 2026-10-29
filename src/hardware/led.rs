@@ -33,7 +33,7 @@ type Neopixel<'a> = Ws2812<PIO0, SM0, CountDown<'a>, Pin<Gpio16, FunctionPio0, P
 
 pub struct Led<'a> {
     neopixel: &'a mut Neopixel<'a>,
-    next_blinking_step: u32,
+    next_blinking_step: u64,
     last_blinking_color: LedColor,
 }
 
@@ -46,9 +46,9 @@ impl Led<'_> {
         }
     }
 
-    pub fn blink(&mut self, color: LedColor, step_ms: u32, ticks: u32) {
+    pub fn blink(&mut self, color: LedColor, step_ms: u64, ticks: u64) {
         if self.last_blinking_color != color || self.next_blinking_step == 0 {
-            self.next_blinking_step = ticks.wrapping_add(step_ms);
+            self.next_blinking_step = ticks + step_ms;
         }
 
         if self.next_blinking_step > ticks {
@@ -56,7 +56,7 @@ impl Led<'_> {
         } else if self.next_blinking_step + step_ms > ticks {
             self.on(LedColor::None);
         } else {
-            self.next_blinking_step = ticks.wrapping_add(step_ms);
+            self.next_blinking_step = ticks + step_ms;
         }
 
         self.last_blinking_color = color;

@@ -219,7 +219,7 @@ fn main() -> ! {
     let mut last_status_bits: Option<StatusBits> = None;
 
     // --
-    let mut ticks: u32 = 0;
+    let mut ticks: u64 = 0;
     let mut chew = Chew::new(ticks);
 
     // Master: status sent with the next request, it comes from the last chew.run.
@@ -341,7 +341,7 @@ fn main() -> ! {
 
             // Tick once per ms --
             if tick_count_down.wait().is_ok() {
-                ticks = ticks.wrapping_add(1);
+                ticks += 1;
                 tick_hid(&mut rusty_chew);
             }
 
@@ -390,7 +390,7 @@ fn main() -> ! {
 
             // Ticks used to blink the LED
             if tick_count_down.wait().is_ok() {
-                ticks = ticks.wrapping_add(1);
+                ticks += 1;
             }
         }
     }
