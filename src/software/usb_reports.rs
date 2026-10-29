@@ -1,14 +1,15 @@
+use frunk::{HCons, HNil};
 use usb_device::{
-    device::{UsbDevice, UsbDeviceState},
+    bus::UsbBusAllocator,
+    device::{StringDescriptors, UsbDevice, UsbDeviceBuilder, UsbDeviceState, UsbVidPid},
     UsbError,
 };
 use usbd_human_interface_device::{
     device::{
-        keyboard::NKROBootKeyboard,
-        mouse::{WheelMouse, WheelMouseReport},
-        DeviceHList,
+        keyboard::{NKROBootKeyboard, NKROBootKeyboardConfig},
+        mouse::{WheelMouse, WheelMouseConfig, WheelMouseReport},
     },
-    usb_class::UsbHidClass,
+    usb_class::{UsbHidClass, UsbHidClassBuilder},
     UsbHidError,
 };
 use waveshare_rp2040_zero::hal::usb::UsbBus;
@@ -18,6 +19,38 @@ use crate::{
     hardware::led::{Led, LedColor},
     options::TIMER_USB_LOOP,
 };
+
+/// USB HID devices of the keyboard: a mouse and an NKRO keyboard (the last added comes first).
+pub type UsbHid<'a> = UsbHidClass<
+    'a,
+    UsbBus,
+    HCons<WheelMouse<'a, UsbBus>, HCons<NKROBootKeyboard<'a, UsbBus>, HNil>>,
+>;
+
+/// Keyboard & mouse, the same on mono and split.
+pub fn usb_hid(usb_bus: &UsbBusAllocator<UsbBus>) -> UsbHid<'_> {
+    UsbHidClassBuilder::new()
+        .add_device(NKROBootKeyboardConfig::default())
+        .add_device(WheelMouseConfig::default())
+        .build(usb_bus)
+}
+
+/// USB device seen by the computer, only the vendor id and the names differ on mono and split.
+pub fn usb_device<'a>(
+    usb_bus: &'a UsbBusAllocator<UsbBus>,
+    vendor_id: u16,
+    product: &'static str,
+    serial_number: &'static str,
+) -> UsbDevice<'a, UsbBus> {
+    UsbDeviceBuilder::new(usb_bus, UsbVidPid(vendor_id, 0x1985))
+        .strings(&[StringDescriptors::default()
+            .manufacturer("florent@linguenheld.fr")
+            .product(product)
+            .serial_number(serial_number)])
+        .unwrap()
+        .supports_remote_wakeup(true)
+        .build()
+}
 
 /// Writes the reports to the computer, the same way on mono and on the split master:
 ///     - keyboard: one case of the queue at most every TIMER_USB_LOOP, a lone case goes out
@@ -113,7 +146,7 @@ impl UsbReports {
 }
 
 /// Clock tick of the USB HID devices, to call once per ms.
-pub fn tick_hid<'a, D: DeviceHList<'a>>(hid: &mut UsbHidClass<'a, UsbBus, D>) {
+pub fn tick_hid(hid: &mut UsbHid) {
     match hid.tick() {
         Err(UsbHidError::WouldBlock) => {}
         Ok(_) => {}

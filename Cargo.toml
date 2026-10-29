@@ -26,6 +26,7 @@ defmt-rtt = "0.4"
 panic-probe = { version = "0.3", features = ["print-defmt"] }
 
 waveshare-rp2040-zero = "0.8.0"
+frunk = { version = "0.4", default-features = false } # HID devices list type (UsbHid)
 smart-leds = "0.3.0"
 ws2812-pio = "0.8.0"
 

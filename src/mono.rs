@@ -11,7 +11,7 @@ use rusty_chew::software::{
     chew::Chew,
     keys::Buffer,
     status::{play_status_songs, show_status_led},
-    usb_reports::{read_keyboard, tick_hid, UsbReports},
+    usb_reports::{read_keyboard, tick_hid, usb_device, usb_hid, UsbReports},
 };
 use usbd_serial::SerialPort;
 
@@ -33,12 +33,9 @@ use fugit::ExtU32;
 use panic_probe as _;
 use ws2812_pio::Ws2812;
 
-#[allow(clippy::wildcard_imports)]
-use usb_device::class_prelude::*;
-use usb_device::prelude::*;
+use usb_device::bus::UsbBusAllocator;
 use usbd_human_interface_device::device::keyboard::NKROBootKeyboard;
 use usbd_human_interface_device::device::mouse::{WheelMouse, WheelMouseReport};
-use usbd_human_interface_device::prelude::*;
 
 #[entry]
 fn main() -> ! {
@@ -81,21 +78,8 @@ fn main() -> ! {
     ));
 
     let mut serial = SerialPort::new(&usb_bus);
-    let mut rusty_chew = UsbHidClassBuilder::new()
-        .add_device(
-            usbd_human_interface_device::device::keyboard::NKROBootKeyboardConfig::default(),
-        )
-        .add_device(usbd_human_interface_device::device::mouse::WheelMouseConfig::default())
-        .build(&usb_bus);
-
-    let mut usb_dev = UsbDeviceBuilder::new(&usb_bus, UsbVidPid(0x1338, 0x1985))
-        .strings(&[StringDescriptors::default()
-            .manufacturer("florent@linguenheld.fr")
-            .product("Rusty Chew Mono")
-            .serial_number("01")])
-        .unwrap()
-        .supports_remote_wakeup(true)
-        .build();
+    let mut rusty_chew = usb_hid(&usb_bus);
+    let mut usb_dev = usb_device(&usb_bus, 0x1338, "Rusty Chew Mono", "01");
 
     // GPIO --
     let mut gpios = GpiosMono {
