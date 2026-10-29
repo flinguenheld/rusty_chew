@@ -238,7 +238,8 @@ write_keyboard: if ticks reached next_ticks {
 | `Duplicate`                   | blue LED, case dropped |
 
 - **Mouse:** `write_mouse`, straight away after the run, not through the queue. Red LED on `WouldBlock`.
-- **`rusty_chew.tick()`:** every 1 ms, for the HID crate's own timing.
+- **`tick_hid`:** every 1 ms, for the HID crate's own timing.
+- **`read_keyboard`:** after each USB poll, reads the computer's report (its LEDs, not used).
 - **`SERIAL_ON`:** with the `serial` feature, no keyboard report is sent.
 
 > 💡 A lone report goes out at once, the next ones wait for the gap:

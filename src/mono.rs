@@ -11,7 +11,7 @@ use rusty_chew::software::{
     chew::Chew,
     keys::Buffer,
     status::{changed_status_song, is_buzzer_active, show_status_led, statuses_to_bits, Statuses},
-    usb_reports::UsbReports,
+    usb_reports::{read_keyboard, tick_hid, UsbReports},
 };
 use usbd_serial::SerialPort;
 
@@ -213,11 +213,7 @@ fn main() -> ! {
         // Tick once per ms -------------------------------------------------------------
         if tick_count_down.wait().is_ok() {
             ticks = ticks.wrapping_add(1);
-            match rusty_chew.tick() {
-                Err(UsbHidError::WouldBlock) => {}
-                Ok(_) => {}
-                Err(e) => core::panic!("Failed to process keyboard tick: {:?}", e),
-            };
+            tick_hid(&mut rusty_chew);
         }
 
         // if !usb_dev.poll(&mut [&mut _serial]) {
@@ -225,16 +221,7 @@ fn main() -> ! {
         // }
 
         if !SERIAL_ON && usb_dev.poll(&mut [&mut rusty_chew]) {
-            match rusty_chew
-                .device::<NKROBootKeyboard<'_, _>, _>()
-                .read_report()
-            {
-                Err(UsbError::WouldBlock) => {}
-                Err(e) => {
-                    core::panic!("Failed to read keyboard report: {:?}", e)
-                }
-                Ok(_leds) => {}
-            }
+            read_keyboard(rusty_chew.device::<NKROBootKeyboard<'_, _>, _>());
         }
     }
 }

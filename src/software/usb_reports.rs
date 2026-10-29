@@ -1,9 +1,14 @@
-use usb_device::device::{UsbDevice, UsbDeviceState};
+use usb_device::{
+    device::{UsbDevice, UsbDeviceState},
+    UsbError,
+};
 use usbd_human_interface_device::{
     device::{
         keyboard::NKROBootKeyboard,
         mouse::{WheelMouse, WheelMouseReport},
+        DeviceHList,
     },
+    usb_class::UsbHidClass,
     UsbHidError,
 };
 use waveshare_rp2040_zero::hal::usb::UsbBus;
@@ -104,5 +109,25 @@ impl UsbReports {
                 }
             };
         }
+    }
+}
+
+/// Clock tick of the USB HID devices, to call once per ms.
+pub fn tick_hid<'a, D: DeviceHList<'a>>(hid: &mut UsbHidClass<'a, UsbBus, D>) {
+    match hid.tick() {
+        Err(UsbHidError::WouldBlock) => {}
+        Ok(_) => {}
+        Err(e) => core::panic!("Failed to process keyboard tick: {:?}", e),
+    };
+}
+
+/// Read the keyboard report sent by the computer (its LEDs, not used), after a USB poll.
+pub fn read_keyboard(keyboard: &mut NKROBootKeyboard<'_, UsbBus>) {
+    match keyboard.read_report() {
+        Err(UsbError::WouldBlock) => {}
+        Err(e) => {
+            core::panic!("Failed to read keyboard report: {:?}", e)
+        }
+        Ok(_leds) => {}
     }
 }
