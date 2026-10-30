@@ -8,6 +8,8 @@ use waveshare_rp2040_zero::{
 use bsp::hal::gpio::{DynPinId, FunctionSio, Pin, SioInput};
 use embedded_hal::digital::*;
 
+use crate::options::ROWS_DISCHARGE_MAX;
+
 // --------------------------------------------------------------------------------------
 // ----------------------------------------------------------------------------- SPLIT --
 
@@ -90,9 +92,21 @@ impl GpiosMono {
                 }
 
                 col.set_low().ok();
+                wait_rows_discharged(&mut self.rows, delay);
             }
         }
 
         output
+    }
+}
+
+/// The rows discharge through the weak pull-down only (the diode blocks the column),
+/// wait for them, else the next column reads the key again (c -> co).
+fn wait_rows_discharged(rows: &mut [impl InputPin], delay: &mut Delay) {
+    for _ in 0..ROWS_DISCHARGE_MAX {
+        if rows.iter_mut().all(|r| r.is_low().unwrap_or(true)) {
+            return;
+        }
+        delay.delay_us(1);
     }
 }

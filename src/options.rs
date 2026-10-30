@@ -29,6 +29,8 @@ pub const MAX_MESSAGE_LENGTH: usize = 9; // RX FIFO (8 bytes) + shift register, 
 pub const MAX_NOT_COMPLETE: u32 = 3;
 pub const UART_SEND_DELAY: u32 = 100; // microseconds, guard before a frame (other side's stop bit)
 
+pub const ROWS_DISCHARGE_MAX: u32 = 30; // microseconds, mono: max wait for the rows to go low between two columns
+
 // Mouse
 // Move i8 each u64 ms
 pub const MOUSE_SPEED_1: (i8, u64) = (1, 15);
