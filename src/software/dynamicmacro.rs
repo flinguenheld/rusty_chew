@@ -1,4 +1,4 @@
-use heapless::{FnvIndexMap, Vec};
+use heapless::{index_map::FnvIndexMap, Vec};
 
 use super::{
     chew::Key,
