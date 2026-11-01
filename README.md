@@ -4,92 +4,7 @@
 
 This is the rustenuine firmware for the [Chew](https://github.com/flinguenheld/chew) keyboard!
 
-It performs some cool hacks that keyboard enthusiasts love:
-
-- Layers
-    - Set default
-    - Activated as long as a key is held down ❤️
-    - Dead key style (activated until another key is pressed or as long as being held)
-- Homerows
-    - Hold down to activate a modifier
-    - Press to print a regular key
-- Combos
-    - Two keys pressed at once result in a third one
-- Leader key
-    - Once activated, it allows you to hit a sequence (3 keys max) to produce another key
-    - Leave it with Escape or a wrong key
-- Mouse emulation
-- LED
-    - Synchronise the embedded controler's aRGB LED (e.g. for layers, caplock...)
-- Buzzer
-    - Buzz jingles (and do it in stereo with the split version!)
-- No mods
-    - Prevent modifiers with specific keys (e.g. no shifted symbols)
-- Caplock
-    - Deactivated by itself or Escape
-- Macros
-    - One key can produce a chain of keys (e.g. to automate accents or email addresses)
-- Dynamic macros
-    - Record
-        - Press `KC::DynMacRecord`
-        - Then another key which will be used to create an entry in the macro dictionary
-        - Now all pressed key are recorded with its modifiers
-        - Press `KC::DynMacRecord` again to end up the record
-    - Launch
-        - Press `KC::DynMacGo`
-        - Then the key which was used to record the macro
-- Nkro
-    - Can hold several keys at the same time (useful in games)
-
 <div align="center">
-    <img src="./images/prawns.png">
-</div>
-
-### Layout
-
-Here's my *current* layout which uses the US international extended keymap.  
-The letter positions come from [Ergo-L](https://ergol.org/) which is my favourite French layout.
-
-<div align="center">
-    <img src="./images/layouts.png">
-</div>
-
-<div align="center">
-    <img src="./images/combos.png">
-
-#### Leader-key
-
-| Combination | Printed |
-| :---------: | :-----: |
-| F + L       | flinguenheld |
-| M + A       | florent@linguenheld.net |
-| M + S       | f@linguenheld.net |
-| H + T       | https:// |
-| D + O + T   | https://github.com/flinguenheld/dotfiles |
-| N + I + X   | sudo nixos-rebuild switch --flake .#flopc |
-|             |   |
-| B + U + Z   | toggle buzzer |
-|             |   |
-| D + I + A   | ø |
-| D + E + G   | ° |
-| C + O + P   | © |
-| R + E + G   | ® |
-| B + E + T   | ß |
-| P + I + L   | ¶ |
-|             |   |
-| M + U + L   | × |
-| D + I + V   | ÷ |
-| E + X + 1   | ¹ |
-| E + X + 2   | ² |
-| E + X + 3   | ³ |
-|             |   |
-| 1 + 4       | ¼ |
-| 1 + 2       | ½ |
-| 3 + 4       | ¾ |
-
-</div>
-
-<div align="center" style="margin-top: 20px;">
     <img src="./images/prawns.png">
 </div>
 
@@ -152,18 +67,9 @@ And connect to it (for instance with minicom or picocom. *Ctrl-A X to exit* )
 
 ### Docs
 
-- How the keys are wired and how the mono scans them: [MATRIX.md](./docs/MATRIX.md)
-- How the keys become USB reports: [REPORTS.md](./docs/REPORTS.md)
-- How both halves talk over their single wire: [SPLIT_LINK.md](./docs/SPLIT_LINK.md)
-- When things happen and what each timer costs: [TIMING.md](./docs/TIMING.md)
-- How the LED and the buzzer show the keyboard's state: [STATUS.md](./docs/STATUS.md)
-
-### Thanks
-
-Rusty Chew uses the [usbd-human-interface-device](https://github.com/dlkj/usbd-human-interface-device) crate which simplifies
-the usb management ❤️.  
-Also the [pio-uart](https://github.com/Sympatron/pio-uart) which allowed me to create a UART half-duplex protocol.  
-And the [rp-hal-boards](https://github.com/rp-rs/rp-hal-boards) that I used as a base to use the RP2040-zero controller.  
+- How the firmware is built (cargo config, memory map, flash storage): [BUILD.md](./docs/BUILD.md)
+- Notes from the port to embassy, step by step: [EMBASSY.md](./docs/EMBASSY.md)
+- What's done and what's next in the port: [TODO.md](./docs/TODO.md)
 
 <div align="center">
     <img src="./images/crab_back.png">

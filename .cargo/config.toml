@@ -20,3 +20,4 @@ rustflags = [
 
 [build]
 target = "thumbv6m-none-eabi"
+target-dir = "/goinfre/flinguen/rusty_chew-target"
