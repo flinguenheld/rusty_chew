@@ -51,6 +51,9 @@ async fn main(_spawner: Spawner) {
 `init` sets the clocks, the PLLs and the timer (with rp-hal: `Watchdog`,
 `init_clocks_and_plls`, `Timer::new`, …). It returns `p`, all the peripherals.
 
+The interrupts used by the async drivers are bound once for the whole firmware with
+`bind_interrupts!`, see [INTERRUPTS.md](./INTERRUPTS.md).
+
 #### Cargo profiles
 
 | Command | Profile | Default |

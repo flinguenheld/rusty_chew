@@ -1,3 +1,5 @@
+use embassy_time::Duration;
+
 pub const HOLD_TIME: u64 = 150; // From free to held (ms)
 pub const COMBO_TIME: u64 = 20;
 
@@ -18,6 +20,8 @@ pub const TIMER_UART_LOOP: u32 = 1;
 pub const TIMER_SPLIT_LOOP: u32 = 5; // Master asks the slave for its keys
 pub const TIMER_LINK_REPORT: u32 = 1000; // Master prints the dropped frames on serial
 pub const LINK_TIMEOUT: u64 = 100; // Without a valid mail, the link is lost (keys released)
+
+pub const LED_FADE_FRAME: Duration = Duration::from_millis(5); // LED fade refresh period (200 Hz)
 
 // pub const UART_SPEED: u32 = 921_600;
 // pub const UART_SPEED: u32 = 460_800;
