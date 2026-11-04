@@ -22,8 +22,15 @@ zero = []
 serial = []
 
 [dependencies]
-embassy-executor = { version = "0.10", features = ["platform-cortex-m", "executor-thread"] }
-embassy-rp = { version = "0.10", features = ["rp2040", "time-driver", "critical-section-impl"] }
+embassy-executor = { version = "0.10", features = [
+  "platform-cortex-m",
+  "executor-thread",
+] }
+embassy-rp = { version = "0.10", features = [
+  "rp2040",
+  "time-driver",
+  "critical-section-impl",
+] }
 embassy-time = "0.5"
 
 cortex-m-rt = "0.7"

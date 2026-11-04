@@ -1,6 +1,19 @@
+# Project-local Helix config, merged on top of ~/.config/helix/languages.toml
+
 [[language]]
 name = "rust"
 
+# Analysis: same target as .cargo/config.toml, so cfg(target_arch = "arm"),
+# no_std and the thumbv6m core/alloc are resolved like a real build.
+[language-server.rust-analyzer.config.cargo]
+target = "thumbv6m-none-eabi"
+# Enable cfg-gated code for analysis (e.g. led.rs `zero`).
+# Don't enable `master` and `slave` together.
+# features = ["zero"]
+
+# Check on save: clippy, for the firmware target only.
+# allTargets = false avoids building tests/benches, which need `std`.
 [language-server.rust-analyzer.config.check]
+command = "clippy"
 targets = ["thumbv6m-none-eabi"]
 allTargets = false
