@@ -3,6 +3,7 @@
 </div>
 
 How the async drivers get woken up: the interrupts, and `bind_interrupts!`.
+The executor that sleeps and polls the tasks is in [EMBASSY.md](./EMBASSY.md).
 
 ### Words
 
@@ -49,7 +50,7 @@ address: the entry tells it **which function to run**.
   │ 2.. │ NMI, HardFault… │ CPU exceptions               │
   ├─────┼─────────────────┼──────────────────────────────┤
   │ 16  │ TIMER_IRQ_0     │ → embassy-rp time driver     │  IRQ 0
-  │ 21  │ USBCTRL_IRQ     │ → DefaultHandler (not bound) │  IRQ 5
+  │ 21  │ USBCTRL_IRQ     │ → usb::InterruptHandler      │  IRQ 5
   │ 23  │ PIO0_IRQ_0      │ → pio::InterruptHandler      │  IRQ 7
   │ 27  │ DMA_IRQ_0       │ → dma::InterruptHandler      │  IRQ 11
   │ 29  │ IO_IRQ_BANK0    │ → embassy-rp GPIO handler    │  IRQ 13
@@ -62,6 +63,10 @@ address: the entry tells it **which function to run**.
 `cortex-m-rt` builds this table at link time: an entry gets a function if one has
 the exact name (`DMA_IRQ_0`), else `DefaultHandler`. There is one table per
 firmware, so one function per line. `bind_interrupts!` writes these functions.
+
+<div align="center">
+    <img src="../images/prawns.png">
+</div>
 
 ### One Table for the Whole Firmware
 
@@ -85,9 +90,9 @@ The lines bound by `Irqs` in `src/mono.rs`:
 |---|---|---|
 | `PIO0_IRQ_0` | `pio::InterruptHandler<PIO0>` | `Pio::new` (the PIO block of the LED) |
 | `DMA_IRQ_0` | `dma::InterruptHandler<DMA_CH0>` | `PioWs2812` (LED colors pushed by DMA) |
+| `USBCTRL_IRQ` | `usb::InterruptHandler<USB>` | `usb::Driver::new` (the USB device, see [USB.md](./USB.md)) |
 
-A driver that needs another interrupt adds its line to the same `Irqs`, for
-example `USBCTRL_IRQ => usb::InterruptHandler<USB>;` for `usb::Driver::new`.
+A driver that needs another interrupt adds its line to the same `Irqs`.
 
 Every driver gets the same value, `Irqs`, and only checks that **its** line is in it:
 
@@ -96,6 +101,10 @@ Every driver gets the same value, `Irqs`, and only checks that **its** line is i
   struct Irqs ─────┤
                    └──> PioWs2812::…(…, p.DMA_CH0, Irqs, …)     needs DMA_IRQ_0
 ```
+
+<div align="center">
+    <img src="../images/prawns.png">
+</div>
 
 ### `bind_interrupts!`
 
@@ -204,12 +213,13 @@ bind_interrupts!            Irqs (type)                 driver::new(…, Irqs)
                                                               (missing line → ✗ error)
 ```
 
-#### What the Two Handlers Do
+#### What the Handlers Do
 
 | Line | Handler | When it fires | What it does |
 |---|---|---|---|
 | `PIO0_IRQ_0` | `pio::InterruptHandler<PIO0>` | a state machine FIFO has room / data, or a PIO IRQ flag | wakes the futures waiting on that state machine, clears the enable bits |
 | `DMA_IRQ_0` | `dma::InterruptHandler<DMA_CH0>` | the DMA transfer of channel 0 is done | wakes the future of `led.write()` (panics on a bus error) |
+| `USBCTRL_IRQ` | `usb::InterruptHandler<USB>` | bus reset, suspend, resume, a setup request, an endpoint buffer done | wakes `usb.run()` (bus events, setup on EP0) or the endpoint futures (`write_packet`…) |
 
 `PioWs2812::write` pushes the color words with DMA, so the LED only really waits on
 `DMA_IRQ_0`. `Pio::new` still asks for the PIO binding: it sets up the whole

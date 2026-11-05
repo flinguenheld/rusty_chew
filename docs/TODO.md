@@ -2,7 +2,7 @@ The `embassy` branch:
 
 - Switching the firmware from rp-hal to embassy, with the same behaviour (`rp-hal` is the reference)
 - Discovering embassy step by step, one module at a time
-- Writing the docs of each step in [EMBASSY.md](./EMBASSY.md)
+- Writing one doc per topic in `docs/` once its step works (`LED.md`, `INTERRUPTS.md`…)
 
 ### Done
 
