@@ -2,3 +2,4 @@
 
 pub mod options;
 pub mod software;
+pub mod usb;

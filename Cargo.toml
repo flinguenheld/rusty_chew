@@ -32,6 +32,8 @@ embassy-rp = { version = "0.10", features = [
   "critical-section-impl",
 ] }
 embassy-time = "0.5"
+embassy-usb = { version = "0.6", default-features = false }
+embassy-futures = "0.1"
 
 cortex-m-rt = "0.7"
 
@@ -40,6 +42,9 @@ defmt-rtt = "1"
 panic-probe = { version = "1", features = ["print-defmt"] }
 
 smart-leds = "0.4.0"
+
+static_cell = "2"
+portable-atomic = { version = "1", features = ["critical-section"] }
 
 [profile.release]
 debug = 2
