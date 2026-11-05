@@ -6,7 +6,8 @@ What embassy is in this firmware: the crates, `init`, and the executor that runs
 the `async` tasks.
 
 How it's built and flashed: [BUILD.md](./BUILD.md). How the drivers get woken
-up: [INTERRUPTS.md](./INTERRUPTS.md).
+up: [INTERRUPTS.md](./INTERRUPTS.md). The chip and its words:
+[RP2040.md](./RP2040.md).
 
 ### The Layers
 

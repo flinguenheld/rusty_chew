@@ -3,7 +3,8 @@
 </div>
 
 How the firmware is built and flashed: what `.cargo/config.toml`, `memory.x`
-and the cargo profiles do.
+and the cargo profiles do. The chip's memory and words:
+[RP2040.md](./RP2040.md).
 
 ### From Source to Chip
 

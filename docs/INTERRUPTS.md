@@ -5,40 +5,12 @@
 How the async drivers get woken up: the interrupts, and `bind_interrupts!`.
 The executor that sleeps and polls the tasks is in [EMBASSY.md](./EMBASSY.md).
 
-### Words
+### The Vector Table
 
-#### Peripheral
+The words used here (peripheral, driver, IRQ, NVIC…) are explained in
+[RP2040.md](./RP2040.md).
 
-A block of hardware inside the chip, next to the CPU: PIO0, DMA, USB, UART0, the
-timer, … The CPU controls it by reading and writing its **registers** (fixed memory
-addresses). A peripheral works on its own, and can raise an **interrupt** to say
-"I'm done" or "I need you".
-
-#### Driver
-
-The code that handles one peripheral, so the rest of the firmware never touches its
-registers: it configures it, and gives a simple API.
-
-```
-  our code         led.write(&[color]).await
-                          │
-  drivers          PioWs2812 (embassy-rp) ──> uses 2 lower drivers:
-  (embassy-rp)        ├── pio::StateMachine  (runs the WS2812 program)
-                      └── dma::Channel       (copies the colors to the PIO FIFO)
-                          │
-  registers        PIO0 / DMA registers (addresses in memory)
-                          │
-  hardware         PIO0 ──> GP16 ──> LED
-```
-
-An **async driver** has `async fn`s: it starts the peripheral and waits for the
-interrupt instead of polling the registers in a loop. It's not complete without
-its **interrupt handler**, the function that runs when the peripheral raises the
-interrupt (here `pio::InterruptHandler`, `dma::InterruptHandler`).
-
-#### Vector Table
-
-A list of addresses at the start of the firmware (in flash, just after boot2). When
+The vector table is a list of addresses at the start of the firmware (in flash, just after boot2). When
 an interrupt fires, the CPU itself reads the matching entry and jumps to that
 address: the entry tells it **which function to run**.
 

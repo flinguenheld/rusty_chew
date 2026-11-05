@@ -6,7 +6,8 @@ The RGB LED of the keyboard: one WS2812 on GP16, driven by the PIO with DMA.
 The code is in `src/software/led.rs`, the setup in `src/mono.rs`.
 
 The interrupts it needs (`PIO0_IRQ_0`, `DMA_IRQ_0`) are bound for the whole
-firmware, see [INTERRUPTS.md](./INTERRUPTS.md).
+firmware, see [INTERRUPTS.md](./INTERRUPTS.md). PIO, DMA, FIFO:
+[RP2040.md](./RP2040.md).
 
 ### Hardware
 

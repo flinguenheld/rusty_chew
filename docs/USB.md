@@ -7,6 +7,7 @@ and run. Today it's a USB serial (CDC ACM), the keyboard (HID) will join it.
 
 The setup is in `src/mono.rs`, the buffers in `src/usb.rs`. Reading the serial
 from the PC: [SERIAL.md](./SERIAL.md). The interrupt: [INTERRUPTS.md](./INTERRUPTS.md).
+The chip's words (peripheral, FIFO…): [RP2040.md](./RP2040.md).
 
 ### Host and Device
 
