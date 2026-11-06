@@ -7,7 +7,8 @@ the `async` tasks.
 
 How it's built and flashed: [BUILD.md](./BUILD.md). How the drivers get woken
 up: [INTERRUPTS.md](./INTERRUPTS.md). The chip and its words:
-[RP2040.md](./RP2040.md).
+[RP2040.md](./RP2040.md). The boot and the run loop, in order:
+[LIFECYCLE.md](./LIFECYCLE.md).
 
 ### The Layers
 
