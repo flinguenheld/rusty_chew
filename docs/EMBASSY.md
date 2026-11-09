@@ -13,7 +13,7 @@ up: [INTERRUPTS.md](./INTERRUPTS.md). The chip and its words:
 ### The Layers
 
 ```
-  our code         tasks: test_led, …            (src/mono.rs, src/software/)
+  our code         tasks: test_led, …            (src/mono.rs, src/led.rs…)
                          │ .await
   executor         embassy-executor              runs the tasks, sleeps (WFE)
                          │

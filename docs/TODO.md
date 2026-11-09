@@ -24,7 +24,7 @@ The `embassy` branch:
 - [ ] 3. Buzzer: PWM, songs as an async task
 - [ ] 4. Matrix (mono): GPIO `Input`/`Output`, scan loop, rows discharge
 - [ ] 5. USB HID: keyboard, mouse, NKRO with `embassy-usb` (replaces `usbd-human-interface-device`), next to the serial
-- [ ] 6. Chew logic back: `software/`, `layouts`, `options` (remove the rp-hal & usbd types)
+- [ ] 6. Chew logic back in `keyboard/` (was `software/`), `layouts`, `options` (remove the rp-hal & usbd types)
 - [ ] 7. Split: direct pins, half-duplex UART on PIO (replaces `pio-uart`), `split_mail`, vbus detection (Gemini)
 - [ ] 8. Status: LED & buzzer show the state
 - [ ] 9. Features `zero`, `master`, `slave`: check every combination builds

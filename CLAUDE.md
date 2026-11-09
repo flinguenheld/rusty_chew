@@ -49,7 +49,7 @@ the LED and the USB serial, never `defmt::info!` or `probe-rs`.
 
 ## Code style
 
-New files follow `src/software/led.rs`:
+New files follow `src/led.rs`:
 
 - A struct per hardware part, owning its driver (`Led` owns the `Ws2812`), with short
   methods that chain when it reads well (`led.set(RED, 200).fade(300).await`).
@@ -64,6 +64,9 @@ New files follow `src/software/led.rs`:
   table or graph when it helps. `//` for the non-obvious lines (rounding, overflow…).
 - Tunable values in `src/options.rs`. Hardware variants as type aliases behind features
   (`#[cfg(feature = "zero")]`).
+- A part is one file in `src/` (`led.rs`). With a second file it becomes a folder,
+  declared inline in `lib.rs` (`pub mod usb { pub mod device; pub mod serial; }`), no
+  `mod.rs`.
 - `rustfmt.toml` (79 columns).
 
 ## Documentation (`docs/`)

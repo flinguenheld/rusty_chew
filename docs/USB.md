@@ -5,7 +5,7 @@
 The USB side of the Chew: how the PC sees it, and how `embassy-usb` is set up
 and run. Today it's a USB serial (CDC ACM), the keyboard (HID) will join it.
 
-The setup is in `src/mono.rs`, the buffers in `src/usb.rs`. Reading the serial
+The setup is in `src/mono.rs`, the buffers in `src/usb/device.rs`. Reading the serial
 from the PC: [USB_SERIAL.md](./USB_SERIAL.md). The interrupt: [INTERRUPTS.md](./INTERRUPTS.md).
 The chip's words (peripheral, FIFO…): [RP2040.md](./RP2040.md).
 
@@ -103,7 +103,7 @@ turning the IADs off.
 #### The Buffers
 
 `embassy-usb` has no heap: it can't allocate, so it borrows arrays we give it.
-They are in one `StaticCell`, `USB_BUFFERS` (`src/usb.rs`), so they live
+They are in one `StaticCell`, `USB_BUFFERS` (`src/usb/device.rs`), so they live
 forever and the device can go in a task (see
 [EMBASSY.md](./EMBASSY.md#static-and-staticcell)).
 

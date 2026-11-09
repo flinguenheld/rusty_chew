@@ -13,8 +13,8 @@ use embassy_rp::{peripherals::USB, usb};
 use embassy_time::Timer;
 use embassy_usb::class::cdc_acm::{CdcAcmClass, State};
 use embassy_usb::{Builder, Config, UsbDevice};
-use rusty_chew::software::led::{self, Led};
-use rusty_chew::usb::{UsbBuffers, UsbDriver, USB_BUFFERS};
+use rusty_chew::led::{self, Led};
+use rusty_chew::usb::device::{UsbBuffers, UsbDriver, USB_BUFFERS};
 use {defmt_rtt as _, panic_probe as _};
 
 bind_interrupts!(struct Irqs {
