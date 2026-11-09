@@ -53,13 +53,10 @@ New files follow `src/led.rs`:
 
 - A struct per hardware part, owning its driver (`Led` owns the `Ws2812`), with short
   methods that chain when it reads well (`led.set(RED, 200).fade(300).await`).
-- Sections with a banner, the name in capitals on the right:
-
-  ```rust
-  // ──────────                                ─────────────────────────────
-  // ─────                               ───────────────────────── SET ─────
-  ```
-
+- No banners: group methods in several `impl` blocks, a short `//` above each
+  (`// Show the next color`). A short file keeps one `impl`.
+- `///` on every `pub` item, the struct too: a summary line, what it owns and how
+  it's used, a `text` example when it helps (no doctests on `thumbv6m`).
 - `///` on every function: what in the first line, then why, limits, and a small `text`
   table or graph when it helps. `//` for the non-obvious lines (rounding, overflow…).
 - Tunable values in `src/options.rs`. Hardware variants as type aliases behind features

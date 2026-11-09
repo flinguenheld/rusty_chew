@@ -10,30 +10,36 @@ pub type Ws2812 = PioWs2812<'static, PIO0, 0, 1, ws2812::Grb>;
 #[cfg(not(feature = "zero"))]
 pub type Ws2812 = PioWs2812<'static, PIO0, 0, 1, ws2812::Rgb>;
 
-// ──────────                                    ─────────────────────────────
-// ─────                                   ────────────────────── COLORS ─────
 pub const RED: RGB8 = RGB8::new(255, 0, 0);
 pub const GREEN: RGB8 = RGB8::new(0, 255, 0);
 pub const BLUE: RGB8 = RGB8::new(0, 0, 255);
 pub const OFF: RGB8 = RGB8::new(0, 0, 0);
 
+/// The RGB LED (WS2812 on GP16), driven by PIO0.
+///
+/// Owns the driver, the current color and the next one: `set` or `off`
+/// stores the next color, `go`, `fade` or `flash` shows it.
+///
+/// ```text
+/// led.set(RED, 200).fade(300).await.off().fade(1000).await;
+/// ```
 pub struct Led {
     ws: Ws2812,
     color: RGB8,
     new_color: RGB8,
 }
 
+// Build
 impl Led {
-    // ──────────                                ─────────────────────────────
-    // ─────                               ───────────────────────── NEW ─────
     /// Wrap the WS2812 driver. Both colors start at `OFF`,
     /// and nothing is sent until the first `go` or `fade`.
     pub fn new(ws: Ws2812) -> Self {
         Led { ws, color: OFF, new_color: OFF }
     }
+}
 
-    // ──────────                                ─────────────────────────────
-    // ─────                               ───────────────────────── SET ─────
+// Set the next color
+impl Led {
     /// Store a new color. Nothing is shown until `go`, `fade`...
     pub fn set(&mut self, color: RGB8, dim: u8) -> &mut Self {
         self.new_color = Led::dim_color(color, dim);
@@ -45,9 +51,10 @@ impl Led {
         self.new_color = OFF;
         self
     }
+}
 
-    // ──────────                                ─────────────────────────────
-    // ─────                                ──────────────── GO / GO FOR ─────
+// Show the next color
+impl Led {
     /// Activate the new color.
     pub async fn go(&mut self) -> &mut Self {
         self.color = self.new_color;
@@ -62,8 +69,6 @@ impl Led {
         self
     }
 
-    // ──────────                                ─────────────────────────────
-    // ─────                               ──────────────── FADE / FLASH ─────
     /// Go from the current color to the new one in `duration_ms`.
     ///
     /// Every `LED_FADE_FRAME`, the elapsed time is turned into a progress:
@@ -122,9 +127,10 @@ impl Led {
         self.fade(duration_ms).await.off().fade(duration_ms).await;
         self
     }
+}
 
-    // ──────────                                ─────────────────────────────
-    // ─────                               ─────────────────────── WRITE ─────
+// Color math and the hardware write
+impl Led {
     /// Send the current color to the LED, gamma corrected.
     ///
     /// The LED is linear: a value of 128 gives half the light of 255.
@@ -155,8 +161,6 @@ impl Led {
         self.ws.write(&[sent]).await;
     }
 
-    // ──────────                                ─────────────────────────────
-    // ─────                               ───────────────────────── DIM ─────
     /// Scale each channel by `dim`: 0 (off) to 255 (full color), rounded
     /// down.
     ///
