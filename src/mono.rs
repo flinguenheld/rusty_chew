@@ -14,7 +14,9 @@ use embassy_time::Timer;
 use embassy_usb::class::cdc_acm::{CdcAcmClass, State};
 use embassy_usb::{Builder, Config, UsbDevice};
 use rusty_chew::led::{self, Led};
+use rusty_chew::options::SERIAL_PACKET_SIZE;
 use rusty_chew::usb::device::{UsbBuffers, UsbDriver, USB_BUFFERS};
+use rusty_chew::usb::serial::UsbSerial;
 use {defmt_rtt as _, panic_probe as _};
 
 bind_interrupts!(struct Irqs {
@@ -57,11 +59,14 @@ async fn usb_run(mut usb: UsbDevice<'static, UsbDriver>) -> ! {
 
 /// Send "hello" every second, to check the serial.
 #[embassy_executor::task]
-async fn test_serial(mut class: CdcAcmClass<'static, UsbDriver>) {
+async fn test_serial(mut usb_serial: UsbSerial) {
     loop {
-        class.wait_connection().await;
-        let _ = class.write_packet(b"hello Flo\r\n").await;
-        Timer::after_millis(1000).await;
+        let blah = b"hello to you darling, that's a wonderfull day to go for a stroll, and then we will eat some piece of cake if you want to.\n";
+        usb_serial.set(blah).write().await;
+        let blah = b"Oh yes that would be great! I secretly hoped you said that..:)\n";
+        usb_serial.set(blah).write().await;
+        usb_serial.set(b"Hello hello!\n").write().await;
+        Timer::after_millis(3000).await;
     }
 }
 
@@ -91,7 +96,7 @@ async fn main(spawner: Spawner) {
     let mut config = Config::new(0xc0de, 0xcafe);
     config.manufacturer = Some("florent@linguenheld.net");
     config.product = Some("Chew embassy");
-    config.serial_number = Some("0001");
+    config.serial_number = Some("1506");
 
     // 3. Buffers the builder writes into (filled once, 'static)
     let b = USB_BUFFERS.init(UsbBuffers {
@@ -111,12 +116,17 @@ async fn main(spawner: Spawner) {
     );
 
     // 4. The class adds its interfaces & endpoints to the builder
-    let class = CdcAcmClass::new(&mut builder, &mut b.state, 64);
+    // QUESTION: rename that ? I suppose there will be a lot of classes?
+    let class = CdcAcmClass::new(
+        &mut builder,
+        &mut b.state,
+        SERIAL_PACKET_SIZE as u16,
+    );
 
     // 5. Build the device: no more changes to the descriptors
     let usb = builder.build();
 
     // 6. The device and the serial run in their own tasks
     spawner.spawn(usb_run(usb).unwrap());
-    spawner.spawn(test_serial(class).unwrap());
+    spawner.spawn(test_serial(UsbSerial::new(class)).unwrap());
 }

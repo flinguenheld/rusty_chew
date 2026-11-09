@@ -23,6 +23,9 @@ pub const LINK_TIMEOUT: u64 = 100; // Without a valid mail, the link is lost (ke
 
 pub const LED_FADE_FRAME: Duration = Duration::from_millis(5); // LED fade refresh period (200 Hz)
 
+pub const SERIAL_PACKET_SIZE: usize = 64;
+pub const SERIAL_MAX_TXT_LEN: usize = 200;
+
 // pub const UART_SPEED: u32 = 921_600;
 // pub const UART_SPEED: u32 = 460_800;
 pub const UART_SPEED: u32 = 115_200;
