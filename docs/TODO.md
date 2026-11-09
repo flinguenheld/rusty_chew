@@ -31,6 +31,7 @@ The `embassy` branch:
 
 ### Later
 
+- [ ] Dig into async: how `.await` sleeps the task and an interrupt wakes it (waker, executor, `WFE`), still magic
 - [ ] `build.rs` that copies `memory.x` (rebuild when it changes)
 - [ ] Save settings in flash (`embassy_rp::flash`, `sequential-storage`)
 - [ ] README: features, layout, thanks back (from `git show main:README.md`)

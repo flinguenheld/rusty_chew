@@ -61,12 +61,21 @@ async fn usb_run(mut usb: UsbDevice<'static, UsbDriver>) -> ! {
 #[embassy_executor::task]
 async fn test_serial(mut usb_serial: UsbSerial) {
     loop {
-        let blah = b"hello to you darling, that's a wonderfull day to go for a stroll, and then we will eat some piece of cake if you want to.\n";
-        usb_serial.set(blah).write().await;
-        let blah = b"Oh yes that would be great! I secretly hoped you said that..:)\n";
-        usb_serial.set(blah).write().await;
-        usb_serial.set(b"Hello hello!\n").write().await;
-        Timer::after_millis(3000).await;
+        usb_serial.read().await;
+
+        while let Some(line) = usb_serial.get_line() {
+            // usb_serial.set(b"You said something!!!\n").write().await;
+
+            usb_serial.set(&line).write().await;
+            usb_serial.set(b"\n").write().await;
+        }
+
+        // let blah = b"hello to you darling, that's a wonderfull day to go for a stroll, and then we will eat some piece of cake if you want to.\n";
+        // usb_serial.set(blah).write().await;
+        // let blah = b"Oh yes that would be great! I secretly hoped you said that..:)\n";
+        // usb_serial.set(blah).write().await;
+        // usb_serial.set(b"Hello hello!\n").write().await;
+        // Timer::after_millis(50).await;
     }
 }
 
