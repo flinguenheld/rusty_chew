@@ -7,6 +7,27 @@ probe, so this is the debug output of the firmware.
 
 How the serial is set up in the firmware: [USB.md](./USB.md).
 
+### UART vs USB Serial
+
+The PC sees `/dev/ttyACM0` as an old serial port ([UART](./UART.md)), but the bytes travel
+in USB packets, not in UART frames:
+
+| | UART | USB serial |
+|---|---|---|
+| Unit on the wire | 10-bit frame, holding 1 byte | packet, holding up to 64 bytes |
+| Start mark | 1 start bit | a SYNC pattern (8 bits) |
+| End mark | 1 stop bit | an "end of packet" signal |
+| Error check | none (or 1 parity bit) | a checksum (CRC) in each packet |
+| Speed | agreed in advance (baud rate) | fixed: 12 Mbit/s on the RP2040 |
+| Who talks | either side, any time | only when the PC asks |
+
+The baud rate set in the terminal is sent to the Chew, stored by
+`embassy-usb` (`line_coding`), and ignored.
+
+<div align="center">
+    <img src="../images/prawns.png">
+</div>
+
 ### From the Firmware to the Terminal
 
 ```

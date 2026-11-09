@@ -6,7 +6,7 @@ The USB side of the Chew: how the PC sees it, and how `embassy-usb` is set up
 and run. Today it's a USB serial (CDC ACM), the keyboard (HID) will join it.
 
 The setup is in `src/mono.rs`, the buffers in `src/usb.rs`. Reading the serial
-from the PC: [SERIAL.md](./SERIAL.md). The interrupt: [INTERRUPTS.md](./INTERRUPTS.md).
+from the PC: [USB_SERIAL.md](./USB_SERIAL.md). The interrupt: [INTERRUPTS.md](./INTERRUPTS.md).
 The chip's words (peripheral, FIFO…): [RP2040.md](./RP2040.md).
 
 ### Host and Device
@@ -204,6 +204,8 @@ are only enabled after `run()` has handled `SET_CONFIGURATION`.
   opened it.
 - **Errors are ignored** (`let _ =`): when the cable is pulled, the loop goes
   back to `wait_connection`.
+- **The USB needs exactly 48 MHz** (±0.25 %): `clk_usb`, from its own PLL
+  ([CLOCKS.md](./CLOCKS.md)). A wrong clock and the PC rejects the device.
 - **`embassy-usb` without default features**: it drops `usbd-hid`, which HID
   will need.
 
