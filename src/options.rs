@@ -51,11 +51,3 @@ pub const SCROLL_SPEED_2: (i8, u64) = (1, 80);
 pub const SCROLL_SPEED_3: (i8, u64) = (5, 10);
 pub const SCROLL_SPEED_4: (i8, u64) = (15, 10);
 pub const SCROLL_SPEED_DEFAULT: (i8, u64) = (1, 20);
-
-// cfg_if! {
-//     if #[cfg(feature = "serial")] {
-//         pub const SERIAL_ON: bool = true;
-//     } else {
-//         pub const SERIAL_ON: bool = false;
-//     }
-// }

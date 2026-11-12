@@ -19,7 +19,6 @@ path = "src/mono.rs"
 master = []
 slave = []
 zero = []
-serial = []
 
 [dependencies]
 embassy-executor = { version = "0.10", features = [

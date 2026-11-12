@@ -6,8 +6,9 @@ The USB side of the Chew: how the PC sees it, and how `embassy-usb` is set up
 and run. Today it's a USB serial (CDC ACM), the keyboard (HID) will join it.
 
 The setup is in `src/mono.rs`, the buffers in `src/usb/device.rs`, the statics
-and type aliases in `src/usb/types.rs`. Reading the serial from the PC:
-[USB_SERIAL.md](./USB_SERIAL.md). The interrupt: [INTERRUPTS.md](./INTERRUPTS.md).
+and type aliases in `src/usb/types.rs`. The serial inside the firmware (queues,
+lines, echo): [SERIAL.md](./SERIAL.md). Reading it from the PC:
+[SERIAL_PC.md](./SERIAL_PC.md). The interrupt: [INTERRUPTS.md](./INTERRUPTS.md).
 The chip's words (peripheral, FIFO…): [RP2040.md](./RP2040.md).
 
 ### Host and Device
@@ -132,7 +133,7 @@ The MS OS descriptors (Windows only) get `&mut []`, an empty slice.
    ├── usb_run        usb.run()                forever, woken by USBCTRL_IRQ
    ├── serial_rx_run  loop: rx.read_packet     PC ──> channel_rx
    ├── serial_tx_run  loop: tx.send_message    channel_tx ──> PC
-   └── test_serial    loop: SERIAL.read        echoes each line (a test)
+   └── answerphone    loop: SERIAL.read        answers each line
                             SERIAL.print
 ```
 
@@ -171,7 +172,7 @@ error`, and no `/dev/ttyACM*` appears.
 ```rust
 #[embassy_executor::task]
 pub async fn serial_tx_run(sender: Sender<'static, UsbDriver>) {
-    let mut tx = UsbSerialTx::new(sender, &SERIAL.channel_tx);
+    let mut tx = UsbSerialTx::new(sender);
 
     loop {
         tx.send_message().await;
@@ -189,8 +190,8 @@ for each direction.
   any task <── SERIAL.read() ─── channel_rx <── serial_rx_run <── PC
 ```
 
-`test_serial` (`src/mono.rs`) is a test loop, like `test_led`: it sends back
-each line it reads.
+What happens to the bytes in each direction, and the `answerphone` task:
+[SERIAL.md](./SERIAL.md).
 
 #### Each Task Its Endpoint
 
@@ -212,15 +213,13 @@ endpoints are only enabled after `run()` has handled `SET_CONFIGURATION`.
 ### Points to Keep in Mind
 
 - **`write_packet` sends one packet: 64 bytes at most.** Longer data returns
-  `Err(BufferOverflow)`. `UsbSerialTx` splits each message into packets, and
-  adds an empty one when the last is full.
+  `Err(BufferOverflow)`. The splitting:
+  [SERIAL.md](./SERIAL.md#packets-and-the-zlp).
 - **`wait_connection` waits for the configuration, not for a terminal.** On
   Linux, `write_packet` then waits until something reads the port: without a
-  terminal open, `serial_tx_run` pauses. `sender.dtr()` tells when a terminal
+  terminal open, `serial_tx_run` pauses and the TX queue fills, then drops
+  ([SERIAL.md](./SERIAL.md#using-it)). `sender.dtr()` tells when a terminal
   has opened it.
-- **`SERIAL.print` never waits.** While `serial_tx_run` pauses, the messages
-  fill `channel_tx` (`SERIAL_TX_QUEUE_LEN`), then the new ones are dropped: a
-  debug print can't stop the keyboard.
 - **Errors are ignored** (`.ok()`): when the cable is pulled, the next message
   waits in `wait_connection`.
 - **The USB needs exactly 48 MHz** (±0.25 %): `clk_usb`, from its own PLL

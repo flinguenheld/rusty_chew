@@ -6,7 +6,7 @@ How a real serial port sends bytes: the **UART** (Universal Asynchronous
 Receiver-Transmitter). The two halves of the split Chew talk this way.
 
 The USB serial of the Chew only pretends to be one, see
-[USB_SERIAL.md](./USB_SERIAL.md). The chip's vocabulary:
+[SERIAL_PC.md](./SERIAL_PC.md). The chip's vocabulary:
 [RP2040.md](./RP2040.md).
 
 ### Serial and UART

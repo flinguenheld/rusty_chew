@@ -13,6 +13,7 @@ use embassy_rp::{peripherals::USB, usb};
 use embassy_time::Timer;
 use embassy_usb::class::cdc_acm::{CdcAcmClass, State};
 use embassy_usb::{Builder, Config, UsbDevice};
+use rusty_chew::answerphone::answerphone;
 use rusty_chew::led::{self, Led};
 use rusty_chew::options::SERIAL_PACKET_SIZE;
 use rusty_chew::usb::device::UsbBuffers;
@@ -130,5 +131,6 @@ async fn main(spawner: Spawner) {
     spawner.spawn(usb_run(usb).unwrap());
     spawner.spawn(serial_rx_run(receiver).unwrap());
     spawner.spawn(serial_tx_run(sender).unwrap());
-    spawner.spawn(test_serial().unwrap());
+    // spawner.spawn(test_serial().unwrap());
+    spawner.spawn(answerphone().unwrap());
 }

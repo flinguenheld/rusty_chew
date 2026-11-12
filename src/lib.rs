@@ -1,5 +1,6 @@
 #![no_std]
 
+pub mod answerphone;
 pub mod led;
 pub mod options;
 pub mod usb {

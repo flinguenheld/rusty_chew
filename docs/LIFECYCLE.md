@@ -77,7 +77,8 @@ a real `fn main() -> !` that creates the executor, and turns ours into its
             │  spawn(test_led)
             │  usb::Driver, Builder the USB device
             │  spawn(usb_run)
-            │  spawn(test_serial)
+            │  spawn(serial_rx_run, serial_tx_run)
+            │  spawn(answerphone)
             └─ returns: the main task is done, its slot is free
 ```
 
@@ -136,7 +137,7 @@ Only interrupts. Each async driver waits for its own line:
 | `TIMER_IRQ_0` | The alarm time is reached | Any task in `Timer::after`, `Ticker::next` |
 | `DMA_IRQ_0` | The DMA copy is done | `test_led` in `ws.write()` (then a 55 µs `Timer`) |
 | `PIO0_IRQ_0` | A PIO FIFO or IRQ flag needs the CPU | The PIO futures (not awaited in `Led` today) |
-| `USBCTRL_IRQ` | Bus reset, setup packet, a packet sent or received | `usb_run`, `test_serial` |
+| `USBCTRL_IRQ` | Bus reset, setup packet, a packet sent or received | `usb_run`, `serial_rx_run`, `serial_tx_run` |
 
 **One alarm for all the timers.** The time driver uses only alarm 0 of the
 hardware timer. Embassy keeps the timers of all the tasks in a queue, and the
@@ -144,7 +145,7 @@ alarm is set to the **earliest** one. When it fires, the due tasks are
 woken and the alarm is set to the next one.
 
 ```
-  timer queue      test_led 5 ms   test_serial 1000 ms
+  timer queue      task A 5 ms     task B 1000 ms
                          │
   alarm 0  ──────────────┘   (only the earliest)
 ```
@@ -178,8 +179,13 @@ sleeps. Three wake-ups per frame, 200 frames per second.
 
 #### Several Tasks
 
-The three tasks share the core: they never run at the same time, each
-`.await` lets the next one run.
+The tasks share the core: they never run at the same time, each `.await`
+lets the next one run.
+
+Here the LED fades while Enter is typed in the terminal. An interrupt wakes
+`serial_rx_run` (`rx`). The two others are woken with **no interrupt**: `rx`
+puts the echo and the line in the channels, which wakes the tasks waiting on
+them ([SERIAL.md](./SERIAL.md)).
 
 ```mermaid
 %%{init: {"sequence": {"mirrorActors": false, "diagramMarginX": 10, "diagramMarginY": 10, "actorMargin": 30, "boxMargin": 5}}}%%
@@ -187,23 +193,27 @@ sequenceDiagram
     participant HW as IRQ
     participant Ex as executor
     participant LED as test_led
-    participant Run as usb_run
-    participant Ser as test_serial
+    participant Rx as rx
+    participant Tx as tx
+    participant Ans as answerphone
 
     Note over Ex: WFE
     HW->>Ex: TIMER_IRQ_0 (wake test_led)
     Ex->>LED: poll
     LED-->>Ex: Pending (DMA)
     Note over Ex: WFE
-    HW->>Ex: USBCTRL_IRQ (wake usb_run)
-    Ex->>Run: poll
-    Run-->>Ex: Pending (next event)
+    HW->>Ex: USBCTRL_IRQ (wake rx)
+    Ex->>Rx: poll
+    Note over Rx: echo → channel_tx (wake tx)<br/>line → channel_rx (wake answerphone)
+    Rx-->>Ex: Pending (next packet)
+    Ex->>Tx: poll
+    Tx-->>Ex: Pending (write_packet)
+    Ex->>Ans: poll
+    Note over Ans: answer → channel_tx
+    Ans-->>Ex: Pending (next line)
     HW->>Ex: DMA_IRQ_0 (wake test_led)
     Ex->>LED: poll
     LED-->>Ex: Pending (Timer 55 µs)
-    HW->>Ex: TIMER_IRQ_0 (wake test_serial)
-    Ex->>Ser: poll
-    Ser-->>Ex: Pending (write_packet)
     Note over Ex: WFE
 ```
 

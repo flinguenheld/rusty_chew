@@ -20,7 +20,7 @@ The `embassy` branch:
 ### Steps
 
 - [x] 1. LED: WS2812 on GP16 with PIO (`PioWs2812`), `bind_interrupts!`, `Timer::after`
-- [ ] 2. Serial: `embassy-usb` CDC ACM replaces `usbd-serial`, to debug without a probe (feature `serial`)
+- [x] 2. Serial: `embassy-usb` CDC ACM replaces `usbd-serial`, to debug without a probe: print, read lines, echo, answerphone
 - [ ] 3. Buzzer: PWM, songs as an async task
 - [ ] 4. Matrix (mono): GPIO `Input`/`Output`, scan loop, rows discharge
 - [ ] 5. USB HID: keyboard, mouse, NKRO with `embassy-usb` (replaces `usbd-human-interface-device`), next to the serial

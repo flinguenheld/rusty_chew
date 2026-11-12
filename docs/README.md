@@ -31,7 +31,8 @@ in [RP2040.md](./RP2040.md), the other docs link to it.
 | -------------------------------- | ---------------------------------------------------------- |
 | [LED.md](./LED.md)               | the WS2812 on GP16: colors, fade, gamma                    |
 | [USB.md](./USB.md)               | `embassy-usb`: the setup, the descriptors, the tasks       |
-| [USB_SERIAL.md](./USB_SERIAL.md) | reading the USB serial from the PC                         |
+| [SERIAL.md](./SERIAL.md)         | the serial in the firmware: queues, lines, echo, commands  |
+| [SERIAL_PC.md](./SERIAL_PC.md)   | reading the USB serial from the PC                         |
 
 ### The Protocols
 

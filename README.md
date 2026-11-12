@@ -49,7 +49,7 @@ Mount the controller's drive and use one of these commands:
 
 ##### Serial
 
-To do some tests and print text throught the [usb port](https://github.com/rust-embedded-community/usbd-serial), you can compile with the feature `serial`:  
+The firmware prints text and answers commands on its USB serial (see [SERIAL.md](docs/SERIAL.md) and [SERIAL_PC.md](docs/SERIAL_PC.md)).  
 Then check the usb events to know which tty is used.  
 ```
     sudo udevadm monitor
