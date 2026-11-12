@@ -46,6 +46,7 @@ smart-leds = "0.4.0"
 static_cell = "2"
 portable-atomic = { version = "1", features = ["critical-section"] }
 heapless = "0.9.3"
+embassy-sync = "0.8.0"
 
 [profile.release]
 debug = 2

@@ -5,8 +5,9 @@
 The USB side of the Chew: how the PC sees it, and how `embassy-usb` is set up
 and run. Today it's a USB serial (CDC ACM), the keyboard (HID) will join it.
 
-The setup is in `src/mono.rs`, the buffers in `src/usb/device.rs`. Reading the serial
-from the PC: [USB_SERIAL.md](./USB_SERIAL.md). The interrupt: [INTERRUPTS.md](./INTERRUPTS.md).
+The setup is in `src/mono.rs`, the buffers in `src/usb/device.rs`, the statics
+and type aliases in `src/usb/types.rs`. Reading the serial from the PC:
+[USB_SERIAL.md](./USB_SERIAL.md). The interrupt: [INTERRUPTS.md](./INTERRUPTS.md).
 The chip's words (peripheral, FIFO…): [RP2040.md](./RP2040.md).
 
 ### Host and Device
@@ -36,7 +37,8 @@ drops it.
 ### The Layers
 
 ```
-  our code        test_serial: class.write_packet(b"hello\r\n")
+  our code        SERIAL.print(b"hello\n")
+                  serial_tx_run: tx.write_packet
                         │
   class           CdcAcmClass  (embassy_usb::class::cdc_acm)  ← usbd_serial::SerialPort
                         │
@@ -72,12 +74,14 @@ Done once in `main`, in this order:
      Builder::new(driver, config, buffers)
          │
   4.     ├── CdcAcmClass::new(&mut builder, …)   adds its interfaces & endpoints
+         │     └── split() ──> sender, receiver
          │   (HID: another class here, later)
          │
   5.     └── builder.build() ──> UsbDevice       descriptors frozen
                                     │
   6. spawn usb_run(usb)  ◄──────────┘
-     spawn test_serial(class)
+     spawn serial_rx_run(receiver)
+     spawn serial_tx_run(sender)
 ```
 
 The `Builder` collects the classes, then `build` writes the final descriptors.
@@ -90,7 +94,7 @@ After `build`, no class can be added.
 | `Config::new(vid, pid)` | `0xc0de`, `0xcafe` | `idVendor`, `idProduct`: test values, not registered |
 | `manufacturer` | `florent@linguenheld.net` | `Manufacturer` |
 | `product` | `Chew embassy` | `Product` |
-| `serial_number` | `0001` | `SerialNumber` |
+| `serial_number` | `1506` | `SerialNumber` |
 
 These strings are readable by any PC the Chew is plugged into (`lsusb -v`,
 `dmesg`).
@@ -103,8 +107,9 @@ turning the IADs off.
 #### The Buffers
 
 `embassy-usb` has no heap: it can't allocate, so it borrows arrays we give it.
-They are in one `StaticCell`, `USB_BUFFERS` (`src/usb/device.rs`), so they live
-forever and the device can go in a task (see
+They are one struct, `UsbBuffers` (`src/usb/device.rs`), in one `StaticCell`,
+`USB_BUFFERS` (`src/usb/types.rs`), so they live forever and the device can go
+in a task (see
 [EMBASSY.md](./EMBASSY.md#static-and-staticcell)).
 
 | Field | Size | Written by | Holds |
@@ -124,10 +129,11 @@ The MS OS descriptors (Windows only) get `&mut []`, an empty slice.
 
 ```
  executor
-   ├── usb_run      usb.run()                   forever, woken by USBCTRL_IRQ
-   └── test_serial  loop: wait_connection
-                          write_packet "hello"
-                          Timer 1 s
+   ├── usb_run        usb.run()                forever, woken by USBCTRL_IRQ
+   ├── serial_rx_run  loop: rx.read_packet     PC ──> channel_rx
+   ├── serial_tx_run  loop: tx.send_message    channel_tx ──> PC
+   └── test_serial    loop: SERIAL.read        echoes each line (a test)
+                            SERIAL.print
 ```
 
 #### `usb_run`: Always Answering
@@ -160,34 +166,44 @@ Its main job is the **enumeration**, right after plugging in:
 Without `usb_run`, nobody answers: `dmesg` shows `device descriptor read
 error`, and no `/dev/ttyACM*` appears.
 
-#### `test_serial`: Sending
+#### The Serial Tasks
 
 ```rust
 #[embassy_executor::task]
-async fn test_serial(mut class: CdcAcmClass<'static, UsbDriver>) {
+pub async fn serial_tx_run(sender: Sender<'static, UsbDriver>) {
+    let mut tx = UsbSerialTx::new(sender, &SERIAL.channel_tx);
+
     loop {
-        class.wait_connection().await;
-        let _ = class.write_packet(b"hello\r\n").await;
-        Timer::after_millis(1000).await;
+        tx.send_message().await;
     }
 }
 ```
 
-A test loop, like `test_led`: it will be replaced by a `Serial` struct.
-
-#### Two Tasks, Two Paths
-
-`run()` and `write_packet` don't use the same **endpoints** (the "mailboxes"
-of a USB device):
+`serial_rx_run` has the same shape, with `rx.read_packet()`. Both are in
+`src/usb/tasks.rs`. They are the only ones to touch the serial endpoints: the
+rest of the firmware uses the `SERIAL` static, which holds a queue (a channel)
+for each direction.
 
 ```
-                 ┌── EP0 (control) ──── usb_run      descriptors, setup, DTR
-  USB cable ─────┤
-                 └── bulk IN / OUT ──── test_serial  the serial data
+  any task ── SERIAL.print() ──> channel_tx ──> serial_tx_run ──> PC
+  any task <── SERIAL.read() ─── channel_rx <── serial_rx_run <── PC
 ```
 
-They work on their own, but `test_serial` needs `usb_run`: the bulk endpoints
-are only enabled after `run()` has handled `SET_CONFIGURATION`.
+`test_serial` (`src/mono.rs`) is a test loop, like `test_led`: it sends back
+each line it reads.
+
+#### Each Task Its Endpoint
+
+The tasks don't use the same **endpoints** (the "mailboxes" of a USB device):
+
+```
+                 ┌── EP0 (control) ──── usb_run        descriptors, setup, DTR
+  USB cable ─────┼── bulk IN ────────── serial_tx_run  the serial data, to the PC
+                 └── bulk OUT ───────── serial_rx_run  the serial data, from the PC
+```
+
+They work on their own, but the serial tasks need `usb_run`: the bulk
+endpoints are only enabled after `run()` has handled `SET_CONFIGURATION`.
 
 <div align="center">
     <img src="../images/prawns.png">
@@ -196,14 +212,17 @@ are only enabled after `run()` has handled `SET_CONFIGURATION`.
 ### Points to Keep in Mind
 
 - **`write_packet` sends one packet: 64 bytes at most.** Longer data returns
-  `Err(BufferOverflow)`. Longer text must be split, it will be the job of the
-  `Serial` struct.
+  `Err(BufferOverflow)`. `UsbSerialTx` splits each message into packets, and
+  adds an empty one when the last is full.
 - **`wait_connection` waits for the configuration, not for a terminal.** On
   Linux, `write_packet` then waits until something reads the port: without a
-  terminal open, `test_serial` pauses. `class.dtr()` tells when a terminal has
-  opened it.
-- **Errors are ignored** (`let _ =`): when the cable is pulled, the loop goes
-  back to `wait_connection`.
+  terminal open, `serial_tx_run` pauses. `sender.dtr()` tells when a terminal
+  has opened it.
+- **`SERIAL.print` never waits.** While `serial_tx_run` pauses, the messages
+  fill `channel_tx` (`SERIAL_TX_QUEUE_LEN`), then the new ones are dropped: a
+  debug print can't stop the keyboard.
+- **Errors are ignored** (`.ok()`): when the cable is pulled, the next message
+  waits in `wait_connection`.
 - **The USB needs exactly 48 MHz** (±0.25 %): `clk_usb`, from its own PLL
   ([CLOCKS.md](./CLOCKS.md)). A wrong clock and the PC rejects the device.
 - **`embassy-usb` without default features**: it drops `usbd-hid`, which HID

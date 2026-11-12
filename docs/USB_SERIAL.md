@@ -33,8 +33,8 @@ The baud rate set in the terminal is sent to the Chew, stored by
 ```
   Chew                                   PC (Linux)
   ┌──────────────────────┐               ┌───────────────────────────────────┐
-  │ test_serial task     │               │ cdc_acm (kernel driver)           │
-  │   class.write_packet │ ── USB ────>  │   └─> /dev/ttyACM0                │
+  │ serial_tx_run task   │               │ cdc_acm (kernel driver)           │
+  │   tx.write_packet    │ ── USB ────>  │   └─> /dev/ttyACM0                │
   │ usb_run task         │   packets     │         ├─> cat                   │
   └──────────────────────┘               │         └─> tio                   │
                                          └───────────────────────────────────┘
@@ -62,7 +62,7 @@ The host reads the device's names from its descriptors, set in `main` by the
 | `Config::new(vid, pid)` | `0xc0de`, `0xcafe` | `idVendor`, `idProduct` |
 | `manufacturer` | `florent@linguenheld.net` | `Manufacturer` |
 | `product` | `Chew embassy` | `Product` |
-| `serial_number` | `0001` | `SerialNumber` |
+| `serial_number` | `1506` | `SerialNumber` |
 
 #### `/dev/serial/by-id/`
 
@@ -70,11 +70,11 @@ The clearest: udev makes a link named after these strings.
 
 ```
 ls -l /dev/serial/by-id/
-# usb-<manufacturer>_<product>_0001-if00 -> ../../ttyACM0
+# usb-<manufacturer>_<product>_1506-if00 -> ../../ttyACM0
 ```
 
 ```
-  usb - <manufacturer> _ <product> _ 0001 - if00
+  usb - <manufacturer> _ <product> _ 1506 - if00
         │                │           │      └─ interface 0 (the CDC control interface)
         │                │           └─ serial_number
         │                └─ product
@@ -150,9 +150,11 @@ sudo cat /dev/ttyACM0      # quit: Ctrl-c
 Nothing to install, good for a first check. But it only reads, and it exits
 when the port disappears.
 
-Opening the port is also what lets the firmware go on: `write_packet` waits
-until the PC reads, so with no `cat` or `tio` open, `test_serial` pauses (see
-[USB.md](./USB.md#points-to-keep-in-mind)).
+Opening the port is also what makes the bytes move: `write_packet` waits
+until the PC reads, so with no `cat` or `tio` open, `serial_tx_run` pauses. The
+rest of the firmware goes on: the messages wait in a queue, and once it's full
+the new ones are dropped (see [USB.md](./USB.md#points-to-keep-in-mind)). So a
+terminal opened late shows the oldest messages, not the latest.
 
 ### Reading with `tio`
 

@@ -15,8 +15,9 @@ use embassy_usb::class::cdc_acm::{CdcAcmClass, State};
 use embassy_usb::{Builder, Config, UsbDevice};
 use rusty_chew::led::{self, Led};
 use rusty_chew::options::SERIAL_PACKET_SIZE;
-use rusty_chew::usb::device::{UsbBuffers, UsbDriver, USB_BUFFERS};
-use rusty_chew::usb::serial::UsbSerial;
+use rusty_chew::usb::device::UsbBuffers;
+use rusty_chew::usb::tasks::{serial_rx_run, serial_tx_run};
+use rusty_chew::usb::types::{UsbDriver, SERIAL, USB_BUFFERS};
 use {defmt_rtt as _, panic_probe as _};
 
 bind_interrupts!(struct Irqs {
@@ -50,33 +51,22 @@ async fn test_led(mut led: Led) {
     }
 }
 
+/// Echo each message received on the serial.
+#[embassy_executor::task]
+async fn test_serial() {
+    loop {
+        let message = SERIAL.read().await;
+        SERIAL.print(b"message received! ----------------\n");
+        SERIAL.print(&message);
+        SERIAL.print(b"\n");
+    }
+}
+
 /// Answer the PC forever: enumeration, setup requests, suspend & resume.
 /// Woken by USBCTRL_IRQ. Without it, the PC never sees the device.
 #[embassy_executor::task]
 async fn usb_run(mut usb: UsbDevice<'static, UsbDriver>) -> ! {
     usb.run().await
-}
-
-/// Send "hello" every second, to check the serial.
-#[embassy_executor::task]
-async fn test_serial(mut usb_serial: UsbSerial) {
-    loop {
-        usb_serial.read().await;
-
-        while let Some(line) = usb_serial.get_line() {
-            // usb_serial.set(b"You said something!!!\n").write().await;
-
-            usb_serial.set(&line).write().await;
-            usb_serial.set(b"\n").write().await;
-        }
-
-        // let blah = b"hello to you darling, that's a wonderfull day to go for a stroll, and then we will eat some piece of cake if you want to.\n";
-        // usb_serial.set(blah).write().await;
-        // let blah = b"Oh yes that would be great! I secretly hoped you said that..:)\n";
-        // usb_serial.set(blah).write().await;
-        // usb_serial.set(b"Hello hello!\n").write().await;
-        // Timer::after_millis(50).await;
-    }
 }
 
 #[embassy_executor::main]
@@ -125,17 +115,20 @@ async fn main(spawner: Spawner) {
     );
 
     // 4. The class adds its interfaces & endpoints to the builder
-    // QUESTION: rename that ? I suppose there will be a lot of classes?
-    let class = CdcAcmClass::new(
+    let serial_class = CdcAcmClass::new(
         &mut builder,
         &mut b.state,
         SERIAL_PACKET_SIZE as u16,
     );
+
+    let (sender, receiver) = serial_class.split();
 
     // 5. Build the device: no more changes to the descriptors
     let usb = builder.build();
 
     // 6. The device and the serial run in their own tasks
     spawner.spawn(usb_run(usb).unwrap());
-    spawner.spawn(test_serial(UsbSerial::new(class)).unwrap());
+    spawner.spawn(serial_rx_run(receiver).unwrap());
+    spawner.spawn(serial_tx_run(sender).unwrap());
+    spawner.spawn(test_serial().unwrap());
 }
