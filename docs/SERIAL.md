@@ -80,7 +80,7 @@ queue) copies the whole struct.
 
 `MsgChannel<N>` is an `embassy_sync` `Channel` of `N` messages. It's protected
 by a critical section, so it can be shared by all the tasks from a `static`
-(see [EMBASSY.md](./EMBASSY.md#static-and-staticcell)).
+(see [EMBASSY.md](./EMBASSY.md#sharing-a-static)).
 
 | Channel method | Queue full / empty | Used by |
 |---|---|---|

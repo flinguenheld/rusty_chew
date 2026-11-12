@@ -17,7 +17,7 @@ in [RP2040.md](./RP2040.md), the other docs link to it.
 
 | Doc                            | What                                                         |
 | ------------------------------ | ------------------------------------------------------------ |
-| [EMBASSY.md](./EMBASSY.md)     | the crates, `init`, the executor and the tasks               |
+| [EMBASSY.md](./EMBASSY.md)     | the crates, `init`, the executor, the tasks, sharing       |
 | [LIFECYCLE.md](./LIFECYCLE.md) | from power on to the tasks, then the run loop                |
 | [BUILD.md](./BUILD.md)         | `.cargo/config.toml`, `memory.x`, the profiles, flashing     |
 

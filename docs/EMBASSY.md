@@ -234,9 +234,78 @@ The fallback must be chosen in `Cargo.toml`, else the build fails
 portable-atomic = { version = "1", features = ["critical-section"] }
 ```
 
-The critical section itself comes from `embassy-rp` (`critical-section-impl`).
+The critical section itself comes from `embassy-rp` (`critical-section-impl`),
+see [The Critical Section](#the-critical-section).
 We don't use `portable-atomic` directly: cargo merges the features, so the line
 turns it on for `static_cell`'s copy.
+
+<div align="center">
+    <img src="../images/prawns.png">
+</div>
+
+### Sharing Between Tasks
+
+#### The Critical Section
+
+A **critical section** is a few instructions that nothing else may cut: no
+interrupt on this core, no code on the other core. It's the lock under all the
+shared data of the firmware (`StaticCell`, the channels).
+
+On the RP2040, `embassy-rp` makes one with two locks, one per threat
+(`src/critical_section_impl.rs`):
+
+```
+  acquire                                    release
+  ───────                                    ───────
+  interrupts off   (PRIMASK)  ◄─ this core   free spinlock 31
+  take spinlock 31 (SIO)      ◄─ other core  interrupts back on
+  failed? interrupts on, try again           (if they were on before)
+```
+
+| Threat | Lock | How |
+|---|---|---|
+| An interrupt on the same core | `PRIMASK` | One CPU bit: when set, no interrupt handler runs |
+| Code on the other core | Spinlock 31 | A [hardware spinlock](./RP2040.md#the-list): reading it takes it, in one step |
+
+The spinlock is the hardware "test and set": checking that the lock is free
+and taking it are one indivisible step, so both cores can never see "free".
+While it waits, a core turns its interrupts back on between tries.
+
+A critical section can be nested: the owner core is stored, and an inner
+`acquire` on the same core does nothing.
+
+#### Compared to a C Mutex
+
+| | `pthread_mutex` (C) | Critical section (here) |
+|---|---|---|
+| Who waits | A thread, put to sleep by the OS | Nobody sleeps: the other core spins a few cycles |
+| Held for | As long as the code wants | A few instructions (push or pop a message) |
+| Waiting for data | `pthread_cond_wait` | `.await` (the async side, not the lock) |
+| Cost | A system call when it's taken | Interrupts off for a few cycles |
+
+The lock only protects the **moment** of touching the data. Waiting for a full
+or empty queue is done by `.await`: the task returns `Pending` and the
+[executor](#the-executor) runs another one.
+
+#### Sharing a `static`
+
+A `static` can be used by every task, so Rust requires its type to be `Sync`
+("safe to share"). An `embassy-sync` `Channel` is `Sync` only if its **raw
+mutex** is: the type parameter `M` chooses how the channel locks.
+
+```rust
+pub type MsgChannel<const N: usize> =
+    ChannelSync<CriticalSectionRawMutex, Message, N>;
+```
+
+| Raw mutex | Locks with | `Sync` | Fits |
+|---|---|---|---|
+| `NoopRawMutex` | Nothing | ✗ | A channel local to one task, never a `static` |
+| `ThreadModeRawMutex` | A check: not in an interrupt (panics otherwise) | ✓ | One executor on one core |
+| `CriticalSectionRawMutex` | A critical section | ✓ | Any task, interrupt or core |
+
+`SERIAL` uses the third: a few more cycles per `print` or `read`, and it keeps
+working if core 1 or an interrupt handler prints one day.
 
 <div align="center">
     <img src="../images/crab_back.png">
