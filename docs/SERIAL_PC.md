@@ -1,5 +1,5 @@
 <div align="center">
-    <img src="../images/crab_coffee.png">
+    <img src="./images/crab_coffee.png">
 </div>
 
 How to read what the Chew sends on its USB serial, from the PC. There is no
@@ -25,7 +25,7 @@ The baud rate set in the terminal is sent to the Chew, stored by
 `embassy-usb` (`line_coding`), and ignored.
 
 <div align="center">
-    <img src="../images/prawns.png">
+    <img src="./images/prawns.png">
 </div>
 
 ### From the Firmware to the Terminal
@@ -45,7 +45,7 @@ The board says it's a **CDC ACM** device (USB serial). Linux loads its
 the bytes the firmware sends.
 
 <div align="center">
-    <img src="../images/prawns.png">
+    <img src="./images/prawns.png">
 </div>
 
 ### Finding the Port
@@ -115,7 +115,7 @@ udevadm info /dev/ttyACM0 | grep -E 'ID_VENDOR|ID_MODEL|ID_SERIAL'
 | `lsusb \| grep c0de` | The Chew is enumerated (even without a serial port) |
 
 <div align="center">
-    <img src="../images/prawns.png">
+    <img src="./images/prawns.png">
 </div>
 
 ### Access to the Port
@@ -138,7 +138,7 @@ sudo usermod -aG dialout $USER
 The new group applies at the next login.
 
 <div align="center">
-    <img src="../images/prawns.png">
+    <img src="./images/prawns.png">
 </div>
 
 ### Reading with `cat`
@@ -192,5 +192,5 @@ sending modem commands to it. The firmware ignores them, but the port can be
 `ENV{ID_MM_DEVICE_IGNORE}="1"` for `c0de:cafe` tells it to skip the Chew.
 
 <div align="center">
-    <img src="../images/crab_back.png">
+    <img src="./images/crab_back.png">
 </div>

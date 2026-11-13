@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="../images/crab_coffee.png">
+  <img src="./images/crab_coffee.png">
 </div>
 
 The RGB LED of the keyboard: one WS2812 on GP16, driven by the PIO with DMA.
@@ -31,7 +31,7 @@ free during the transfer.
 ```
 
 <div align="center">
-  <img src="../images/prawns.png">
+  <img src="./images/prawns.png">
 </div>
 
 ### Two Colors
@@ -70,7 +70,7 @@ led.set(led::RED, 200)       // what: red, dimmed to 200 / 255
 | `flash(ms)`       | fade to the new color, then fade to off: lasts 2 × `ms` |
 
 <div align="center">
-  <img src="../images/prawns.png">
+  <img src="./images/prawns.png">
 </div>
 
 ### Fade
@@ -134,7 +134,7 @@ frames in a row can give the same color, so the end is decided by the time,
 never by the color.
 
 <div align="center">
-  <img src="../images/prawns.png">
+  <img src="./images/prawns.png">
 </div>
 
 ### Gamma
@@ -213,7 +213,7 @@ barely visible anyway. For one indicator LED with dim levels and fades from off,
 the dark end matters more, hence the softer 2.0.
 
 <div align="center">
-  <img src="../images/prawns.png">
+  <img src="./images/prawns.png">
 </div>
 
 ### Points to Keep in Mind
@@ -233,5 +233,5 @@ the dark end matters more, hence the softer 2.0.
   fade a few writes send what the LED already shows. Harmless (~85 µs each).
 
 <div align="center">
-  <img src="../images/crab_back.png">
+  <img src="./images/crab_back.png">
 </div>

@@ -1,5 +1,5 @@
 <div align="center">
-    <img src="../images/crab_coffee.png">
+    <img src="./images/crab_coffee.png">
 </div>
 
 What embassy is in this firmware: the crates, `init`, and the executor that runs
@@ -28,7 +28,7 @@ everything in turn. With embassy, each part is a task that `.await`s its
 hardware, and the executor runs whichever task is ready.
 
 <div align="center">
-    <img src="../images/prawns.png">
+    <img src="./images/prawns.png">
 </div>
 
 ### The Crates
@@ -70,7 +70,7 @@ The boot2 (`w25q080`, right for the RP2040-Zero flash) is in embassy-rp by
 default, see [BUILD.md](./BUILD.md#the-boot).
 
 <div align="center">
-    <img src="../images/prawns.png">
+    <img src="./images/prawns.png">
 </div>
 
 ### `init` and the Peripherals
@@ -100,7 +100,7 @@ A peripheral moved into a driver can't be given to a second one: two drivers
 on the same pin or DMA channel is a **compile error**.
 
 <div align="center">
-    <img src="../images/prawns.png">
+    <img src="./images/prawns.png">
 </div>
 
 ### The Executor
@@ -163,7 +163,7 @@ started once with `spawn`, never called nor `.await`ed.
 | A `Timer` | Only one way to wait. A task can wait on the DMA, the USB, … |
 
 <div align="center">
-    <img src="../images/prawns.png">
+    <img src="./images/prawns.png">
 </div>
 
 ### `'static` and `StaticCell`
@@ -240,7 +240,7 @@ We don't use `portable-atomic` directly: cargo merges the features, so the line
 turns it on for `static_cell`'s copy.
 
 <div align="center">
-    <img src="../images/prawns.png">
+    <img src="./images/prawns.png">
 </div>
 
 ### Sharing Between Tasks
@@ -308,5 +308,5 @@ pub type MsgChannel<const N: usize> =
 working if core 1 or an interrupt handler prints one day.
 
 <div align="center">
-    <img src="../images/crab_back.png">
+    <img src="./images/crab_back.png">
 </div>

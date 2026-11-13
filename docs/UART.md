@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="../images/crab_coffee.png">
+  <img src="./images/crab_coffee.png">
 </div>
 
 How a real serial port sends bytes: the **UART** (Universal Asynchronous
@@ -42,7 +42,7 @@ The old "serial port" of PCs (RS-232) had a UART behind it. That's why
 | 1 bit per tick: slower      | fast, on short distances (inside a chip, a PC) |
 
 <div align="center">
-  <img src="../images/prawns.png">
+  <img src="./images/prawns.png">
 </div>
 
 ### The Frame
@@ -115,7 +115,7 @@ The **parity** bit is a simple error check: it makes the number of 1s even
 (or odd). It finds one wrong bit, not two.
 
 <div align="center">
-  <img src="../images/prawns.png">
+  <img src="./images/prawns.png">
 </div>
 
 ### Receiving
@@ -171,7 +171,7 @@ Between two frames, the wire can stay idle for any time:
 ```
 
 <div align="center">
-  <img src="../images/prawns.png">
+  <img src="./images/prawns.png">
 </div>
 
 ### Speed
@@ -202,5 +202,5 @@ Either way, the framing and the timing are done by the hardware: the code
 gives bytes and gets bytes.
 
 <div align="center">
-  <img src="../images/crab_back.png">
+  <img src="./images/crab_back.png">
 </div>

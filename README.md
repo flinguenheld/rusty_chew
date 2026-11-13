@@ -1,11 +1,11 @@
 <div align="center">
-    <img src="./images/crab_coffee.png">
+    <img src="./docs/images/crab_coffee.png">
 </div>
 
 This is the rustenuine firmware for the [Chew](https://github.com/flinguenheld/chew) keyboard!
 
 <div align="center">
-    <img src="./images/prawns.png">
+    <img src="./docs/images/prawns.png">
 </div>
 
 ### Flash
@@ -62,15 +62,39 @@ And connect to it (for instance with minicom or picocom. *Ctrl-A X to exit* )
 ```
 
 <div align="center">
-    <img src="./images/prawns.png">
+    <img src="./docs/images/prawns.png">
 </div>
 
 ### Docs
 
-- How the firmware is built (cargo config, memory map, flash storage): [BUILD.md](./docs/BUILD.md)
-- Notes from the port to embassy, step by step: [EMBASSY.md](./docs/EMBASSY.md)
-- What's done and what's next in the port: [TODO.md](./docs/TODO.md)
+The docs are Markdown files in [docs/](./docs/README.md), one per topic, readable
+on GitHub as they are. [mdBook](https://rust-lang.github.io/mdBook/) turns them
+into a book with a sidebar and a search.
+
+##### Install
+
+```
+  cargo install mdbook
+  cargo install md-tui --locked
+```
+
+##### Read
+
+```
+  mdbook serve --open      # in the browser, reloads on each save
+  mdbook build             # or only build it, in target/book/
+  mdt docs/SUMMARY.md      # in the terminal, from the summary
+```
+
+> 💡 In mdt: `s` selects a link, `Enter` opens it, `b` goes back, `q` quits.
+> It needs a [Nerd Font](https://www.nerdfonts.com/) in the terminal.
+
+##### Update
+
+- Edit the files in `docs/`, images go in `docs/images/`.
+- A new doc must be listed in [SUMMARY.md](./docs/SUMMARY.md) (the sidebar of
+  the book) and in [docs/README.md](./docs/README.md) (the index on GitHub).
 
 <div align="center">
-    <img src="./images/crab_back.png">
+    <img src="./docs/images/crab_back.png">
 </div>

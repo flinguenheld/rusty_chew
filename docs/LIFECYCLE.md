@@ -1,5 +1,5 @@
 <div align="center">
-    <img src="../images/crab_coffee.png">
+    <img src="./images/crab_coffee.png">
 </div>
 
 The life of the board, in order: from power on to the tasks, then the loop
@@ -28,7 +28,7 @@ words (IRQ, `WFE`, XIP…) are in [RP2040.md](./RP2040.md).
 | Run loop | Forever | The executor and the tasks | Never (only a reset or a power off) |
 
 <div align="center">
-    <img src="../images/prawns.png">
+    <img src="./images/prawns.png">
 </div>
 
 ### Boot
@@ -92,7 +92,7 @@ a real `fn main() -> !` that creates the executor, and turns ours into its
 Details: [EMBASSY.md](./EMBASSY.md#init-and-the-peripherals).
 
 <div align="center">
-    <img src="../images/prawns.png">
+    <img src="./images/prawns.png">
 </div>
 
 ### Run Loop
@@ -218,7 +218,7 @@ sequenceDiagram
 ```
 
 <div align="center">
-    <img src="../images/prawns.png">
+    <img src="./images/prawns.png">
 </div>
 
 ### rp-hal vs Embassy
@@ -244,7 +244,7 @@ everything at each turn.
 | A slow job | Delays the whole loop | Delays the other tasks too, if it doesn't `.await` |
 
 <div align="center">
-    <img src="../images/prawns.png">
+    <img src="./images/prawns.png">
 </div>
 
 ### Points to Keep in Mind
@@ -260,5 +260,5 @@ everything at each turn.
   could run on it later.
 
 <div align="center">
-    <img src="../images/crab_back.png">
+    <img src="./images/crab_back.png">
 </div>

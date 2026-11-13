@@ -1,5 +1,5 @@
 <div align="center">
-    <img src="../images/crab_coffee.png">
+    <img src="./images/crab_coffee.png">
 </div>
 
 The USB side of the Chew: how the PC sees it, and how `embassy-usb` is set up
@@ -32,7 +32,7 @@ So the Chew must **always be ready to answer**. If it stops answering, the PC
 drops it.
 
 <div align="center">
-    <img src="../images/prawns.png">
+    <img src="./images/prawns.png">
 </div>
 
 ### The Layers
@@ -59,7 +59,7 @@ drops it.
 | Class | `CdcAcmClass` | One function of the device: here a serial port. HID will be another |
 
 <div align="center">
-    <img src="../images/prawns.png">
+    <img src="./images/prawns.png">
 </div>
 
 ### The Setup
@@ -123,7 +123,7 @@ in a task (see
 The MS OS descriptors (Windows only) get `&mut []`, an empty slice.
 
 <div align="center">
-    <img src="../images/prawns.png">
+    <img src="./images/prawns.png">
 </div>
 
 ### The Tasks
@@ -207,7 +207,7 @@ They work on their own, but the serial tasks need `usb_run`: the bulk
 endpoints are only enabled after `run()` has handled `SET_CONFIGURATION`.
 
 <div align="center">
-    <img src="../images/prawns.png">
+    <img src="./images/prawns.png">
 </div>
 
 ### Points to Keep in Mind
@@ -228,5 +228,5 @@ endpoints are only enabled after `run()` has handled `SET_CONFIGURATION`.
   will need.
 
 <div align="center">
-    <img src="../images/crab_back.png">
+    <img src="./images/crab_back.png">
 </div>

@@ -1,5 +1,5 @@
 <div align="center">
-    <img src="../images/crab_coffee.png">
+    <img src="./images/crab_coffee.png">
 </div>
 
 How the firmware is built and flashed: what `.cargo/config.toml`, `memory.x`
@@ -32,7 +32,7 @@ A crate that depends on this one only needs its `Cargo.toml`. The
 `.cargo/config.toml` is about this machine and this project.
 
 <div align="center">
-    <img src="../images/prawns.png">
+    <img src="./images/prawns.png">
 </div>
 
 ### `.cargo/config.toml`
@@ -106,7 +106,7 @@ compiler.
 folder can be wiped, it's only a cache: the next build is just longer.
 
 <div align="center">
-    <img src="../images/prawns.png">
+    <img src="./images/prawns.png">
 </div>
 
 ### `memory.x`
@@ -204,7 +204,7 @@ println!("cargo:rerun-if-changed=memory.x");
 ```
 
 <div align="center">
-    <img src="../images/prawns.png">
+    <img src="./images/prawns.png">
 </div>
 
 ### Cargo Profiles
@@ -242,7 +242,7 @@ opt-level = "s"   # optimise for size
 ```
 
 <div align="center">
-    <img src="../images/prawns.png">
+    <img src="./images/prawns.png">
 </div>
 
 ### Writing in the Flash at Runtime
@@ -321,5 +321,5 @@ flash.blocking_read(STORAGE_OFFSET, &mut buf)?;
   write stay blocking.
 
 <div align="center">
-    <img src="../images/crab_back.png">
+    <img src="./images/crab_back.png">
 </div>

@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="../images/crab_coffee.png">
+  <img src="./images/crab_coffee.png">
 </div>
 
 Where the RP2040 gets its sense of time: a quartz crystal on the board, and
@@ -93,7 +93,7 @@ all. The ROSC is enough for a board without a crystal and without USB, or for
 a sleeping chip (it uses less power than the XOSC).
 
 <div align="center">
-  <img src="../images/prawns.png">
+  <img src="./images/prawns.png">
 </div>
 
 ### The Clock Tree
@@ -140,7 +140,7 @@ add its own drift. Two PLLs because the USB needs exactly 48 MHz, and 125 is
 not a multiple of 48.
 
 <div align="center">
-  <img src="../images/prawns.png">
+  <img src="./images/prawns.png">
 </div>
 
 ### Precision
@@ -170,7 +170,7 @@ Here it's tiny. On chips with an integer-only divider, some baud rates came
 out a few % off: the start of the 5 % margin.
 
 <div align="center">
-  <img src="../images/prawns.png">
+  <img src="./images/prawns.png">
 </div>
 
 ### Aside: Why Watches Use 32768 Hz
@@ -206,5 +206,5 @@ So 32768 is **the lowest power of 2 that can't be heard**. It's in watches,
 and in the clock chips that keep the time in PCs and phones when they're off.
 
 <div align="center">
-  <img src="../images/crab_back.png">
+  <img src="./images/crab_back.png">
 </div>

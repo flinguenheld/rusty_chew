@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="../images/crab_coffee.png">
+  <img src="./images/crab_coffee.png">
 </div>
 
 The docs of the Chew firmware, one file per topic. The words of the chip are
@@ -22,7 +22,7 @@ in [RP2040.md](./RP2040.md), the other docs link to it.
 | [BUILD.md](./BUILD.md)         | `.cargo/config.toml`, `memory.x`, the profiles, flashing     |
 
 <div align="center">
-  <img src="../images/prawns.png">
+  <img src="./images/prawns.png">
 </div>
 
 ### The Parts
@@ -47,7 +47,7 @@ in [RP2040.md](./RP2040.md), the other docs link to it.
 | [TODO.md](./TODO.md) | the plan of the port and what is done                          |
 
 <div align="center">
-  <img src="../images/prawns.png">
+  <img src="./images/prawns.png">
 </div>
 
 ### Where to Start
@@ -59,5 +59,5 @@ in [RP2040.md](./RP2040.md), the other docs link to it.
 ```
 
 <div align="center">
-  <img src="../images/crab_back.png">
+  <img src="./images/crab_back.png">
 </div>

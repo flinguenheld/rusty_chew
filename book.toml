@@ -1,0 +1,9 @@
+[book]
+title = "Rusty Chew"
+authors = ["florent@linguenheld.net"]
+language = "en"
+src = "docs"
+
+[build]
+build-dir = "target/book"
+create-missing = false    # a typo in SUMMARY.md fails the build

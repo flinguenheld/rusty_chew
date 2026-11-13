@@ -73,15 +73,17 @@ The docs explain the project as it is, not the story of the port (no "step N").
 - One file per topic (`LED.md`, `INTERRUPTS.md`…). Firmware-wide concepts get their own
   file, linked from the others.
 - After writing or changing a doc: check its links, that it doesn't repeat another doc
-  (link instead), and that it's listed in [docs/README.md](docs/README.md).
+  (link instead), that it's listed in [docs/README.md](docs/README.md) and
+  [docs/SUMMARY.md](docs/SUMMARY.md), and that `mdbook build` passes.
 - When a step is done, review all the docs (duplicates, old facts, files to merge or
   split): report first, I choose.
 - Style: centered `crab_coffee.png` at the top, `crab_back.png` at the end, `prawns.png`
-  between groups of sections (in `../images/`). `###` sections, `####` subsections.
+  between groups of sections (in `docs/images/`). `###` sections, `####` subsections.
   Short sentences, tables for lists of facts.
 - **Lots of graphs** (layers, pipelines, timelines, state machines, memory layouts),
-  ASCII first. Mermaid only when ASCII gets messy; sequence diagrams use the compact
-  init line (`mirrorActors: false`, small margins) and short actor names.
+  ASCII first: it shows everywhere (GitHub, mdBook, mdt). Mermaid only when ASCII gets
+  messy, it renders on GitHub only; sequence diagrams use the compact init line
+  (`mirrorActors: false`, small margins) and short actor names.
 
 ## Build
 

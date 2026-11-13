@@ -1,5 +1,5 @@
 <div align="center">
-    <img src="../images/crab_coffee.png">
+    <img src="./images/crab_coffee.png">
 </div>
 
 How the async drivers get woken up: the interrupts, and `bind_interrupts!`.
@@ -37,7 +37,7 @@ the exact name (`DMA_IRQ_0`), else `DefaultHandler`. There is one table per
 firmware, so one function per line. `bind_interrupts!` writes these functions.
 
 <div align="center">
-    <img src="../images/prawns.png">
+    <img src="./images/prawns.png">
 </div>
 
 ### One Table for the Whole Firmware
@@ -75,7 +75,7 @@ Every driver gets the same value, `Irqs`, and only checks that **its** line is i
 ```
 
 <div align="center">
-    <img src="../images/prawns.png">
+    <img src="./images/prawns.png">
 </div>
 
 ### `bind_interrupts!`
@@ -198,7 +198,7 @@ bind_interrupts!            Irqs (type)                 driver::new(…, Irqs)
 PIO block, and other programs on it can wait on their FIFOs or IRQ flags.
 
 <div align="center">
-    <img src="../images/prawns.png">
+    <img src="./images/prawns.png">
 </div>
 
 ### Rules
@@ -222,5 +222,5 @@ they bind different lines, but one `Irqs` in `main` keeps the whole table in one
 place.
 
 <div align="center">
-    <img src="../images/crab_back.png">
+    <img src="./images/crab_back.png">
 </div>

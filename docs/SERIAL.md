@@ -1,5 +1,5 @@
 <div align="center">
-    <img src="../images/crab_coffee.png">
+    <img src="./images/crab_coffee.png">
 </div>
 
 The serial inside the firmware: how any task prints a text or reads a line,
@@ -51,7 +51,7 @@ let line = SERIAL.read().await;    // from a task
 it can be lost.
 
 <div align="center">
-    <img src="../images/prawns.png">
+    <img src="./images/prawns.png">
 </div>
 
 ### Messages and Queues
@@ -103,7 +103,7 @@ The two queues are 20 slots of about 200 bytes: 4 KB of RAM, always reserved.
 Raising `SERIAL_MSG_MAX_LEN` grows every slot.
 
 <div align="center">
-    <img src="../images/prawns.png">
+    <img src="./images/prawns.png">
 </div>
 
 ### Sending
@@ -160,7 +160,7 @@ What happens with no terminal open:
 [USB.md](./USB.md#points-to-keep-in-mind).
 
 <div align="center">
-    <img src="../images/prawns.png">
+    <img src="./images/prawns.png">
 </div>
 
 ### Receiving
@@ -220,7 +220,7 @@ kept in the `message` field between two `read_packet`:
 | `channel_rx` full (nobody reads) | The line is lost |
 
 <div align="center">
-    <img src="../images/prawns.png">
+    <img src="./images/prawns.png">
 </div>
 
 ### The Answerphone
@@ -253,7 +253,7 @@ Three slots of the TX queue, out of 16. A new command only grows
 `USAGE_COMMANDS`.
 
 <div align="center">
-    <img src="../images/prawns.png">
+    <img src="./images/prawns.png">
 </div>
 
 ### Points to Keep in Mind
@@ -269,5 +269,5 @@ Three slots of the TX queue, out of 16. A new command only grows
   the line but don't show up.
 
 <div align="center">
-    <img src="../images/crab_back.png">
+    <img src="./images/crab_back.png">
 </div>
